@@ -1,0 +1,11 @@
+# SyHost - Git'e eklenmeyecek dosyalar
+# (Kullanici verileri zaten %LOCALAPPDATA%\SyHost icinde durur, burada olmaz)
+*.log
+*.dll
+cache/
+*.toml
+ayarlar.json
+sunucular.json
+pencere.json
+Thumbs.db
+desktop.ini

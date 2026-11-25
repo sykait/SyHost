@@ -1,0 +1,7 @@
+# Windows dosyalari her zaman CRLF satir sonuyla insin (.bat dosyalari icin sart)
+*.ps1  text eol=crlf
+*.bat  text eol=crlf
+*.cs   text eol=crlf
+*.json text eol=crlf
+*.md   text eol=crlf
+*.ttf  binary
