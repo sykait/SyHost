@@ -35,7 +35,7 @@ Modrinth パック（`.mrpack`）を選ぶだけで、Java・MOD ローダー・
 スタートメニューから **PowerShell** を開き、次の1行を貼り付けて Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/sykait/SyHost/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/sykait/SyHost/main/legacy/install.ps1 | iex
 ```
 
 SyHost をダウンロードしてセットアップを開始します。同じコマンドで**アップデート**もできます
@@ -45,7 +45,7 @@ SyHost をダウンロードしてセットアップを開始します。同じ�
 
 1. このページの緑の **Code** ボタン → **Download ZIP**。
 2. 任意のフォルダに展開（例: `ドキュメント\SyHost`）。
-3. **`Setup.bat`** をダブルクリック。
+3. **`legacy`** フォルダを開き、**`Setup.bat`** をダブルクリック。
    - 「Windows によって PC が保護されました」と出たら: **詳細情報 → 実行**。
 
 ### セットアップの内容

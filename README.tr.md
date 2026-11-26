@@ -35,7 +35,7 @@ Arkadaşların internetten bağlansın, sen de her şeyi şık, animasyonlu bir 
 Başlat menüsüne **PowerShell** yaz, aç, aşağıdaki satırı yapıştır ve Enter'a bas:
 
 ```powershell
-irm https://raw.githubusercontent.com/sykait/SyHost/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/sykait/SyHost/main/legacy/install.ps1 | iex
 ```
 
 Bu komut SyHost'u indirir ve kurulumu başlatır. Aynı komut ileride **güncellemek** için de kullanılır
@@ -45,7 +45,7 @@ Bu komut SyHost'u indirir ve kurulumu başlatır. Aynı komut ileride **güncell
 
 1. Bu sayfada yeşil **Code** düğmesine bas → **Download ZIP**.
 2. Zip'i bir klasöre çıkar (ör. `Belgeler\SyHost`).
-3. **`Setup.bat`**'a çift tıkla.
+3. **`legacy`** klasörünü aç ve **`Setup.bat`**'a çift tıkla.
    - Windows "bilgisayarınız korundu" derse: **Ek bilgi → Yine de çalıştır**.
 
 ### Kurulum ne yapar?

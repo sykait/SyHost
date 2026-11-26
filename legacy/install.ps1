@@ -1,7 +1,7 @@
 # =====================================================================
 #  SyHost - one-line installer
 #  Paste into PowerShell and press Enter:
-#     irm https://raw.githubusercontent.com/sykait/SyHost/main/install.ps1 | iex
+#     irm https://raw.githubusercontent.com/sykait/SyHost/main/legacy/install.ps1 | iex
 #  Run the same command again to update (your settings and servers are kept).
 # =====================================================================
 $ErrorActionPreference = 'Stop'
@@ -19,9 +19,11 @@ try {
     $zip = Join-Path $tmp 'syhost.zip'
     Invoke-WebRequest "https://github.com/$Repo/archive/refs/heads/$Branch.zip" -OutFile $zip -UseBasicParsing
     Expand-Archive $zip -DestinationPath $tmp -Force
-    $src = Get-ChildItem $tmp -Directory | Select-Object -First 1
+    $unzipped = Get-ChildItem $tmp -Directory | Select-Object -First 1
+    # PowerShell surumu repoda legacy klasorunde durur; yalnizca o kurulur
+    $src = Join-Path $unzipped.FullName 'legacy'
     New-Item -ItemType Directory -Force $Dest | Out-Null
-    Copy-Item (Join-Path $src.FullName '*') $Dest -Recurse -Force
+    Copy-Item (Join-Path $src '*') $Dest -Recurse -Force
     Get-ChildItem $Dest -Recurse -File | Unblock-File
     Write-Host "  Downloaded to: $Dest" -ForegroundColor Green
 } finally {

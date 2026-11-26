@@ -3,8 +3,8 @@
 **Copyright © 2026 sykait. All rights reserved.**
 
 This license applies to the SyHost source code and all files in this repository (the "Software").
-The Cascadia Mono font in the `fonts/` folder is **not** covered by this license; it is licensed under the
-SIL Open Font License 1.1 (see `fonts/OFL.txt`).
+The Cascadia Mono font in the `legacy/fonts/` folder is **not** covered by this license; it is licensed under the
+SIL Open Font License 1.1 (see `legacy/fonts/OFL.txt`).
 
 ## You may
 

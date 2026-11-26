@@ -35,7 +35,7 @@ Your friends join over the internet, and you control everything from a slick, an
 Open **PowerShell** from the Start menu, paste this line and press Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/sykait/SyHost/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/sykait/SyHost/main/legacy/install.ps1 | iex
 ```
 
 It downloads SyHost and starts the setup. Run the same command later to **update**
@@ -45,7 +45,7 @@ It downloads SyHost and starts the setup. Run the same command later to **update
 
 1. Click the green **Code** button on this page → **Download ZIP**.
 2. Extract it to a folder (e.g. `Documents\SyHost`).
-3. Double-click **`Setup.bat`**.
+3. Open the **`legacy`** folder and double-click **`Setup.bat`**.
    - If Windows says "Windows protected your PC": **More info → Run anyway**.
 
 ### What does the setup do?
@@ -143,17 +143,20 @@ Windows 10 and 11 only for now.
 
 ```
 SyHost/
-├── SyHost.bat                 → opens SyHost
-├── Setup.bat                  → first-time setup (one click)
-├── install.ps1                → one-line internet install / update
-├── src/
-│   ├── SyHost.ps1             → the app itself
-│   ├── SyHost.Core.cs         → window, tray icon, process and backup helpers
-│   ├── Lang.ps1               → translations (English / Türkçe / 日本語)
-│   └── Setup.ps1              → setup steps
-├── config/
-│   └── default-settings.json  → default settings on first launch
-└── fonts/                     → Cascadia Mono font (SIL OFL 1.1)
+├── legacy/                        → the PowerShell edition (works today)
+│   ├── SyHost.bat                 → opens SyHost
+│   ├── Setup.bat                  → first-time setup (one click)
+│   ├── install.ps1                → one-line internet install / update
+│   ├── src/
+│   │   ├── SyHost.ps1             → the app itself
+│   │   ├── SyHost.Core.cs         → window, tray icon, process and backup helpers
+│   │   ├── Lang.ps1               → translations (English / Türkçe / 日本語)
+│   │   └── Setup.ps1              → setup steps
+│   ├── config/
+│   │   └── default-settings.json  → default settings on first launch
+│   └── fonts/                     → Cascadia Mono font (SIL OFL 1.1)
+├── README.md
+└── LICENSE.md
 ```
 
 ---
