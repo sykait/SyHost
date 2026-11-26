@@ -75,6 +75,9 @@ sealed partial class App
     private partial void BeginShutdown(string after);
     /// <summary>Hide-Panel (599-602)</summary>
     private partial void HidePanel();
+    /// <summary>Çalışan başka sunucuların (komut satırında "nogui" geçen java.exe) süreç numaraları.
+    /// PowerShell: Get-CimInstance Win32_Process -Filter "Name='java.exe'" | Where-Object { $_.CommandLine -match 'nogui' } (456 ve 892. satırlar)</summary>
+    private partial List<int> OtherServerPids();
 
     // ---------- Sunucu ekranı çizimi (App.ServerView.cs) ----------
     /// <summary>Get-StartPct (1455-1461)</summary>

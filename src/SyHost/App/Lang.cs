@@ -25,6 +25,8 @@ static partial class Lang
     static Lang()
     {
         AddCore();
+        AddInstall();
+        AddTray();
         AddFirstRun();
         AddSettings();
         AddUninstall();
@@ -32,12 +34,14 @@ static partial class Lang
         AddExtra();
     }
 
-    // Yeni ekranların metinleri (her biri kendi dosyasında)
-    static partial void AddFirstRun();
-    static partial void AddSettings();
-    static partial void AddUninstall();
-    static partial void AddPortable();
-    static partial void AddExtra();
+    // Bölümlerin kendi metinleri (her biri kendi dosyasında; aynı anahtar iki kez eklenmez)
+    static partial void AddInstall();    // Core/Installer.cs, Core/Java.cs
+    static partial void AddTray();       // Core/Tray.cs
+    static partial void AddFirstRun();   // ilk açılış ekranı
+    static partial void AddSettings();   // ayarlar ekranı
+    static partial void AddUninstall();  // kaldır
+    static partial void AddPortable();   // taşınabilir klasör, eski verinin taşınması
+    static partial void AddExtra();      // diğerleri
 
     static void Tx(string tr, string en, string ja) => Table[tr] = (en, ja);
 

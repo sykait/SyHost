@@ -22,4 +22,5 @@ sealed partial class App
     private partial void GoHome() { Screen = "home"; ResetFrame(); }
     private partial void BeginShutdown(string after) { }
     private partial void HidePanel() { }
+    private partial List<int> OtherServerPids() => new();
 }
