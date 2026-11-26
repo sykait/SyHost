@@ -6,7 +6,7 @@
 Pick a Modrinth pack (`.mrpack`) and SyHost installs Java, the mod loader, the mods and the settings for you.
 Your friends join over the internet, and you control everything from a slick, animated terminal screen.
 
-> Windows 10 / 11 · NeoForge · Forge · Fabric · English, Türkçe, 日本語 · Made by **sykait**
+> Windows 10 / 11 · NeoForge · Forge · Fabric · English, Türkçe, 日本語 · Made by [**sykait**](https://github.com/sykait)
 
 ---
 
@@ -155,6 +155,13 @@ SyHost/
 │   └── default-settings.json  → default settings on first launch
 └── fonts/                     → Cascadia Mono font (SIL OFL 1.1)
 ```
+
+---
+
+## 🛠️ How it was made
+
+SyHost is designed and directed by **sykait**: the features, the flow and the look.
+The code was written together with AI coding tools.
 
 ---
 

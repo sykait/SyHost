@@ -6,7 +6,7 @@
 Bir Modrinth paketi (`.mrpack`) seç; Java, mod yükleyici, modlar ve ayarlar kendiliğinden kurulsun.
 Arkadaşların internetten bağlansın, sen de her şeyi şık, animasyonlu bir terminal ekranından yönet.
 
-> Windows 10 / 11 · NeoForge · Forge · Fabric · English, Türkçe, 日本語 · Yapımcı: **sykait**
+> Windows 10 / 11 · NeoForge · Forge · Fabric · English, Türkçe, 日本語 · Yapımcı: [**sykait**](https://github.com/sykait)
 
 ---
 
@@ -128,6 +128,13 @@ SyHost'un kendisi çok hafiftir. Sunucunun kullanacağı RAM'i ve çekirdekleri 
 
 **Mac / Linux?**
 Şimdilik sadece Windows 10 ve 11.
+
+---
+
+## 🛠️ Nasıl yapıldı
+
+SyHost'un özelliklerini, akışını ve görünüşünü **sykait** tasarladı ve yönetti.
+Kod, yapay zekâ kodlama araçlarıyla birlikte yazıldı.
 
 ---
 
