@@ -1,0 +1,24 @@
+# SyHost - editor ayarlari (VS Code, Visual Studio ve Rider bunu okur)
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+# PowerShell 5.1 Turkce ve Japonca karakterleri dogru okusun diye BOM'lu UTF-8
+[*.ps1]
+charset = utf-8-bom
+
+# Tek satir kurulum (irm | iex) dosyanin basindaki BOM'u kaldiramaz
+[legacy/install.ps1]
+charset = utf-8
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+end_of_line = lf
+indent_size = 2
