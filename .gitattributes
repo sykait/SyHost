@@ -1,7 +1,27 @@
 # Windows dosyalari her zaman CRLF satir sonuyla insin (.bat dosyalari icin sart)
-*.ps1  text eol=crlf
-*.bat  text eol=crlf
-*.cs   text eol=crlf
-*.json text eol=crlf
-*.md   text eol=crlf
-*.ttf  binary
+*.ps1     text eol=crlf
+*.bat     text eol=crlf
+*.cs      text eol=crlf
+*.json    text eol=crlf
+*.md      text eol=crlf
+
+# .NET proje dosyalari
+*.csproj  text eol=crlf
+*.sln     text eol=crlf
+*.slnx    text eol=crlf
+*.props   text eol=crlf
+*.targets text eol=crlf
+
+# GitHub Actions dosyalari
+*.yml     text eol=lf
+*.yaml    text eol=lf
+
+# Ikili dosyalar: Git icerigine hic dokunmasin
+*.ttf     binary
+*.ico     binary
+*.png     binary
+*.jpg     binary
+*.gif     binary
+*.zip     binary
+*.exe     binary
+*.dll     binary

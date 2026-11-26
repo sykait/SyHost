@@ -1,11 +1,35 @@
 # SyHost - Git'e eklenmeyecek dosyalar
-# (Kullanici verileri zaten %LOCALAPPDATA%\SyHost icinde durur, burada olmaz)
-*.log
-*.dll
-cache/
-*.toml
+
+# Kullanici verileri: ayarlar, sunucu listesi, playit gizli anahtari, kayitlar
+# Bunlar asla commit'lenmemeli. playit.toml gizli anahtar icerir.
 ayarlar.json
 sunucular.json
 pencere.json
+*.toml
+*.log
+cache/
+
+# Tasinabilir surum repo icinde denenirse olusan klasorler
+/App/
+/Data/
+/Servers/
+
+# .NET derleme ciktilari (ana surum)
+bin/
+obj/
+dist/
+publish/
+artifacts/
+TestResults/
+*.exe
+*.dll
+*.pdb
+*.user
+*.suo
+.vs/
+
+# Editorler ve Windows
+.vscode/
+.idea/
 Thumbs.db
 desktop.ini
