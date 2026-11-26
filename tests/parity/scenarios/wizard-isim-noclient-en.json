@@ -1,0 +1,37 @@
+{
+  "t": 3.05,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "en",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [],
+  "state": {
+    "screen": "wizard",
+    "wizard": {
+      "step": "isim",
+      "info": {
+        "Path": "C:\\SyHostTest\\Downloads\\All the Mods 9 0.3.2.mrpack",
+        "Name": "All the Mods 9",
+        "Version": "0.3.2",
+        "Mc": "1.20.1",
+        "Loader": "forge",
+        "LoaderVer": "47.3.0",
+        "Java": 17,
+        "Mods": 412,
+        "ClientOnly": 0,
+        "Saves": ["ATM9 Lobby"],
+        "SizeMb": 9
+      },
+      "name": "ATM9",
+      "worldSel": 0
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "t": 4.4,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "tr",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [
+    {
+      "id": "createplus",
+      "ad": "Create Plus",
+      "klasor": "C:\\SyHostTest\\Servers\\CreatePlus",
+      "mc": "1.21.1",
+      "loader": "neoforge",
+      "loaderSurum": "21.1.172",
+      "java": 21,
+      "baslat": "@libraries/net/neoforged/neoforge/21.1.172/win_args.txt nogui",
+      "paket": "normal",
+      "eklenme": "2026-10-02 18:44",
+      "sonAcilis": "2026-11-27 09:15",
+      "sonBaslatmaSn": 48
+    },
+    {
+      "id": "fabricsky",
+      "ad": "Fabric Skyblock",
+      "klasor": "C:\\SyHostTest\\Servers\\FabricSkyblock",
+      "mc": "1.20.1",
+      "loader": "fabric",
+      "loaderSurum": "0.16.10",
+      "java": 17,
+      "baslat": "-jar fabric-server-launch.jar nogui",
+      "paket": "dusuk",
+      "eklenme": "2026-11-20 21:03",
+      "sonAcilis": "2026-11-26 22:41",
+      "sonBaslatmaSn": null
+    }
+  ],
+  "state": {
+    "screen": "home",
+    "modCounts": {
+      "createplus": 214,
+      "fabricsky": 87,
+      "atm9": 412,
+      "yeni": 0,
+      "sunucu": 198,
+      "sunucu2": 64
+    },
+    "worldSizes": {
+      "createplus": "1450 MB",
+      "fabricsky": "312 MB",
+      "atm9": "5210 MB",
+      "yeni": "henüz oluşmadı",
+      "sunucu": "980 MB",
+      "sunucu2": "未作成"
+    },
+    "sysFree": 13529146982,
+    "totalRam": 34359738368,
+    "threads": 12,
+    "homeSel": 0,
+    "homeMsg": "Dosya seçilmedi.",
+    "homeMsgUntil": "2026-11-27 14:29:59"
+  }
+}

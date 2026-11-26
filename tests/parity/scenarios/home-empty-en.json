@@ -1,0 +1,39 @@
+{
+  "t": 7.15,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "en",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [],
+  "state": {
+    "screen": "home",
+    "modCounts": {
+      "createplus": 214,
+      "fabricsky": 87,
+      "atm9": 412,
+      "yeni": 0,
+      "sunucu": 198,
+      "sunucu2": 64
+    },
+    "worldSizes": {
+      "createplus": "1450 MB",
+      "fabricsky": "312 MB",
+      "atm9": "5210 MB",
+      "yeni": "henüz oluşmadı",
+      "sunucu": "980 MB",
+      "sunucu2": "未作成"
+    },
+    "sysFree": 13529146982,
+    "totalRam": 34359738368,
+    "threads": 12,
+    "homeSel": 0
+  }
+}

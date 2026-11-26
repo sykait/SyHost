@@ -1,0 +1,37 @@
+{
+  "t": 6.65,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "ja",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [],
+  "state": {
+    "screen": "wizard",
+    "wizard": {
+      "step": "dunya",
+      "info": {
+        "Path": "C:\\SyHostTest\\Downloads\\まったりクラフト.mrpack",
+        "Name": "まったりクラフト",
+        "Version": "1.0",
+        "Mc": "1.21.1",
+        "Loader": "neoforge",
+        "LoaderVer": "21.1.172",
+        "Java": 21,
+        "Mods": 156,
+        "ClientOnly": 22,
+        "Saves": ["はじまりの村", "空島"],
+        "SizeMb": 3
+      },
+      "name": "まったりクラフト",
+      "worldSel": 0
+    }
+  }
+}

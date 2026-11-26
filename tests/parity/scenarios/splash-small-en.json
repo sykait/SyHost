@@ -1,0 +1,33 @@
+{
+  "t": 1.35,
+  "now": "2026-11-27 14:30:00",
+  "w": 53,
+  "h": 15,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "en",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [],
+  "state": {
+    "screen": "splash",
+    "splashStart": 0,
+    "stars": [
+      [3, 10, 99.183],
+      [9, 47, 10.071],
+      [10, 17, 2.911],
+      [3, 10, 82.177],
+      [3, 37, 24.608],
+      [2, 40, 66.566],
+      [8, 1, 36.183],
+      [9, 27, 51.834],
+      [2, 43, 25.787],
+      [12, 28, 22.82]
+    ],
+    "meteors": []
+  }
+}

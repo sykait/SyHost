@@ -1,0 +1,46 @@
+{
+  "t": 9.9,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "tr",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [],
+  "state": {
+    "screen": "wizard",
+    "wizard": {
+      "step": "hata",
+      "info": {
+        "Path": "C:\\SyHostTest\\Downloads\\Create Plus 2.3.mrpack",
+        "Name": "Create Plus",
+        "Version": "2.3",
+        "Mc": "1.21.1",
+        "Loader": "neoforge",
+        "LoaderVer": "21.1.172",
+        "Java": 21,
+        "Mods": 214,
+        "ClientOnly": 31,
+        "Saves": [],
+        "SizeMb": 4
+      },
+      "name": "Create Plus",
+      "worldSel": 0,
+      "target": "C:\\SyHostTest\\Servers\\CreatePlus",
+      "startedAt": "2026-11-27 14:26:12",
+      "sync": {
+        "steps": [2, 2, 3, 0, 0, 0, 0],
+        "pct": 0,
+        "count": "",
+        "detail": "NeoForge 21.1.172 kuruluyor (biraz sürebilir)",
+        "error": "NeoForge kurulamadı (kurulum.log dosyasına bak). Sunucu dosyaları indirilirken bağlantı koptu: Uzak sunucu bir hata döndürdü: (503) Sunucu Kullanılamıyor. İnternet bağlantını kontrol et, sonra C:\\SyHostTest\\Servers\\CreatePlus\\kurulum.log dosyasına bakıp kurulumu yeniden başlat; sorun sürerse modpack sayfasındaki sürüm notlarını oku."
+      }
+    }
+  }
+}

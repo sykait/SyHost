@@ -5,32 +5,41 @@
 #  Yapımcı : sykait
 #  Lisans  : LICENSE.md (kullanırsan kredi vermek zorunlu)
 # =====================================================================
+#  -Root      taşınabilir kurulumun klasörü (şimdilik kullanılmıyor)
+#  -TestFrame senaryo.json -TestOut kare.txt
+#             test modu: senaryodaki durumu kurar, tek bir kareyi dosyaya yazar ve çıkar.
+#             C# sürümüyle (SyHost.exe --frame) aynı biçim; tests\parity iki çıktıyı karşılaştırır.
+param([string]$Root, [string]$TestFrame, [string]$TestOut)
 $ErrorActionPreference = 'Stop'
 $SrcDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppRoot = Split-Path -Parent $SrcDir
 $Title   = 'SyHost'
 $Version = '0.5.0'
+$VersionText = $Version
+$Edition = 'Terminal'
 
 # Kullanıcı verileri (ayarlar, sunucu listesi, playit anahtarı) kodun yanında değil, burada durur
 $Data = Join-Path $env:LOCALAPPDATA 'SyHost'
 New-Item -ItemType Directory -Force $Data, (Join-Path $Data 'cache') | Out-Null
 $Root = $Data
 
-# ---------- Tek kopya ----------
-$created = $false
-$mutex = New-Object System.Threading.Mutex($true, 'Local\SyHostSunucuMerkezi', [ref]$created)
-if (-not $created) {
-    Add-Type -Namespace W -Name U -MemberDefinition @'
+# ---------- Tek kopya (test modunda atlanır: açık bir SyHost'a dokunmasın) ----------
+if (-not $TestFrame) {
+    $created = $false
+    $mutex = New-Object System.Threading.Mutex($true, 'Local\SyHostSunucuMerkezi', [ref]$created)
+    if (-not $created) {
+        Add-Type -Namespace W -Name U -MemberDefinition @'
 [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t);
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
 '@
-    $hw = [W.U]::FindWindow('ConsoleWindowClass', $Title)
-    if ($hw -ne [IntPtr]::Zero) { [void][W.U]::ShowWindow($hw, 9); [void][W.U]::ShowWindow($hw, 5); [void][W.U]::SetForegroundWindow($hw) }
-    exit
+        $hw = [W.U]::FindWindow('ConsoleWindowClass', $Title)
+        if ($hw -ne [IntPtr]::Zero) { [void][W.U]::ShowWindow($hw, 9); [void][W.U]::ShowWindow($hw, 5); [void][W.U]::SetForegroundWindow($hw) }
+        exit
+    }
 }
 
-$Host.UI.RawUI.WindowTitle = $Title
+$Host.UI.RawUI.WindowTitle = $(if ($TestFrame) { "$Title test" } else { $Title })
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 [Console]::InputEncoding  = New-Object Text.UTF8Encoding $false
 [Console]::TreatControlCAsInput = $true
@@ -812,12 +821,16 @@ function Wizard-WorldOptions {
     $opts += , @((L 'Yepyeni bir dünya oluştur'), '')
     , $opts
 }
+# Kurulum adımlarının ekranda görünen adları (sırası $InstallScript'teki adımlarla aynı)
+function Get-InstallStepNames($info) {
+    @((L 'Klasör hazırlanıyor'), (L 'Java {0} kontrol ediliyor' $info.Java), (L '{0} {1} kuruluyor' $LoaderName[$info.Loader] $info.LoaderVer), (L 'Modlar indiriliyor'), (L 'Ayar dosyaları kopyalanıyor'), (L 'Dünya hazırlanıyor'), (L 'Son ayarlar yapılıyor'))
+}
 function Begin-Install {
     $w = $Wiz
     $w.Target = Safe-FolderName $w.Name
     $worldName = if ($w.Info.Saves.Count) { (Wizard-WorldOptions)[$w.WorldSel][1] } else { '' }
     $sync = [hashtable]::Synchronized(@{ Steps = @(); Pct = 0; Count = ''; Detail = ''; Done = $false; Error = $null; Result = $null; Failed = @() })
-    $names = @((L 'Klasör hazırlanıyor'), (L 'Java {0} kontrol ediliyor' $w.Info.Java), (L '{0} {1} kuruluyor' $LoaderName[$w.Info.Loader] $w.Info.LoaderVer), (L 'Modlar indiriliyor'), (L 'Ayar dosyaları kopyalanıyor'), (L 'Dünya hazırlanıyor'), (L 'Son ayarlar yapılıyor'))
+    $names = Get-InstallStepNames $w.Info
     $sync.Steps = @($names | ForEach-Object { [hashtable]::Synchronized(@{ N = $_; S = 0 }) })
     $ps = [powershell]::Create()
     [void]$ps.AddScript($InstallScript.ToString()).AddArgument($sync).AddArgument($w.Info).AddArgument($w.Target).AddArgument($worldName).AddArgument($(if ($Cfg.playitKullan) { $Cfg.sesAdresi } else { '' })).AddArgument($MaxPlayers).AddArgument("$($w.Name) | SyHost").AddArgument($JavaFuncs.ToString()).AddArgument(@{
@@ -1284,7 +1297,7 @@ function Render-Home([int]$W, [int]$H) {
     $logo = Render-Logo 1.0 (Logo-Shine)
     $info = @(
         ($Bo + $c.brass + (L 'SUNUCU MERKEZİ') + $R),
-        ($c.dim + "v$Version  ·  sykait" + $R),
+        ($c.dim + "v$VersionText  ·  $Edition  ·  sykait" + $R),
         ($c.dark + ('─' * 38) + $R),
         ($c.soft + (L 'Arkadaş adresi  ') + $R + $(if ($HasFriendAddr) { $Bo + $c.cyan + $FriendAddr } else { $c.dim + (L 'henüz yok') }) + $R),
         ($c.soft + (L 'Dış erişim      ') + $R + $(if (PlayitOn) { $c.green + (L '● açık (playit)') } elseif ($HasFriendAddr) { $c.yellow + (L '● bağlanıyor') } else { $c.yellow + (L '● kurulu değil') + $c.dim + (L '  (Setup.bat)') }) + $R),
@@ -1727,9 +1740,8 @@ function Render-Server([int]$W, [int]$H) {
 }
 
 # ---------- Çizim: kare ----------
-function Render {
-    $W = [Console]::WindowWidth - 1; $H = [Console]::WindowHeight
-    try { if ([Console]::BufferHeight -ne $H -or [Console]::BufferWidth -ne ($W + 1)) { [Console]::SetBufferSize($W + 1, $H) } } catch {}
+# Bir kareyi hazırla: her satır tam $W genişliğinde. Test modunda dosyaya yazılan şey de budur.
+function Build-Frame([int]$W, [int]$H) {
     $showCursor = $false; $cursorCol = 1
     switch ($Screen) {
         'splash' { $rows = Render-Splash $W $H }
@@ -1747,16 +1759,27 @@ function Render {
             $showCursor = ($Mode -ne 'closing'); $cursorCol = 4 + $shown.Length
         }
     }
-    $sb = New-Object Text.StringBuilder
-    [void]$sb.Append("$E[?25l")
     $newFrame = New-Object string[] $H
     for ($i = 0; $i -lt $H; $i++) {
         $line = if ($i -lt $rows.Count) { PadV $rows[$i] $W } else { ' ' * $W }
         $newFrame[$i] = $line
+    }
+    @{ Frame = $newFrame; ShowCursor = $showCursor; CursorCol = $cursorCol }
+}
+# Kareyi konsola çiz: yalnızca değişen satırlar yazılır
+function Render {
+    $W = [Console]::WindowWidth - 1; $H = [Console]::WindowHeight
+    try { if ([Console]::BufferHeight -ne $H -or [Console]::BufferWidth -ne ($W + 1)) { [Console]::SetBufferSize($W + 1, $H) } } catch {}
+    $fr = Build-Frame $W $H
+    $newFrame = $fr.Frame
+    $sb = New-Object Text.StringBuilder
+    [void]$sb.Append("$E[?25l")
+    for ($i = 0; $i -lt $H; $i++) {
+        $line = $newFrame[$i]
         if ($i -ge $PrevFrame.Count -or $PrevFrame[$i] -ne $line) { [void]$sb.Append("$E[$($i + 1);1H").Append($line) }
     }
     $script:PrevFrame = $newFrame
-    if ($showCursor) { [void]$sb.Append("$E[$H;${cursorCol}H$E[?25h") }
+    if ($fr.ShowCursor) { [void]$sb.Append("$E[$H;$($fr.CursorCol)H$E[?25h") }
     [Console]::Write($sb.ToString())
 }
 function Animating {
@@ -1764,6 +1787,152 @@ function Animating {
     if ($Screen -eq 'server' -and $UiMode -eq 'buyuk') { return $true }
     if ($Screen -eq 'server' -and ($Status -in 'BASLIYOR', 'DURUYOR' -or $Mode -in 'closing', 'kapat' -or $BackupStage)) { return $true }
     $false
+}
+
+# ---------- Test modu: tek bir kareyi dosyaya yaz ----------
+# SyHost.ps1 -TestFrame senaryo.json -TestOut kare.txt
+# Senaryodaki durumu kurar, saati dondurur, bir kare çizer ve satırları dosyaya yazar.
+# C# sürümündeki App.RunFrameTest / ApplyScenario'nun birebir karşılığı (src\SyHost\App\App.cs):
+# aynı senaryo iki sürümde de çalıştırılır, iki çıktı bayt bayt aynı olmalıdır (tests\parity).
+# Dil ve ayarlar normal açılıştaki gibi ayarlar.json'dan, sunucular sunucular.json'dan gelir.
+if ($TestFrame) {
+    $TestOutPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($TestOut)
+    try {
+        $TestScn = Get-Content -LiteralPath $TestFrame -Raw -Encoding UTF8 | ConvertFrom-Json
+        $TestInv = [Globalization.CultureInfo]::InvariantCulture
+        # Alan var ve null değil mi (C#: Has)
+        function Test-ScnHas($obj, [string]$name) { $null -ne $obj -and $null -ne $obj.PSObject.Properties[$name] -and $null -ne $obj.PSObject.Properties[$name].Value }
+        function ConvertTo-ScnDate($v) { [datetime]::ParseExact([string]$v, 'yyyy-MM-dd HH:mm:ss', $TestInv) }
+
+        # Saat donar: T ve Get-Date hep senaryodaki değeri verir
+        $TestT = [double]$TestScn.t
+        $TestNow = ConvertTo-ScnDate $TestScn.now
+        function T { $script:TestT }
+        function Get-Date([string]$Format) { if ($Format) { $script:TestNow.ToString($Format) } else { $script:TestNow } }
+        if (Test-ScnHas $TestScn 'version') { $Version = [string]$TestScn.version; $VersionText = $Version }
+        if (Test-ScnHas $TestScn 'edition') { $Edition = [string]$TestScn.edition }
+        $TestW = [int]$TestScn.w; $TestH = [int]$TestScn.h
+        $TestSt = $TestScn.state
+        if ($TestSt -is [System.Management.Automation.PSCustomObject]) {
+            if (Test-ScnHas $TestSt 'screen') { $Screen = [string]$TestSt.screen }
+            if (Test-ScnHas $TestSt 'splashStart') { $SplashStart = [double]$TestSt.splashStart }
+            if (Test-ScnHas $TestSt 'outroStart') { $OutroStart = [double]$TestSt.outroStart }
+            # Rastgelelik kapalı: glitch ve yeni meteor yok, yalnızca senaryodakiler
+            $GlitchNext = 1e9; $GlitchUntil = 0.0
+            if (Test-ScnHas $TestSt 'glitch') {
+                $TestG = $TestSt.glitch
+                $GlitchUntil = [double]$TestG.until
+                $GlitchNext = if ($null -ne $TestG.PSObject.Properties['next']) { [double]$TestG.next } else { 1e9 }
+                $GlitchRows = @{}
+                foreach ($TestP in $TestG.rows.PSObject.Properties) { $GlitchRows[[int]::Parse($TestP.Name, $TestInv)] = [int]$TestP.Value }
+            }
+            $MeteorNextSpawn = if (Test-ScnHas $TestSt 'meteorNextSpawn') { [double]$TestSt.meteorNextSpawn } else { 1e9 }
+            $MeteorLastT = $TestT
+            $StarsSize = "$TestW,$TestH"
+            $Stars = @{}
+            if (Test-ScnHas $TestSt 'stars') {
+                foreach ($TestS in $TestSt.stars) {
+                    $TestRow = [int]$TestS[0]
+                    if (-not $Stars.ContainsKey($TestRow)) { $Stars[$TestRow] = New-Object System.Collections.Generic.List[object] }
+                    $Stars[$TestRow].Add(@([int]$TestS[1], [double]$TestS[2]))
+                }
+            }
+            $Meteors = New-Object System.Collections.Generic.List[hashtable]
+            if (Test-ScnHas $TestSt 'meteors') {
+                foreach ($TestM in $TestSt.meteors) {
+                    $Meteors.Add(@{ x = [double]$TestM.x; y = [double]$TestM.y; vx = [double]$TestM.vx; vy = [double]$TestM.vy; len = [int]$TestM.len; age = [double]$TestM.age; life = [double]$TestM.life })
+                }
+            }
+
+            # Ana menü
+            if (Test-ScnHas $TestSt 'homeSel') { $HomeSel = [int]$TestSt.homeSel }
+            if (Test-ScnHas $TestSt 'homeMode') { $HomeMode = [string]$TestSt.homeMode }
+            if (Test-ScnHas $TestSt 'homeMsg') { $HomeMsg = [string]$TestSt.homeMsg }
+            if (Test-ScnHas $TestSt 'homeMsgUntil') { $HomeMsgUntil = ConvertTo-ScnDate $TestSt.homeMsgUntil }
+            if (Test-ScnHas $TestSt 'modCounts') { foreach ($TestP in $TestSt.modCounts.PSObject.Properties) { $ModCountCache[$TestP.Name] = [int]$TestP.Value } }
+            if (Test-ScnHas $TestSt 'worldSizes') { foreach ($TestP in $TestSt.worldSizes.PSObject.Properties) { $WorldSizeCache[$TestP.Name] = [string]$TestP.Value } }
+            if (Test-ScnHas $TestSt 'sysFree') { $SysFree = [double]$TestSt.sysFree }
+            if (Test-ScnHas $TestSt 'totalRam') { $TotalRam = [double]$TestSt.totalRam }
+            if (Test-ScnHas $TestSt 'threads') { $Threads = [int]$TestSt.threads }
+            if (Test-ScnHas $TestSt 'javaFound') {
+                $TestJavaFound = [bool]$TestSt.javaFound
+                function Find-Java([int]$major) { if ($script:TestJavaFound) { 'java.exe' } else { $null } }
+            }
+            # playit yok; açık mı kapalı mı senaryo söyler (yoksa kapalı)
+            $Pl = [pscustomobject]@{ Running = ((Test-ScnHas $TestSt 'playitOn') -and [bool]$TestSt.playitOn) }
+
+            # Sunucu ekranı
+            if (Test-ScnHas $TestSt 'cur') { $Cur = $null; foreach ($TestSv in $Servers) { if ($TestSv.id -ceq [string]$TestSt.cur) { $Cur = $TestSv; break } } }
+            if (Test-ScnHas $TestSt 'status') { $Status = [string]$TestSt.status }
+            if (Test-ScnHas $TestSt 'mode') { $Mode = [string]$TestSt.mode }
+            if (Test-ScnHas $TestSt 'uiMode') { $UiMode = [string]$TestSt.uiMode }
+            if (Test-ScnHas $TestSt 'detail') { $Detail = [bool]$TestSt.detail }
+            if (Test-ScnHas $TestSt 'scroll') { $Scroll = [int]$TestSt.scroll }
+            # Süreç yok: yalnızca "çalışıyor mu" bilgisi
+            if (Test-ScnHas $TestSt 'running') { $S = [pscustomobject]@{ Running = [bool]$TestSt.running } }
+            if (Test-ScnHas $TestSt 'startTime') { $StartTime = ConvertTo-ScnDate $TestSt.startTime }
+            if (Test-ScnHas $TestSt 'players') { foreach ($TestP in $TestSt.players) { [void]$Players.Add([string]$TestP) } }
+            if (Test-ScnHas $TestSt 'ramNow') { $RamNow = [double]$TestSt.ramNow }
+            if (Test-ScnHas $TestSt 'cpuNow') { $CpuNow = [double]$TestSt.cpuNow }
+            if (Test-ScnHas $TestSt 'loadedRamMax') { $LoadedRamMax = [int]$TestSt.loadedRamMax }
+            if (Test-ScnHas $TestSt 'ramPending') { $RamPending = [bool]$TestSt.ramPending }
+            if (Test-ScnHas $TestSt 'activePack') { $ActivePack = [string]$TestSt.activePack }
+            if (Test-ScnHas $TestSt 'packSel') { $PackSel = [int]$TestSt.packSel }
+            if (Test-ScnHas $TestSt 'stage') { $Stage = [int]$TestSt.stage }
+            if (Test-ScnHas $TestSt 'stopPhase') { $StopPhase = [int]$TestSt.stopPhase }
+            if (Test-ScnHas $TestSt 'expectedStart') { $ExpectedStart = [int]$TestSt.expectedStart }
+            if (Test-ScnHas $TestSt 'modCount') { $ModCount = [int]$TestSt.modCount }
+            if (Test-ScnHas $TestSt 'backupStage') { $BackupStage = [string]$TestSt.backupStage }
+            if (Test-ScnHas $TestSt 'autoRestartAt') { $AutoRestartAt = ConvertTo-ScnDate $TestSt.autoRestartAt }
+            if (Test-ScnHas $TestSt 'closingSince') { $ClosingSince = ConvertTo-ScnDate $TestSt.closingSince }
+            if (Test-ScnHas $TestSt 'shutdownStopAt') { $ShutdownStopAt = ConvertTo-ScnDate $TestSt.shutdownStopAt }
+            if (Test-ScnHas $TestSt 'finishAt') { $FinishAt = ConvertTo-ScnDate $TestSt.finishAt }
+            if (Test-ScnHas $TestSt 'afterClose') { $AfterClose = [string]$TestSt.afterClose }
+            if (Test-ScnHas $TestSt 'inputText') { $InputText = [string]$TestSt.inputText }
+            if (Test-ScnHas $TestSt 'winUstte') { $Win.ustte = [bool]$TestSt.winUstte }
+            if (Test-ScnHas $TestSt 'log') {
+                foreach ($TestE in $TestSt.log) { $Log.Add([pscustomobject]@{ T = [string]$TestE.T; K = [string]$TestE.K; M = [string]$TestE.M; V = [bool]$TestE.V }) }
+            }
+
+            # Sihirbaz
+            if (Test-ScnHas $TestSt 'wizard') {
+                $TestWz = $TestSt.wizard; $TestI = $TestWz.info
+                $TestInfo = [pscustomobject]@{
+                    Path = [string]$TestI.Path; Name = [string]$TestI.Name; Version = [string]$TestI.Version; Mc = [string]$TestI.Mc; Loader = [string]$TestI.Loader; LoaderVer = [string]$TestI.LoaderVer
+                    Java = [int]$TestI.Java; Mods = [int]$TestI.Mods; ClientOnly = [int]$TestI.ClientOnly
+                    Saves = @(foreach ($TestX in $TestI.Saves) { [string]$TestX }); SizeMb = [double]$TestI.SizeMb
+                }
+                $Wiz = [pscustomobject]@{ Step = [string]$TestWz.step; Info = $TestInfo; Name = [string]$TestWz.name; WorldSel = [int]$TestWz.worldSel; Sync = $null; PS = $null; Handle = $null; Target = $null; StartedAt = $null }
+                if (Test-ScnHas $TestWz 'target') { $Wiz.Target = [string]$TestWz.target }
+                if (Test-ScnHas $TestWz 'startedAt') { $Wiz.StartedAt = ConvertTo-ScnDate $TestWz.startedAt }
+                if (Test-ScnHas $TestWz 'sync') {
+                    $TestY = $TestWz.sync
+                    $TestSync = [hashtable]::Synchronized(@{ Steps = @(); Pct = 0; Count = ''; Detail = ''; Done = $false; Error = $null; Result = $null; Failed = @() })
+                    $TestNames = @(Get-InstallStepNames $TestInfo)
+                    $TestK = 0
+                    $TestSync.Steps = @(foreach ($TestX in $TestY.steps) { [hashtable]::Synchronized(@{ N = $(if ($TestK -lt $TestNames.Count) { $TestNames[$TestK] } else { '' }); S = [int]$TestX }); $TestK++ })
+                    if (Test-ScnHas $TestY 'pct') { $TestSync.Pct = [int]$TestY.pct }
+                    if (Test-ScnHas $TestY 'count') { $TestSync.Count = [string]$TestY.count }
+                    if (Test-ScnHas $TestY 'detail') { $TestSync.Detail = [string]$TestY.detail }
+                    if (Test-ScnHas $TestY 'error') { $TestSync.Error = [string]$TestY.error }
+                    if (Test-ScnHas $TestY 'failed') { $TestSync.Failed = @(foreach ($TestX in $TestY.failed) { [string]$TestX }) }
+                    $Wiz.Sync = $TestSync
+                }
+            }
+        }
+
+        # Kareyi çiz ve yaz: her satır "\n" ile biter, en sonda imleç satırı; UTF-8 (BOM'suz)
+        $TestFr = Build-Frame $TestW $TestH
+        $TestSb = New-Object Text.StringBuilder
+        foreach ($TestLine in $TestFr.Frame) { [void]$TestSb.Append($TestLine).Append("`n") }
+        [void]$TestSb.Append('#cursor ').Append($(if ($TestFr.ShowCursor) { 'on ' } else { 'off ' })).Append([string]$TestFr.CursorCol).Append("`n")
+        [IO.File]::WriteAllText($TestOutPath, $TestSb.ToString(), (New-Object Text.UTF8Encoding $false))
+    } catch {
+        # Gizli pencerede hata görünmez: yanına yaz
+        try { [IO.File]::WriteAllText($TestOutPath + '.error.txt', ($_ | Out-String) + $_.ScriptStackTrace, (New-Object Text.UTF8Encoding $false)) } catch {}
+        exit 1
+    }
+    exit 0
 }
 
 # ---------- Başlangıç ----------

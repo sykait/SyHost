@@ -4,7 +4,8 @@
 #  Yeni bir dil eklemek için: her satıra bir sütun ekle ve $Languages'e ekle.
 # =====================================================================
 $Languages = [ordered]@{ en = 'English'; tr = 'Türkçe'; ja = '日本語' }
-$TextTable = @{}
+# Anahtarlar büyük-küçük harfe duyarlı: 'NORMAL' ile 'Normal', 'YENİ SUNUCU' ile 'yeni sunucu' ayrı metinlerdir
+$TextTable = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)
 function Tx([string]$tr, [string]$en, [string]$ja) { $TextTable[$tr] = @{ en = $en; ja = $ja } }
 
 # Metni seçili dile çevir. {0} {1} gibi yer tutucular ek argümanlarla doldurulur.

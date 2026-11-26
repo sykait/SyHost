@@ -1,0 +1,43 @@
+{
+  "t": 2.75,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "ja",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [],
+  "state": {
+    "screen": "wizard",
+    "wizard": {
+      "step": "hata",
+      "info": {
+        "Path": "C:\\SyHostTest\\Downloads\\まったりクラフト.mrpack",
+        "Name": "まったりクラフト",
+        "Version": "1.0",
+        "Mc": "1.21.1",
+        "Loader": "neoforge",
+        "LoaderVer": "21.1.172",
+        "Java": 21,
+        "Mods": 156,
+        "ClientOnly": 22,
+        "Saves": ["はじまりの村", "空島"],
+        "SizeMb": 3
+      },
+      "name": "まったりクラフト",
+      "worldSel": 1,
+      "target": "C:\\SyHostTest\\Servers\\まったりクラフト",
+      "startedAt": "2026-11-27 14:28:00",
+      "sync": {
+        "steps": [2, 2, 3, 0, 0, 0, 0],
+        "error": "NeoForge をインストールできませんでした（kurulum.log を確認してください）。 ダウンロード中に接続が切れました: リモートサーバーがエラーを返しました: (503) サービスを利用できません。 インターネット接続を確認してから、もう一度インストールしてください。 問題が続く場合は C:\\SyHostTest\\Servers\\まったりクラフト\\kurulum.log を開いて内容を確認してください。"
+      }
+    }
+  }
+}

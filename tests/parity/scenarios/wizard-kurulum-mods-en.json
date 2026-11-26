@@ -1,0 +1,45 @@
+{
+  "t": 17.85,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "en",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [],
+  "state": {
+    "screen": "wizard",
+    "wizard": {
+      "step": "kurulum",
+      "info": {
+        "Path": "C:\\SyHostTest\\Downloads\\Fabric Skyblock 1.4.0.mrpack",
+        "Name": "Fabric Skyblock",
+        "Version": "1.4.0",
+        "Mc": "1.20.1",
+        "Loader": "fabric",
+        "LoaderVer": "0.16.10",
+        "Java": 17,
+        "Mods": 87,
+        "ClientOnly": 12,
+        "Saves": ["Skyblock Start", "Void Island"],
+        "SizeMb": 2
+      },
+      "name": "Fabric Skyblock",
+      "worldSel": 1,
+      "target": "C:\\SyHostTest\\Servers\\FabricSkyblock",
+      "startedAt": "2026-11-27 14:27:41",
+      "sync": {
+        "steps": [2, 2, 2, 1, 0, 0, 0],
+        "pct": 7,
+        "count": "6/87",
+        "detail": "fabric-api-0.92.2+1.20.1.jar"
+      }
+    }
+  }
+}

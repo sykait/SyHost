@@ -1,0 +1,114 @@
+{
+  "t": 5,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "ja",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [
+    {
+      "id": "sunucu",
+      "ad": "クリエイト工房",
+      "klasor": "C:\\SyHostTest\\Servers\\クリエイト工房",
+      "mc": "1.21.1",
+      "loader": "neoforge",
+      "loaderSurum": "21.1.172",
+      "java": 21,
+      "baslat": "@libraries/net/neoforged/neoforge/21.1.172/win_args.txt nogui",
+      "paket": "normal",
+      "eklenme": "2026-11-01 10:00",
+      "sonAcilis": "2026-11-27 08:02",
+      "sonBaslatmaSn": 51
+    },
+    {
+      "id": "sunucu2",
+      "ad": "まったりサバイバル",
+      "klasor": "C:\\SyHostTest\\Servers\\まったりサバイバル",
+      "mc": "1.20.1",
+      "loader": "fabric",
+      "loaderSurum": "0.16.10",
+      "java": 17,
+      "baslat": "-jar fabric-server-launch.jar nogui",
+      "paket": "yuksek",
+      "eklenme": "2026-11-02 10:00",
+      "sonAcilis": "2026-11-12 23:59",
+      "sonBaslatmaSn": null
+    }
+  ],
+  "state": {
+    "screen": "server",
+    "cur": "sunucu",
+    "status": "ACIK",
+    "mode": "help",
+    "uiMode": "buyuk",
+    "running": true,
+    "startTime": "2026-11-27 13:05:12",
+    "ramNow": 6764573491,
+    "cpuNow": 37.6,
+    "loadedRamMax": 10,
+    "activePack": "normal",
+    "packSel": 1,
+    "modCount": 198,
+    "expectedStart": 48,
+    "sysFree": 13529146982,
+    "totalRam": 34359738368,
+    "threads": 12,
+    "log": [
+      {
+        "T": "14:21:03",
+        "K": "panel",
+        "M": "クリエイト工房 を開いています。閉じるには F10、使い方は F1。",
+        "V": true
+      },
+      {
+        "T": "14:21:09",
+        "K": "info",
+        "M": "Loading 198 mods:",
+        "V": false
+      },
+      {
+        "T": "14:22:05",
+        "K": "ok",
+        "M": "サーバー準備完了！(62 秒)  このPCからは 'localhost' で参加できます。",
+        "V": true
+      },
+      {
+        "T": "14:24:40",
+        "K": "join",
+        "M": "Steve がゲームに参加しました",
+        "V": true
+      },
+      {
+        "T": "14:25:12",
+        "K": "chat",
+        "M": "<Steve> こんにちは！川のそばに工場を建てませんか？風車はとても良くできましたが、ベルトが少し長すぎる気がします。明日の夜に続きをやりましょう。よろしくお願いします！",
+        "V": true
+      },
+      {
+        "T": "14:26:00",
+        "K": "cmd",
+        "M": "say 皆さん、こんばんは",
+        "V": true
+      },
+      {
+        "T": "14:27:33",
+        "K": "warn",
+        "M": "Can't keep up! Is the server overloaded? Running 2034ms or 40 ticks behind",
+        "V": true
+      },
+      {
+        "T": "14:28:10",
+        "K": "leave",
+        "M": "alex_99 がゲームから退出しました",
+        "V": true
+      }
+    ]
+  }
+}

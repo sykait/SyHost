@@ -1,0 +1,46 @@
+{
+  "t": 20.2,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 41,
+  "version": "1.0.0",
+  "edition": "Test",
+  "lang": "en",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\SyHostTest\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "",
+    "playitKullan": false
+  },
+  "servers": [],
+  "state": {
+    "screen": "wizard",
+    "wizard": {
+      "step": "bitti",
+      "info": {
+        "Path": "C:\\SyHostTest\\Downloads\\Create Plus 2.3.mrpack",
+        "Name": "Create Plus",
+        "Version": "2.3",
+        "Mc": "1.21.1",
+        "Loader": "neoforge",
+        "LoaderVer": "21.1.172",
+        "Java": 21,
+        "Mods": 214,
+        "ClientOnly": 31,
+        "Saves": [],
+        "SizeMb": 4
+      },
+      "name": "Create Plus",
+      "worldSel": 0,
+      "target": "C:\\SyHostTest\\Servers\\CreatePlus",
+      "startedAt": "2026-11-27 14:21:05",
+      "sync": {
+        "steps": [2, 2, 2, 2, 2, 2, 2],
+        "pct": 100,
+        "count": "214/214",
+        "detail": "İlk açılışta yeni bir dünya oluşturulacak",
+        "failed": ["jei-1.21.1-neoforge-19.21.0.247.jar", "jade-1.21.1-NeoForge-15.8.3.jar"]
+      }
+    }
+  }
+}
