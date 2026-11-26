@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 $SrcDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppRoot = Split-Path -Parent $SrcDir
 $Title   = 'SyHost'
-$Version = '1.0.0'
+$Version = '0.5.0'
 
 # Kullanıcı verileri (ayarlar, sunucu listesi, playit anahtarı) kodun yanında değil, burada durur
 $Data = Join-Path $env:LOCALAPPDATA 'SyHost'
