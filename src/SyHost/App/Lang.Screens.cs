@@ -1,0 +1,206 @@
+// =====================================================================
+//  SyHost - yeni ekranların metinleri (ilk açılış, arkadaş bağlantısı,
+//  ayarlar, kaldır) ve ana menü/sihirbaz eklemeleri
+//  Her satır: Tx("Türkçe", "English", "日本語")
+// =====================================================================
+namespace SyHost;
+
+static partial class Lang
+{
+    static partial void AddFirstRun()
+    {
+        // ---------- Başlık ve adımlar ----------
+        Tx("HOŞ GELDİN", "WELCOME", "ようこそ");
+        Tx("Adım {0}/{1}", "Step {0}/{1}", "ステップ {0}/{1}");
+        Tx("Birkaç adımda her şey hazır.", "A few steps and you're all set.", "数ステップですべて準備できます。");
+        Tx("Dil", "Language", "言語");
+        Tx("Konum", "Location", "場所");
+        Tx("Eski veriler", "Old data", "以前のデータ");
+        Tx("Sistem", "System", "システム");
+        Tx("Arkadaşlar", "Friends", "フレンド");
+        Tx("Yazı tipi", "Font", "フォント");
+        Tx("Kısayollar", "Shortcuts", "ショートカット");
+        Tx("Hazır", "Done", "完了");
+        Tx("DİL", "LANGUAGE", "言語");
+        Tx("KURULUM YERİ", "INSTALL LOCATION", "インストール先");
+        Tx("ESKİ VERİLER", "OLD DATA", "以前のデータ");
+        Tx("SİSTEM", "SYSTEM", "システム");
+        Tx("ARKADAŞ BAĞLANTISI", "FRIEND CONNECTION", "フレンド接続");
+        Tx("YAZI TİPİ", "FONT", "フォント");
+        Tx("KISAYOLLAR", "SHORTCUTS", "ショートカット");
+        Tx("HAZIR", "ALL SET", "準備完了");
+
+        // ---------- Dil ve konum ----------
+        Tx("Dil daha sonra Ayarlar'dan değiştirilebilir.", "You can change the language later in Settings.", "言語はあとから設定で変更できます。");
+        Tx("SyHost nereye kurulsun? Ayarların ve sunucuların bu klasörde durur.", "Where should SyHost live? Your settings and servers are kept in this folder.", "SyHost をどこに置きますか？設定とサーバーはこのフォルダーに保存されます。");
+        Tx("önerilen", "recommended", "おすすめ");
+        Tx("Başka bir klasör seç...", "Choose another folder...", "別のフォルダーを選ぶ...");
+        Tx("Bilgisayardaki SyHost'u güncelle: {0}", "Update the SyHost on this PC: {0}", "この PC の SyHost を更新: {0}");
+        Tx("Bu klasör OneDrive ile eşitleniyor. Sunucu dosyaları büyük ve sürekli değişir; OneDrive dışında bir yer önerilir.",
+           "This folder syncs with OneDrive. Server files are big and change all the time, so a folder outside OneDrive is recommended.",
+           "このフォルダーは OneDrive と同期されています。サーバーのファイルは大きく常に変化するため、OneDrive の外をおすすめします。");
+        Tx("Yine de buraya kurmak için tekrar Enter'a bas.", "Press Enter again to install here anyway.", "それでもここにインストールする場合は、もう一度 Enter を押してください。");
+        Tx("Bu klasöre yazılamıyor. Başka bir yer seç.", "This folder can't be written to. Choose another one.", "このフォルダーには書き込めません。別の場所を選んでください。");
+        Tx("Burada zaten SyHost var; güncellenip açılacak.", "SyHost is already here; it will be updated and opened.", "ここにはすでに SyHost があります。更新して開きます。");
+        Tx("Oradaki SyHost daha yeni ({0}); yalnızca açılacak.", "The SyHost there is newer ({0}); it will just be opened.", "そちらの SyHost のほうが新しいため（{0}）、開くだけにします。");
+        Tx("SyHost orada açık. Önce onu kapat, sonra tekrar dene.", "SyHost is running there. Close it first, then try again.", "そちらの SyHost が起動中です。閉じてからもう一度お試しください。");
+        Tx("SyHost'un kurulacağı klasörü seç", "Choose a folder for SyHost", "SyHost を置くフォルダーを選択");
+        Tx("kur", "install", "インストール");
+
+        // ---------- Eski veriler ----------
+        Tx("Eski ayarların taşındı", "Your old settings came along", "以前の設定を引き継ぎました");
+        Tx("{0} sunucu ve ayarların bu klasöre kopyalandı.", "{0} servers and your settings were copied into this folder.", "{0} 台のサーバーと設定をこのフォルダーにコピーしました。");
+        Tx("playit bağlantın da taşındı.", "Your playit connection came along too.", "playit の接続も引き継ぎました。");
+        Tx("Eski klasör silinmedi: {0}", "The old folder was not deleted: {0}", "以前のフォルダーは削除していません: {0}");
+        Tx("Eski verilerin daha önce şuraya taşınmış: {0}", "Your old data was already moved to: {0}", "以前のデータはすでに次の場所へ移されています: {0}");
+        Tx("İki SyHost aynı playit bağlantısını kullanırsa birbirini bozar.", "Two SyHosts using the same playit connection get in each other's way.", "2 つの SyHost が同じ playit 接続を使うと競合します。");
+        Tx("Buraya da kopyala", "Copy it here too", "ここにもコピーする");
+        Tx("Kopyalama, temiz başla", "Don't copy, start fresh", "コピーせずに新しく始める");
+
+        // ---------- Sistem, Java, yazı tipi ----------
+        Tx("SyHost Windows 10 veya 11 ister.", "SyHost needs Windows 10 or 11.", "SyHost には Windows 10 または 11 が必要です。");
+        Tx("{0} GB RAM, {1} çekirdek", "{0} GB RAM, {1} cores", "RAM {0} GB、{1} コア");
+        Tx("Modlu sunucular için en az 8 GB RAM önerilir.", "At least 8 GB of RAM is recommended for modded servers.", "MOD入りサーバーには 8 GB 以上の RAM をおすすめします。");
+        Tx("SyHost klasörü: {0}", "SyHost folder: {0}", "SyHost フォルダー: {0}");
+        Tx("Java 21 hazır", "Java 21 is ready", "Java 21 の準備完了");
+        Tx(" (bilgisayarında kurulu)", " (installed on this PC)", "（この PC にインストール済み）");
+        Tx(" (SyHost klasöründe)", " (inside the SyHost folder)", "（SyHost フォルダー内）");
+        Tx("Çoğu modpack Java 21 ister. Şimdi indirilsin mi? Yaklaşık 50 MB, yalnızca SyHost klasörüne iner.",
+           "Most modpacks need Java 21. Download it now? About 50 MB, saved only inside the SyHost folder.",
+           "ほとんどの Modpack には Java 21 が必要です。今ダウンロードしますか？約 50 MB で、SyHost フォルダー内にだけ保存されます。");
+        Tx("İndir", "Download", "ダウンロード");
+        Tx("Sonra (sunucu kurarken iner)", "Later (it downloads when you add a server)", "あとで（サーバーの追加時にダウンロード）");
+        Tx("Eski paketlerin istediği Java 8 ve 17 gerekince kendiliğinden iner.", "Java 8 and 17 for older packs download by themselves when needed.", "古いパック用の Java 8 と 17 は、必要なときに自動でダウンロードされます。");
+        Tx("Java 21 indirilemedi: {0}", "Couldn't download Java 21: {0}", "Java 21 をダウンロードできませんでした: {0}");
+        Tx("Cascadia Mono yazı tipi hazır", "The Cascadia Mono font is ready", "Cascadia Mono フォントの準備完了");
+        Tx("Logonun ve animasyonların doğru görünmesi için Cascadia Mono yazı tipi yalnızca senin kullanıcına kurulacak (yönetici izni gerekmez).",
+           "So the logo and animations look right, the Cascadia Mono font will be installed for your user only (no admin rights needed).",
+           "ロゴとアニメーションを正しく表示するため、Cascadia Mono フォントをこのユーザーにだけインストールします（管理者権限は不要）。");
+        Tx("Yazı tipi kurulamadı. SyHost yine çalışır, bazı semboller farklı görünebilir.", "Couldn't install the font. SyHost still works; some symbols may look different.", "フォントをインストールできませんでした。SyHost は動作しますが、一部の記号の見た目が変わる場合があります。");
+
+        // ---------- Kısayollar ve bitiş ----------
+        Tx("Masaüstüne kısayol", "Desktop shortcut", "デスクトップのショートカット");
+        Tx("Başlat menüsüne kısayol", "Start menu shortcut", "スタートメニューのショートカット");
+        Tx("Masaüstündeki SyHost kısayolu başka bir SyHost'u açıyor; yenisiyle değiştirilecek.", "The SyHost shortcut on your desktop opens another SyHost; it will be replaced with this one.", "デスクトップの SyHost ショートカットは別の SyHost を開きます。このコピー用に置き換えます。");
+        Tx("Boşluk", "Space", "Space");
+        Tx("aç/kapat", "on/off", "オン/オフ");
+        Tx("Her şey hazır!", "All set!", "準備完了！");
+        Tx("Sunucu eklemek için ana menüde \"Yeni sunucu ekle\"yi seç ve bir Modrinth paketi (.mrpack) aç.",
+           "To add a server, choose \"Add a new server\" in the main menu and open a Modrinth pack (.mrpack).",
+           "サーバーを追加するには、メインメニューで「新しいサーバーを追加」を選び、Modrinth パック（.mrpack）を開きます。");
+        Tx("Ayarlara her zaman F9 ile ulaşabilirsin.", "Settings are always one key away: F9.", "設定はいつでも F9 で開けます。");
+        Tx(" Başla", " Start", " はじめる");
+
+        // ---------- Arkadaş bağlantısı (playit) ----------
+        Tx("Çoğu ev internetinde (CGNAT) arkadaşların doğrudan bağlanamaz.", "On most home connections (CGNAT) your friends cannot connect to you directly.", "多くの家庭用回線（CGNAT）では、友達が直接接続できません。");
+        Tx("playit.gg bunu bedava çözer ve sana sabit bir adres verir (ör. bir-sey.joinmc.link).", "playit.gg fixes this for free and gives you a fixed address (e.g. some-name.joinmc.link).", "playit.gg が無料で解決し、固定アドレス（例: some-name.joinmc.link）をくれます。");
+        Tx("SyHost playit'i sadece kendisi açıkken çalıştırır, bilgisayarın açılışında başlamaz.", "SyHost only runs playit while SyHost itself is open, never at Windows startup.", "SyHost は自身が開いている間だけ playit を動かします。Windows の起動時には動きません。");
+        Tx("Arkadaşların internetten bağlanabilsin mi?", "Should your friends be able to join over the internet?", "友達がインターネット経由で参加できるようにしますか？");
+        Tx("Evet, bağlantıyı kur", "Yes, set it up", "はい、設定する");
+        Tx("Şimdilik hayır", "Not now", "今はしない");
+        Tx("Arkadaş bağlantısı hazır: {0}", "Friend connection is ready: {0}", "フレンド接続の準備完了: {0}");
+        Tx("Devam", "Continue", "続ける");
+        Tx("Yeniden bağla", "Link again", "再接続する");
+        Tx("playit indiriliyor...", "Downloading playit...", "playit をダウンロード中...");
+        Tx("playit kurulamadı, bu adım atlanıyor.", "Couldn't set up playit, skipping this step.", "playit をセットアップできなかったため、この手順をスキップします。");
+        Tx("playit hesabına bağlanma", "Linking your playit account", "playit アカウントとの連携");
+        Tx("1. Birazdan tarayıcıda playit.gg açılacak.", "1. playit.gg will open in your browser in a moment.", "1. まもなくブラウザで playit.gg が開きます。");
+        Tx("2. Hesabın yoksa bedava oluştur (Create Account), varsa giriş yap.", "2. If you don't have an account, create one for free (Create Account); otherwise log in.", "2. アカウントがなければ無料で作成（Create Account）、あればログイン。");
+        Tx("3. Çıkan sayfada bu bilgisayarı onayla (Continue / Add Agent).", "3. Approve this computer on the page that opens (Continue / Add Agent).", "3. 表示されたページでこの PC を承認（Continue / Add Agent）。");
+        Tx("Tarayıcıda onaylamanı bekliyorum (en fazla 10 dakika)...", "Waiting for you to approve it in the browser (up to 10 minutes)...", "ブラウザでの承認を待っています（最大 10 分）...");
+        Tx("playit bağlantısı tamamlanmadı. Tekrar deneyebilirsin.", "The playit link was not completed. You can try again.", "playit との連携が完了しませんでした。もう一度お試しください。");
+        Tx("Arkadaşlarının bağlanacağı adres", "The address your friends will use", "友達が使うアドレス");
+        Tx("1. Birazdan playit.gg tünel sayfası açılacak.", "1. The playit.gg tunnels page will open in a moment.", "1. まもなく playit.gg のトンネルページが開きます。");
+        Tx("2. \"Add Tunnel\" > \"Minecraft Java\" seç > Continue > bölge \"Automatic (Free)\" > Create Tunnel.", "2. \"Add Tunnel\" > \"Minecraft Java\" > Continue > region \"Automatic (Free)\" > Create Tunnel.", "2. 「Add Tunnel」>「Minecraft Java」> Continue > リージョン「Automatic (Free)」> Create Tunnel。");
+        Tx("3. Sesli sohbet modu kullanıyorsan bir tane de \"MC: Simple Voice Chat\" tüneli oluştur.", "3. If you use the voice chat mod, also create a \"MC: Simple Voice Chat\" tunnel.", "3. ボイスチャット MOD を使う場合は「MC: Simple Voice Chat」トンネルも作成。");
+        Tx("4. Tünellerin adreslerini aşağıya yapıştır (sağ tık = yapıştır).", "4. Paste the tunnel addresses below (right-click = paste).", "4. 下にトンネルのアドレスを貼り付けてください（右クリック = 貼り付け）。");
+        Tx("Minecraft adresi", "Minecraft address", "Minecraft アドレス");
+        Tx("(ör. bir-sey.joinmc.link veya xxx.tun.ply.gg)", "(e.g. some-name.joinmc.link or xxx.tun.ply.gg)", "（例: some-name.joinmc.link または xxx.tun.ply.gg）");
+        Tx("Sesli sohbet adresi", "Voice chat address", "ボイスチャット アドレス");
+        Tx("(yoksa boş bırakıp Enter)", "(leave empty and press Enter if none)", "（なければ空のまま Enter）");
+        Tx("Adres anlaşılamadı. Örnek: bir-sey.joinmc.link", "That address doesn't look right. Example: some-name.joinmc.link", "アドレスを認識できませんでした。例: some-name.joinmc.link");
+        Tx("Sesli sohbet adresi anlaşılamadı, boş bırakıldı.", "Couldn't understand the voice chat address, left it empty.", "ボイスチャットのアドレスを認識できなかったため、空にしました。");
+        Tx("Arkadaş adresi kaydedildi: {0}", "Friend address saved: {0}", "友達用アドレスを保存しました: {0}");
+    }
+
+    static partial void AddSettings()
+    {
+        Tx("AYARLAR", "SETTINGS", "設定");
+        Tx("GENEL", "GENERAL", "一般");
+        Tx("SUNUCU", "SERVER", "サーバー");
+        Tx("SYHOST", "SYHOST", "SYHOST");
+        Tx("Sunucu klasörü", "Server folder", "サーバーフォルダー");
+        Tx("Masaüstü kısayolu", "Desktop shortcut", "デスクトップのショートカット");
+        Tx("Başlat menüsü kısayolu", "Start menu shortcut", "スタートメニューのショートカット");
+        Tx("Yazı boyutu", "Text size", "文字サイズ");
+        Tx("Arkadaş bağlantısı (playit)", "Friend connection (playit)", "フレンド接続（playit）");
+        Tx("Maksimum oyuncu", "Max players", "最大プレイヤー数");
+        Tx("Otomatik yedek", "Automatic backup", "自動バックアップ");
+        Tx("Saklanacak yedek", "Backups to keep", "保存するバックアップ数");
+        Tx("Çökerse yeniden başlat", "Restart after a crash", "クラッシュ時に再起動");
+        Tx("Klasörü aç", "Open the folder", "フォルダーを開く");
+        Tx("SyHost'u kaldır", "Uninstall SyHost", "SyHost をアンインストール");
+        Tx("Arayüzün dili. Klasör adları da bu dilde görünür.", "The language of SyHost. Folder names in Explorer follow it too.", "SyHost の表示言語です。エクスプローラーのフォルダー名もこの言語になります。");
+        Tx("Yeni sunucuların kurulacağı yer. Enter ile değiştir.", "Where new servers are installed. Press Enter to change it.", "新しいサーバーのインストール先です。Enter で変更します。");
+        Tx("Enter ile aç ya da kapat.", "Press Enter to turn it on or off.", "Enter でオン/オフを切り替えます。");
+        Tx("← → ile ayarla. Pencere yeni boyuta göre büyür ya da küçülür.", "Adjust with ← →. The window grows or shrinks to fit.", "← → で調整します。ウィンドウの大きさも合わせて変わります。");
+        Tx("Arkadaşlarının internetten bağlanması için. Enter ile kur ya da yeniden bağla.", "Lets your friends join over the internet. Press Enter to set it up or link again.", "友達がインターネット経由で参加するためのものです。Enter で設定または再接続します。");
+        Tx("Bulunan Java sürümleri. Enter ile Java 21'i SyHost klasörüne indir.", "Java versions found. Press Enter to download Java 21 into the SyHost folder.", "見つかった Java のバージョンです。Enter で Java 21 を SyHost フォルダーにダウンロードします。");
+        Tx("Yeni kurulan sunucular için. ← → ile ayarla.", "For newly installed servers. Adjust with ← →.", "新しくインストールするサーバー用です。← → で調整します。");
+        Tx("Sunucu açıkken dünya kaç saatte bir yedeklensin. 0 = kapalı.", "How often the world is backed up while the server runs, in hours. 0 = off.", "サーバー稼働中にワールドをバックアップする間隔（時間）。0 = オフ。");
+        Tx("Her sunucuda tutulacak en yeni yedek sayısı.", "How many of the newest backups each server keeps.", "各サーバーで保存する最新バックアップの数です。");
+        Tx("Sunucu beklenmedik şekilde kapanırsa 10 saniye sonra yeniden açılır.", "If the server stops unexpectedly, it starts again after 10 seconds.", "サーバーが予期せず停止した場合、10 秒後に再起動します。");
+        Tx("SyHost klasörünü Explorer'da açar.", "Opens the SyHost folder in Explorer.", "SyHost フォルダーをエクスプローラーで開きます。");
+        Tx("Kısayolları ve klasör dışındaki izleri kaldırır; istersen klasörü de siler.", "Removes the shortcuts and everything SyHost left outside its folder; it can delete the folder too.", "ショートカットとフォルダー外の痕跡を削除します。フォルダーごと削除することもできます。");
+        Tx("Yeni sunucuların kurulacağı klasörü seç", "Choose the folder for new servers", "新しいサーバーのフォルダーを選択");
+        Tx("açık", "on", "オン");
+        Tx("kapalı", "off", "オフ");
+        Tx("başka bir SyHost'u açıyor", "opens another SyHost", "別の SyHost を開きます");
+        Tx("kurulu değil", "not set up", "未設定");
+        Tx("{0} saatte bir", "every {0} h", "{0} 時間ごと");
+        Tx("değiştir", "change", "変更");
+        Tx("ayarla", "adjust", "調整");
+    }
+
+    static partial void AddUninstall()
+    {
+        Tx("SYHOST'U KALDIR", "UNINSTALL SYHOST", "SYHOST をアンインストール");
+        Tx("NELER KALDIRILSIN?", "WHAT SHOULD GO?", "削除するもの");
+        Tx("BİTTİ", "DONE", "完了");
+        Tx("Masaüstü ve Başlat menüsü kısayolları", "Desktop and Start menu shortcuts", "デスクトップとスタートメニューのショートカット");
+        Tx("SyHost'un kurduğu Cascadia Mono yazı tipi", "The Cascadia Mono font SyHost installed", "SyHost がインストールした Cascadia Mono フォント");
+        Tx("Eski sürümün veri klasörü", "Data folder of the old version", "旧バージョンのデータフォルダー");
+        Tx("Eski sürümün program klasörü", "Program folder of the old version", "旧バージョンのプログラムフォルダー");
+        Tx("Eski playit kurulumu (Program Files)", "Old playit install (Program Files)", "旧 playit（Program Files）");
+        Tx("Eski kurulumun sisteme koyduğu yazı tipi", "Font the old setup put into Windows", "旧セットアップが Windows に入れたフォント");
+        Tx("Java (başka programlar da kullanıyor olabilir)", "Java (other programs may use it too)", "Java（ほかのプログラムも使っている可能性あり）");
+        Tx("SyHost klasörünün kendisi", "The SyHost folder itself", "SyHost フォルダー自体");
+        Tx("içinde {0} sunucu ve dünyaları var", "contains {0} servers and their worlds", "{0} 台のサーバーとワールドを含みます");
+        Tx("Windows izin isteyecek", "Windows will ask for permission", "Windows が許可を求めます");
+        Tx("Java varsayılan olarak silinmez; başka programlar da kullanıyor olabilir.", "Java is not removed by default; other programs may use it too.", "Java は既定では削除しません。ほかのプログラムも使っている可能性があります。");
+        Tx("Klasörün dışındaki sunuculara dokunulmaz: {0}", "Servers outside the folder are never touched: {0}", "フォルダー外のサーバーには一切触れません: {0}");
+        Tx("Emin misin? SyHost klasörü, içindeki sunucular ve dünyalarla birlikte silinecek. Onaylamak için tekrar Enter'a bas.",
+           "Are you sure? The SyHost folder will be deleted together with the servers and worlds inside it. Press Enter again to confirm.",
+           "本当によろしいですか？SyHost フォルダーは、中のサーバーとワールドごと削除されます。確認のためもう一度 Enter を押してください。");
+        Tx(" Seçilenleri kaldır   ", " Remove selected   ", " 選んだものを削除   ");
+        Tx(" seç / bırak   ", " select / unselect   ", " 選択 / 解除   ");
+        Tx("seç / bırak", "select / unselect", "選択 / 解除");
+        Tx("kaldır", "remove", "削除");
+        Tx("Kaldırılıyor…", "Removing…", "削除中…");
+        Tx("Kaldırma tamamlandı.", "Uninstall finished.", "アンインストールが完了しました。");
+        Tx("SyHost kapanınca klasörü de silinecek.", "The folder will be deleted when SyHost closes.", "SyHost を閉じるとフォルダーも削除されます。");
+        Tx("Artık SyHost klasörünü silebilirsin; Explorer'da gösterdim.", "You can delete the SyHost folder now; it's shown in Explorer.", "SyHost フォルダーを削除できます。エクスプローラーで表示しました。");
+        Tx("Deneme modu: hiçbir şey silinmedi.", "Test mode: nothing was deleted.", "テストモード: 何も削除していません。");
+        Tx(" SyHost'u kapat", " Close SyHost", " SyHost を閉じる");
+        Tx("kapat", "close", "閉じる");
+    }
+
+    static partial void AddExtra()
+    {
+        // Ana menü: ayarlar tuşu ve playit ipucu (eski "(Setup.bat)" yerine)
+        Tx("ayarlar", "settings", "設定");
+        Tx("  (F9 ayarlar)", "  (F9 settings)", "  （F9 設定）");
+        // Sihirbaz özeti: Java artık izin istemeden SyHost klasörüne iner
+        Tx("Java {0} otomatik olarak SyHost klasörüne indirilecek.", "Java {0} will be downloaded into the SyHost folder automatically.", "Java {0} は SyHost フォルダーに自動でダウンロードされます。");
+    }
+}

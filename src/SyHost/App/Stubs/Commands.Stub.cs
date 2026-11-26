@@ -12,10 +12,13 @@ sealed partial class App
         bool ctrl = (k.Modifiers & ConsoleModifiers.Control) != 0;
         switch (Screen)
         {
-            case "splash": Screen = "home"; ResetFrame(); return;
+            case "splash": AfterSplash(); return;
             case "outro": Quit = true; return;
-            case "home": HandleHomeKey(k, ctrl); return;
+            case "home": if (k.Key == ConsoleKey.F9) { OpenSettings(); return; } HandleHomeKey(k, ctrl); return;
             case "wizard": HandleWizardKey(k, ctrl); return;
+            case "firstrun": HandleFirstRunKey(k, ctrl); return;
+            case "settings": HandleSettingsKey(k, ctrl); return;
+            case "uninstall": HandleUninstallKey(k, ctrl); return;
         }
     }
 }

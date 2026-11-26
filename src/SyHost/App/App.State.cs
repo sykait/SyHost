@@ -13,7 +13,8 @@ namespace SyHost;
 sealed partial class App
 {
     // ---------- Sabitler ----------
-    public const string Title = "SyHost";
+    /// <summary>Pencere başlığı. Testler (SYHOST_TEST_TITLE) paralel çalışan kopyaları ayırmak için değiştirebilir.</summary>
+    public static readonly string Title = Environment.GetEnvironmentVariable("SYHOST_TEST_TITLE") is { Length: > 0 } t ? t : "SyHost";
     public static readonly string Version = typeof(App).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "1.0.0";
     /// <summary>Başlıkta sürümün yanında görünen etiket. Terminal sürümünde "Terminal" yazar.</summary>
     public string Edition = "C#";

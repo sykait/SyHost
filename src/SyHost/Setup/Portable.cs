@@ -19,7 +19,12 @@ static unsafe partial class Portable
     public const string ExeName = "SyHost.exe";
 
     /// <summary>Önerilen kurulum yeri: C:\Users\&lt;ad&gt;\SyHost (OneDrive'a eşitlenmez).</summary>
-    public static string DefaultRoot() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SyHost");
+    public static string DefaultRoot()
+    {
+        // Testler varsayılan yeri bir test klasörüne yönlendirebilir
+        string t = Environment.GetEnvironmentVariable("SYHOST_DEFAULT_ROOT");
+        return !string.IsNullOrEmpty(t) ? t : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SyHost");
+    }
 
     /// <summary>Bu klasörde kurulu bir SyHost var mı (Data klasörü)?</summary>
     public static bool IsInstalled(string root) => Directory.Exists(Path.Combine(root, DataName));

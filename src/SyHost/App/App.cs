@@ -35,14 +35,23 @@ sealed partial class App
     // ---------- Ayarlar (SyHost.ps1 51-110) ----------
     public void LoadConfig()
     {
-        Directory.CreateDirectory(Data);
-        if (!File.Exists(CfgFile)) Json.WriteText(CfgFile, Encoding.UTF8.GetString(Asset("default-settings.json")));
-        try { Cfg = Json.ReadSettings(CfgFile); }
-        catch
+        if (SetupMode)
         {
-            // Bozuk ayar dosyası: kenara al, varsayılanla devam et (veri kaybolmasın)
-            try { File.Copy(CfgFile, CfgFile + ".bozuk", true); } catch { }
+            // Henüz kurulmadı: diske hiçbir şey yazma, Windows'un dilini öner
             Cfg = Json.ParseSettings(Encoding.UTF8.GetString(Asset("default-settings.json")));
+            Cfg.dil = Portable.UiLanguage();
+        }
+        else
+        {
+            Directory.CreateDirectory(Data);
+            if (!File.Exists(CfgFile)) Json.WriteText(CfgFile, Encoding.UTF8.GetString(Asset("default-settings.json")));
+            try { Cfg = Json.ReadSettings(CfgFile); }
+            catch
+            {
+                // Bozuk ayar dosyası: kenara al, varsayılanla devam et (veri kaybolmasın)
+                try { File.Copy(CfgFile, CfgFile + ".bozuk", true); } catch { }
+                Cfg = Json.ParseSettings(Encoding.UTF8.GetString(Asset("default-settings.json")));
+            }
         }
         Cfg.arkadasAdresi ??= ""; Cfg.sesAdresi ??= "";
         Cfg.sunucuKokKlasoru = ResolveRootDir(Cfg.sunucuKokKlasoru);
@@ -76,14 +85,38 @@ sealed partial class App
                 Cfg.paketler[pk].cekirdek = plan[pk][2];
             }
             Cfg.paketlerAyarlandi = true;
-            SaveConfig();
+            if (!SetupMode) SaveConfig();
         }
         Packs = Cfg.paketler;
         MaxPlayers = Cfg.maksOyuncu != 0 ? Cfg.maksOyuncu : 5;
         Threads = Environment.ProcessorCount;
         TotalRam = mem.Total;
         HasFriendAddr = !string.IsNullOrEmpty(Cfg.arkadasAdresi) && Cfg.playitKullan;
-        if (File.Exists(WinFile)) { try { Win = Json.ParseWin(Json.ReadText(WinFile)) ?? new WinState(); } catch { Win = new WinState(); } }
+        if (!SetupMode && File.Exists(WinFile)) { try { Win = Json.ParseWin(Json.ReadText(WinFile)) ?? new WinState(); } catch { Win = new WinState(); } }
+    }
+
+    /// <summary>Açılışta: eski verileri taşı, taşınmış klasörün kısayollarını düzelt, klasör görünümünü uygula.</summary>
+    void PortableStartup()
+    {
+        if (SetupMode) { NextAfterSplash = "firstrun"; return; }
+        // 0.5.0'dan kalan veriler: bu Data henüz boşsa bir kez kopyala
+        if (Migration.HasLegacyData() && Migration.DataIsFresh(Data))
+        {
+            string moved = Migration.MovedTo();
+            bool here = moved != null && string.Equals(Path.GetFullPath(moved).TrimEnd('\\'), AppRoot.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+            if (moved == null || here)
+            {
+                try { FrMigrated = Migration.Copy(Data, AppRoot, Cfg.dil); LoadConfig(); } catch { }
+            }
+            else FrMovedTo = moved;
+        }
+        LoadServers();
+        // Klasör taşındıysa eski yeri gösteren kısayolları buraya çevir
+        try { if (Shortcuts.FixMoved(ExePath, Lang.L("SyHost - modlu Minecraft sunucu merkezi")) > 0) ShowHomeMsg(Lang.L("Kısayollar yeni yere güncellendi.")); } catch { }
+        string root = AppRoot, lang = Lang.Code;
+        var dirs = Servers.Select(s => s.klasor).ToList();
+        Task.Run(() => FolderLook.Apply(root, lang, dirs));
+        NextAfterSplash = (Cfg.kurulumTamam == false || FrMigrated != null || FrMovedTo != null) ? "firstrun" : "home";
     }
 
     /// <summary>sunucuKokKlasoru: boşsa SyHost klasöründeki Servers, göreliyse SyHost klasörüne göre.</summary>
@@ -157,8 +190,8 @@ sealed partial class App
         try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High; } catch { }
         Native.DpiAware();
         LoadConfig();
-        Native.SetFont("Cascadia Mono", (short)(Cfg.yaziTipiBoyutu != 0 ? Cfg.yaziTipiBoyutu : 16));
-        LoadServers();
+        Native.SetFont(Fonts.Face, (short)(Cfg.yaziTipiBoyutu != 0 ? Cfg.yaziTipiBoyutu : 16));
+        PortableStartup();
         InitTables();
 
         Native.PrepareConsole();
@@ -168,7 +201,7 @@ sealed partial class App
         Tray.Start(Title);
         Native.MakeOpaque();
         SetUiMode("buyuk", NoSave: true);
-        SplashStart = T();
+        SplashStart = NoSplash ? T() - SplashLen - 1 : T();
         StartPlayit();
         SysFree = Native.Memory().Avail;
 
@@ -178,7 +211,8 @@ sealed partial class App
             {
                 DateTime now = Now();
 
-                if (Screen == "splash" && (T() - SplashStart) > SplashLen) { Screen = "home"; ResetFrame(); }
+                if (Screen == "splash" && (T() - SplashStart) > SplashLen) AfterSplash();
+                FrPoll();
                 if (Screen == "outro" && (T() - OutroStart) > OutroLen) { Quit = true; break; }
 
                 // Tepsi menüsü ve kısayollar

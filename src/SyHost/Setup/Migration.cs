@@ -84,7 +84,10 @@ static class Migration
             }
             catch { }
         }
-        try { r.Servers = Json.ParseServers(Json.ReadText(Path.Combine(dataDir, "sunucular.json"))).Count; } catch { }
+        // Sunucu listesi yoksa boş liste: taşıma bir daha tekrarlanmasın
+        string list = Path.Combine(dataDir, "sunucular.json");
+        if (!File.Exists(list)) Json.WriteText(list, "[]");
+        try { r.Servers = Json.ParseServers(Json.ReadText(list)).Count; } catch { }
         r.Playit = File.Exists(Path.Combine(dataDir, "playit.toml"));
         WriteNote(src, root);
         return r;

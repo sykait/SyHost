@@ -20,40 +20,56 @@ static class Program
         if (args.Length >= 2 && args[0] == "--selftest")
             return SelfTest.Run(args);
 
-        bool hosted = Array.IndexOf(args, "--hosted") >= 0;
+        bool hosted = HasArg(args, "--hosted");
 
         // Pencere gizleme, küçük mod ve taşıma yalnızca klasik konsol penceresinde (conhost) çalışır.
         // Windows Terminal'de açıldıysak kendimizi conhost'ta yeniden aç.
         if (!hosted && !Native.IsConhost())
         {
-            Relaunch(args);
+            Launch(Environment.ProcessPath, args);
             return 0;
         }
 
-        string root = ArgValue(args, "--root") ?? AppContext.BaseDirectory;
+        string exe = Environment.ProcessPath;
+        string root = ArgValue(args, "--root") ?? Path.GetDirectoryName(exe);
+        bool installed = Portable.IsInstalled(root);
+
+        // Kurulu klasöre yazılamıyorsa (ör. Program Files'a taşınmış) sessizce çökme, anlaşılır uyarı göster
+        if (installed && !Portable.CanWrite(Path.Combine(root, Portable.DataName)))
+        {
+            Lang.Code = Portable.UiLanguage();
+            Portable.Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost.exe'yi yazılabilir bir klasöre taşı (ör. {1}) ve oradan aç.", root, Portable.DefaultRoot()));
+            return 1;
+        }
 
         // Tek kopya: ikinci kez açılırsa açık olan pencereyi öne getir
-        using var mutex = new Mutex(true, @"Local\SyHostSunucuMerkezi", out bool created);
-        if (!created)
+        var app = new App(root) { SetupMode = !installed, NoSplash = HasArg(args, "--no-splash") };
+        // Terminal sürümüyle aynı kilit: iki sürüm aynı anda açılamaz (aynı verileri kullanırlar)
+        string mutexName = @"Local\SyHostSunucuMerkezi" + (App.Title == "SyHost" ? "" : "-" + App.Title);
+        using (var mutex = new Mutex(true, mutexName, out bool created))
         {
-            Native.FocusWindow(App.Title);
-            return 0;
+            if (!created)
+            {
+                Native.FocusWindow(App.Title);
+                return 0;
+            }
+            try { app.Run(); }
+            finally { try { mutex.ReleaseMutex(); } catch { } }
         }
 
-        var app = new App(root);
-        try { app.Run(); }
-        finally { try { mutex.ReleaseMutex(); } catch { } }
-
-        if (app.RestartApp) Relaunch(args);
+        // Kurulum/güncelleme bitti: SyHost'u yeni yerinden aç (animasyon tekrar oynamasın)
+        if (app.LaunchAfterExit != null) Launch(app.LaunchAfterExit, new[] { "--no-splash" });
+        else if (app.RestartApp) Launch(exe, args);
+        // Kaldır: SyHost kapandıktan sonra klasörü sil
+        if (app.DeleteRootAfterExit) Uninstall.DeleteFolderAfterExit(root);
         return 0;
     }
 
-    /// <summary>SyHost'u klasik konsol penceresinde (conhost) yeniden aç.</summary>
-    public static void Relaunch(string[] args)
+    /// <summary>Bir SyHost.exe'yi klasik konsol penceresinde (conhost) aç.</summary>
+    public static void Launch(string exe, string[] args)
     {
         var rest = new List<string>();
         foreach (string a in args) if (a != "--hosted") rest.Add(a.Contains(' ') ? "\"" + a + "\"" : a);
-        string exe = Environment.ProcessPath;
         var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "conhost.exe"), $"\"{exe}\" --hosted {string.Join(' ', rest)}".TrimEnd())
         {
             UseShellExecute = true,
@@ -61,6 +77,8 @@ static class Program
         };
         try { Process.Start(psi); } catch { }
     }
+
+    static bool HasArg(string[] args, string name) => Array.IndexOf(args, name) >= 0;
 
     static string ArgValue(string[] args, string name)
     {
