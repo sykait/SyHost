@@ -1,6 +1,6 @@
 # SyHost
 
-[English](README.md) · [Türkçe](README.tr.md) · **日本語**
+[English](../README.md) · [Türkçe](README.tr.md) · **日本語**
 
 **MOD入り Minecraft サーバーをワンクリックでセットアップ・起動・管理。**
 Modrinth パック（`.mrpack`）を選ぶだけで、Java・MOD ローダー・MOD・設定を SyHost が自動でインストールします。
@@ -144,6 +144,6 @@ SyHost は**ソース公開型**のプロジェクトです。閲覧・ダウン
 
 > This project is based on **SyHost** by **sykait** — https://github.com/sykait/SyHost
 
-書面による許可なく販売・商用利用することはできません。詳細: [LICENSE.md](LICENSE.md)
+書面による許可なく販売・商用利用することはできません。詳細: [LICENSE.md](../LICENSE.md)
 
 Minecraft は Mojang Studios の商標です。SyHost は Mojang および Microsoft とは関係ありません。

@@ -1,6 +1,6 @@
 # SyHost
 
-[English](README.md) · **Türkçe** · [日本語](README.ja.md)
+[English](../README.md) · **Türkçe** · [日本語](README.ja.md)
 
 **Modlu Minecraft sunucusunu tek tıkla kur, aç, yönet.**
 Bir Modrinth paketi (`.mrpack`) seç; Java, mod yükleyici, modlar ve ayarlar kendiliğinden kurulsun.
@@ -145,6 +145,6 @@ SyHost **kaynak görünür** bir projedir: kodu görebilir, indirebilir ve kişi
 
 > Bu proje **SyHost** (yapımcı: **sykait**) projesine dayanmaktadır — https://github.com/sykait/SyHost
 
-Satış ve ticari kullanım yazılı izin olmadan yasaktır. Ayrıntılar: [LICENSE.md](LICENSE.md)
+Satış ve ticari kullanım yazılı izin olmadan yasaktır. Ayrıntılar: [LICENSE.md](../LICENSE.md)
 
 Minecraft, Mojang Studios'un ticari markasıdır. SyHost, Mojang veya Microsoft ile bağlantılı değildir.

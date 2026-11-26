@@ -1,6 +1,6 @@
 # SyHost
 
-**English** · [Türkçe](README.tr.md) · [日本語](README.ja.md)
+**English** · [Türkçe](docs/README.tr.md) · [日本語](docs/README.ja.md)
 
 **Set up, run and manage a modded Minecraft server with one click.**
 Pick a Modrinth pack (`.mrpack`) and SyHost installs Java, the mod loader, the mods and the settings for you.
@@ -155,6 +155,7 @@ SyHost/
 │   ├── config/
 │   │   └── default-settings.json  → default settings on first launch
 │   └── fonts/                     → Cascadia Mono font (SIL OFL 1.1)
+├── docs/                          → this README in Türkçe and 日本語
 ├── README.md
 └── LICENSE.md
 ```
