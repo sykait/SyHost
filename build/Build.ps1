@@ -3,11 +3,13 @@
 #    build\Build.ps1             hızlı derleme denetimi (Debug)
 #    build\Build.ps1 -Publish    tek dosya SyHost.exe üretir (NativeAOT) -> dist\SyHost.exe
 #    build\Build.ps1 -Run        derleyip test klasöründe açar (geliştirme için)
+#    build\Build.ps1 -Publish -Terminal   ayrıca Terminal sürümünü tek exe yapar -> dist\SyHost-Terminal.exe
 #  Gerekenler: .NET 10 SDK ve Visual Studio C++ derleme araçları (yalnızca -Publish için).
 # =====================================================================
 [CmdletBinding()]
 param(
     [switch]$Publish,
+    [switch]$Terminal,
     [switch]$Run,
     [string]$RunRoot = 'D:\SyHostTest\dev'
 )
@@ -58,6 +60,22 @@ if ($Publish) {
     Copy-Item (Join-Path $out 'SyHost.exe') (Join-Path $Dist 'SyHost.exe') -Force
     $kb = [int]((Get-Item (Join-Path $Dist 'SyHost.exe')).Length / 1KB)
     Write-Host "dist\SyHost.exe hazır ($kb KB)" -ForegroundColor Green
+
+    # Terminal (PowerShell) sürümü: PowerShell uygulamasını içinde taşıyan tek exe
+    if ($Terminal) {
+        $tproj = Join-Path $Repo 'src\SyHost.Terminal\SyHost.Terminal.csproj'
+        if (Test-Path $tproj) {
+            $tout = Join-Path $Repo 'src\SyHost.Terminal\bin\publish'
+            $ta = @('publish', $tproj, '-c', 'Release', '-r', 'win-x64', '-o', $tout, '-nologo')
+            if ($envTools) { $ta += '-p:IlcUseEnvironmentalTools=true' }
+            Invoke-Dotnet $ta
+            Copy-Item (Join-Path $tout 'SyHost-Terminal.exe') (Join-Path $Dist 'SyHost-Terminal.exe') -Force
+            $tkb = [int]((Get-Item (Join-Path $Dist 'SyHost-Terminal.exe')).Length / 1KB)
+            Write-Host "dist\SyHost-Terminal.exe hazır ($tkb KB)" -ForegroundColor Green
+        } else {
+            Write-Warning 'Terminal sürümünün başlatıcısı (src\SyHost.Terminal) henüz yok, atlandı.'
+        }
+    }
 } else {
     Invoke-Dotnet @('build', $Project, '-c', 'Debug', '-nologo', '-v', 'q', '-clp:NoSummary')
     Write-Host 'Derleme başarılı' -ForegroundColor Green

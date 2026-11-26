@@ -1,0 +1,46 @@
+# SyHost - her push ve pull request'te: derle, arka ucu denetle, iki sürümün ekranlarını karşılaştır
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build SyHost.exe (C#, single file)
+        shell: powershell
+        run: .\build\Build.ps1 -Publish
+
+      - name: Self-tests (shortcuts, folder look, migration)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $t = Join-Path $env:RUNNER_TEMP 'selftest'
+          .\dist\SyHost.exe --selftest shortcuts (Join-Path $t 'sc');      if ($LASTEXITCODE) { exit 1 }
+          .\dist\SyHost.exe --selftest folderlook (Join-Path $t 'fl\SyHost') ja; if ($LASTEXITCODE) { exit 1 }
+          New-Item -ItemType Directory -Force (Join-Path $t 'legacy') | Out-Null
+          Set-Content (Join-Path $t 'legacy\sunucular.json') '[]' -Encoding ASCII
+          .\dist\SyHost.exe --selftest migration (Join-Path $t 'legacy') (Join-Path $t 'mig'); if ($LASTEXITCODE) { exit 1 }
+
+      - name: Parity (C# and Terminal editions draw the same frames)
+        shell: powershell
+        run: |
+          if (Test-Path .\tests\parity\Run-Parity.ps1) { .\tests\parity\Run-Parity.ps1 -NoBuild; if ($LASTEXITCODE) { exit 1 } }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SyHost
+          path: dist/*.exe
