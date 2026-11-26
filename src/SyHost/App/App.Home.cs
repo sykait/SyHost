@@ -127,7 +127,7 @@ sealed partial class App
                 WorldSizeCache[id] = (File.Exists(wd) || Directory.Exists(wd)) ? Ps.F("{0:0} MB", HomeSizeBytes(wd) / (1024.0 * 1024)) : Lang.L("henüz oluşmadı");
             }
             string pk = Ps.In(sv.paket, PackKeys) ? sv.paket : "normal";
-            foreach (string l in Card((sv.ad ?? "").ToUpper(), new[]
+            foreach (string l in Card(Up(sv.ad), new[]
             {
                 c.soft + Lang.L("Sürüm     ") + R + c.text + "Minecraft " + sv.mc + "  ·  " + HomeLoaderName(sv.loader) + " " + sv.loaderSurum + R,
                 c.soft + Lang.L("Paket     ") + R + Bo + PackColor[pk] + PackName(pk) + R + c.dim + Lang.L("   ·   Java {0}   ·   dünya {1}", sv.java, WorldSizeCache[id]) + R,

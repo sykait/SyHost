@@ -1,4 +1,4 @@
-// =====================================================================
+﻿// =====================================================================
 //  SyHost - açılış, ana döngü ve test modu
 //  legacy/src/SyHost.ps1: üst kısım (ayarlar, 51-110) ve "Başlangıç" (1769-1904)
 // =====================================================================
@@ -429,7 +429,7 @@ sealed partial class App
         if (Has(st, "sysFree", out v)) SysFree = v.GetDouble();
         if (Has(st, "totalRam", out v)) TotalRam = v.GetDouble();
         if (Has(st, "threads", out v)) Threads = v.GetInt32();
-        if (Has(st, "javaFound", out v)) TestJavaFound = v.GetBoolean();
+        if (Has(st, "javaFound", out v) && (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False)) TestJavaFound = v.GetBoolean();
         TestPlayitOn = Has(st, "playitOn", out v) && v.GetBoolean();
 
         // Sunucu ekranı
@@ -493,5 +493,6 @@ sealed partial class App
                 Wiz.Sync = sync;
             }
         }
+        ApplyScenarioScreens(st);
     }
 }

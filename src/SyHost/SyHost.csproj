@@ -39,6 +39,8 @@
   <ItemGroup>
     <!-- Exe'nin içine gömülen dosyalar (yazı tipi, simgeler) -->
     <EmbeddedResource Include="Assets\**\*" Exclude="Assets\SyHost.ico" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Varsayılan ayarlar: iki sürüm aynı dosyayı kullanır (tek kaynak: legacy\config) -->
+    <EmbeddedResource Include="..\..\legacy\config\default-settings.json" LogicalName="default-settings.json" />
     <!-- Cascadia Mono (SIL OFL 1.1): bilgisayarda yoksa kullanıcıya kurulur -->
     <EmbeddedResource Include="..\..\legacy\fonts\CascadiaMono-Regular.ttf;..\..\legacy\fonts\CascadiaMono-Bold.ttf;..\..\legacy\fonts\OFL.txt" LogicalName="fonts\%(Filename)%(Extension)" />
   </ItemGroup>

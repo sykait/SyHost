@@ -67,7 +67,7 @@ sealed partial class App
             List<string> logo = RenderLogo(1.0, LogoShine());
             string[] info =
             {
-                Bo + c.brass + Cur.ad.ToUpper() + R,
+                Bo + c.brass + Up(Cur.ad) + R,
                 c.dim + Lang.L("{0} {1}  ·  {2} mod  ·  en fazla {3} oyuncu", ViewLoaderName(Cur.loader), Cur.mc, ModCount, MaxPlayers) + R,
                 c.dark + Ps.Rep("─", 38) + R,
                 c.soft + Lang.L("Adres  ") + R + (HasFriendAddr ? Bo + c.cyan + FriendAddr : c.dim + Lang.L("dış adres yok")) + R,
@@ -225,7 +225,7 @@ sealed partial class App
     {
         var rows = new List<string>();
         rows.Add("");
-        rows.Add("  " + Bo + c.red + Lang.L("{0} KAPATILSIN MI?", Cur.ad.ToUpper()) + R);
+        rows.Add("  " + Bo + c.red + Lang.L("{0} KAPATILSIN MI?", Up(Cur.ad)) + R);
         rows.Add("");
         if (Players.Count > 0) { rows.Add("  " + c.yellow + Lang.L("Dikkat: şu an {0} kişi oyunda ({1})", Players.Count, string.Join(", ", Players)) + R); rows.Add(""); }
         rows.Add("  " + c.soft + Lang.L("Oyunculara haber verilir, dünya kaydedilir, sunucu kapanır.") + R);

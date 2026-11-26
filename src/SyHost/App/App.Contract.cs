@@ -126,6 +126,7 @@ sealed partial class App
 
     string FindJava(int major)
     {
+        if (TestJava != null) return TestJava.TryGetValue(major, out bool f) && f ? "java.exe" : null;
         if (TestJavaFound.HasValue) return TestJavaFound.Value ? "java.exe" : null;
         return Java.Find(major, Data);
     }

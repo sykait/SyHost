@@ -1,0 +1,134 @@
+{
+    "t":  5.8,
+    "now":  "2026-11-27 14:30:00",
+    "w":  129,
+    "h":  41,
+    "version":  "1.0.0",
+    "edition":  "Test",
+    "lang":  "tr",
+    "cfg":  {
+                "sunucuKokKlasoru":  "C:\\SyHostTest\\Root\\Servers",
+                "maksOyuncu":  8,
+                "arkadasAdresi":  "",
+                "sesAdresi":  "",
+                "playitKullan":  false
+            },
+    "servers":  [
+                    {
+                        "id":  "icerde",
+                        "ad":  "Create Plus",
+                        "klasor":  "C:\\SyHostTest\\Root\\Servers\\CreatePlus",
+                        "mc":  "1.21.1",
+                        "loader":  "neoforge",
+                        "loaderSurum":  "21.1.172",
+                        "java":  21,
+                        "baslat":  "x nogui",
+                        "paket":  "normal",
+                        "eklenme":  "2026-10-02 18:44",
+                        "sonAcilis":  "2026-11-27 09:15",
+                        "sonBaslatmaSn":  48
+                    },
+                    {
+                        "id":  "icerde2",
+                        "ad":  "Skyblock",
+                        "klasor":  "C:\\SyHostTest\\Root\\Servers\\Skyblock",
+                        "mc":  "26.1",
+                        "loader":  "fabric",
+                        "loaderSurum":  "0.17.2",
+                        "java":  25,
+                        "baslat":  "-jar fabric-server-launch.jar nogui",
+                        "paket":  "dusuk",
+                        "eklenme":  "2026-11-20 21:03",
+                        "sonAcilis":  null,
+                        "sonBaslatmaSn":  null
+                    },
+                    {
+                        "id":  "disarda",
+                        "ad":  "Eski Dunya",
+                        "klasor":  "C:\\SyHostTest\\Elsewhere\\OldWorld",
+                        "mc":  "1.20.1",
+                        "loader":  "forge",
+                        "loaderSurum":  "47.3.0",
+                        "java":  17,
+                        "baslat":  "x nogui",
+                        "paket":  "yuksek",
+                        "eklenme":  "2026-09-01 10:00",
+                        "sonAcilis":  "2026-09-02 10:00",
+                        "sonBaslatmaSn":  60
+                    }
+                ],
+    "state":  {
+                  "appRoot":  "C:\\SyHostTest\\Root",
+                  "defaultRoot":  "C:\\Users\\Test\\SyHost",
+                  "legacyDir":  "C:\\Users\\Test\\AppData\\Local\\SyHost",
+                  "osBuild":  26200,
+                  "totalRam":  34359738368,
+                  "threads":  16,
+                  "sysFree":  17179869184,
+                  "fontOk":  true,
+                  "dryRun":  false,
+                  "uninstall":  {
+                                    "phase":  "onay",
+                                    "items":  [
+                                                  {
+                                                      "key":  "kisayol",
+                                                      "title":  "Masaüstü ve Başlat menüsü kısayolları",
+                                                      "detail":  "C:\\Users\\Test\\Desktop\\SyHost.lnk  ·  C:\\Users\\Test\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\SyHost.lnk",
+                                                      "on":  true,
+                                                      "needsAdmin":  false,
+                                                      "state":  0
+                                                  },
+                                                  {
+                                                      "key":  "yazitipi",
+                                                      "title":  "SyHost\u0027un kurduğu Cascadia Mono yazı tipi",
+                                                      "detail":  "C:\\Users\\Test\\AppData\\Local\\Microsoft\\Windows\\Fonts",
+                                                      "on":  true,
+                                                      "needsAdmin":  false,
+                                                      "state":  0
+                                                  },
+                                                  {
+                                                      "key":  "eskiveri",
+                                                      "title":  "Eski sürümün veri klasörü",
+                                                      "detail":  "C:\\Users\\Test\\AppData\\Local\\SyHost",
+                                                      "on":  false,
+                                                      "needsAdmin":  false,
+                                                      "state":  0
+                                                  },
+                                                  {
+                                                      "key":  "eskikurulum",
+                                                      "title":  "Eski sürümün program klasörü",
+                                                      "detail":  "C:\\Users\\Test\\AppData\\Local\\Programs\\SyHost",
+                                                      "on":  false,
+                                                      "needsAdmin":  false,
+                                                      "state":  0
+                                                  },
+                                                  {
+                                                      "key":  "eskiplayit",
+                                                      "title":  "Eski playit kurulumu (Program Files)",
+                                                      "detail":  "playit",
+                                                      "on":  false,
+                                                      "needsAdmin":  true,
+                                                      "state":  0
+                                                  },
+                                                  {
+                                                      "key":  "java",
+                                                      "title":  "Java (başka programlar da kullanıyor olabilir)",
+                                                      "detail":  "Microsoft Build of OpenJDK with Hotspot 21.0.13+11 (x64)",
+                                                      "on":  false,
+                                                      "needsAdmin":  true,
+                                                      "state":  0
+                                                  },
+                                                  {
+                                                      "key":  "klasor",
+                                                      "title":  "SyHost klasörünün kendisi",
+                                                      "detail":  "C:\\SyHostTest\\Root",
+                                                      "on":  true,
+                                                      "needsAdmin":  false,
+                                                      "state":  0
+                                                  }
+                                              ],
+                                    "sel":  6
+                                },
+                  "screen":  "uninstall"
+              }
+}

@@ -16,7 +16,7 @@
 #  Farklar: tests\parity\out\<senaryo>.diff.txt (ESC karakteri ␛ olarak yazılır).
 #  Çalışma klasörü: <WorkRoot>\<senaryo>\ (her çalıştırmada yeniden kurulur, sonra incelenebilsin diye kalır)
 #    cs\Data\{ayarlar.json,sunucular.json}   cs.txt    C# sürümü (--root cs)
-#    ps\SyHost\{ayarlar.json,sunucular.json} ps.txt    Terminal sürümü (LOCALAPPDATA = ps)
+#    ps\Data\{ayarlar.json,sunucular.json}   ps.txt    Terminal sürümü (-Root ps)
 # =====================================================================
 [CmdletBinding()]
 param(
@@ -67,7 +67,7 @@ function Merge-Json($dst, $src) {
 # Senaryonun çalışma klasörünü kur: iki sürüme aynı ayarlar ve sunucu listesi
 function New-Workspace($t) {
     if (Test-Path $t.Dir) { Remove-Item $t.Dir -Recurse -Force }
-    New-Item -ItemType Directory -Force (Join-Path $t.Dir 'cs\Data'), (Join-Path $t.Dir 'ps\SyHost'), (Join-Path $t.Dir 'cs-localappdata') | Out-Null
+    New-Item -ItemType Directory -Force (Join-Path $t.Dir 'cs\Data'), (Join-Path $t.Dir 'ps\Data'), (Join-Path $t.Dir 'localappdata') | Out-Null
     $sc = $t.Scenario
     $cfg = $DefaultCfg | ConvertFrom-Json
     if ($null -ne $sc.cfg) { Merge-Json $cfg $sc.cfg }
@@ -75,7 +75,7 @@ function New-Workspace($t) {
     $cfg | Add-Member -NotePropertyName paketlerAyarlandi -NotePropertyValue $true -Force
     $cfgJson = ConvertTo-Json -InputObject $cfg -Depth 10
     $srvJson = if ($null -eq $sc.servers) { '[]' } else { ConvertTo-Json -InputObject @($sc.servers) -Depth 10 }
-    foreach ($d in (Join-Path $t.Dir 'cs\Data'), (Join-Path $t.Dir 'ps\SyHost')) {
+    foreach ($d in (Join-Path $t.Dir 'cs\Data'), (Join-Path $t.Dir 'ps\Data')) {
         Write-Utf8 (Join-Path $d 'ayarlar.json') $cfgJson
         Write-Utf8 (Join-Path $d 'sunucular.json') $srvJson
     }
@@ -89,7 +89,7 @@ function Invoke-CsFrame($t) {
     $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
     $psi.WorkingDirectory = $t.Dir
     # gerçek kullanıcı verisine (LOCALAPPDATA\SyHost) hiçbir koşulda dokunmasın
-    $psi.EnvironmentVariables['LOCALAPPDATA'] = Join-Path $t.Dir 'cs-localappdata'
+    $psi.EnvironmentVariables['LOCALAPPDATA'] = Join-Path $t.Dir 'localappdata'
     $p = [Diagnostics.Process]::Start($psi)
     $so = $p.StandardOutput.ReadToEndAsync(); $se = $p.StandardError.ReadToEndAsync()
     if (-not $p.WaitForExit(60000)) { try { $p.Kill() } catch {}; $t.CsError = 'zaman aşımı (60 sn)'; return }
@@ -99,12 +99,12 @@ function Invoke-CsFrame($t) {
     if ($p.ExitCode -ne 0 -or -not (Test-Path $t.CsOut)) { $t.CsError = "çıkış kodu $($p.ExitCode)" + $(if ($msg) { "`n$msg" } else { '' }) }
 }
 
-# Terminal sürümü: gerçek (gizli) bir konsol penceresinde, LOCALAPPDATA senaryonun klasörü
+# Terminal sürümü: gerçek (gizli) bir konsol penceresinde; SyHost klasörü senaryonun ps klasörü
 function Start-PsFrame($t) {
     $old = $env:LOCALAPPDATA
-    $env:LOCALAPPDATA = Join-Path $t.Dir 'ps'
+    $env:LOCALAPPDATA = Join-Path $t.Dir 'localappdata'   # gerçek kullanıcı verisine hiçbir koşulda dokunmasın
     try {
-        $a = "-NoProfile -ExecutionPolicy Bypass -File `"$PsApp`" -TestFrame `"$($t.File)`" -TestOut `"$($t.PsOut)`""
+        $a = "-NoProfile -ExecutionPolicy Bypass -File `"$PsApp`" -Root `"$(Join-Path $t.Dir 'ps')`" -TestFrame `"$($t.File)`" -TestOut `"$($t.PsOut)`""
         $p = Start-Process powershell.exe -ArgumentList $a -WorkingDirectory $t.Dir -WindowStyle Hidden -PassThru
         $null = $p.Handle   # çıkış kodunu sonra okuyabilmek için
         $t.Proc = $p; $t.Started = [DateTime]::Now
@@ -182,7 +182,7 @@ $tasks = @(foreach ($f in $files) {
 $sw = [Diagnostics.Stopwatch]::StartNew()
 Write-Host ("{0} senaryo, çalışma klasörü {1}" -f $tasks.Count, $WorkRoot) -ForegroundColor DarkGray
 
-# Terminal sürümü yardımcı kodu (SyHost.Core.cs) ilk senaryoda bir kez derlenir, sonra kopyalanır
+# Terminal sürümü yardımcı kodu (SyHost.*.cs) ilk senaryoda bir kez derlenir (legacy\cache), sonrakiler hazır olanı kullanır
 $CoreDll = $null
 $queue = New-Object System.Collections.Generic.Queue[object]
 foreach ($t in $tasks) { $queue.Enqueue($t) }
@@ -211,7 +211,6 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
         try {
             $t.Scenario = [IO.File]::ReadAllText($t.File, [Text.Encoding]::UTF8) | ConvertFrom-Json
             New-Workspace $t
-            if ($CoreDll) { $cd = Join-Path $t.Dir 'ps\SyHost\cache'; New-Item -ItemType Directory -Force $cd | Out-Null; Copy-Item $CoreDll $cd }
             Invoke-CsFrame $t
             Start-PsFrame $t
             $running.Add($t)
@@ -225,9 +224,7 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
             $running.Remove($t) | Out-Null
             Finish-Task $t
             if (-not $CoreDll) {
-                $dll = Join-Path $t.Dir 'ps\SyHost\cache\SyHost.Core.dll'
-                if (Test-Path $dll) { $CoreDll = Join-Path $WorkRoot 'SyHost.Core.dll'; Copy-Item $dll $CoreDll -Force }
-                else { $CoreDll = '' }
+                $CoreDll = Join-Path $Repo 'legacy\cache\SyHost.Core.dll'
             }
         }
     }

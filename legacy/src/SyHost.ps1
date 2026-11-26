@@ -1,32 +1,43 @@
 ﻿# =====================================================================
-#  SyHost - Modlu Minecraft sunucu merkezi
+#  SyHost - Modlu Minecraft sunucu merkezi (Terminal sürümü)
 #  Modrinth paketlerinden (.mrpack) sunucu kurar, açar ve yönetir.
 #
 #  Yapımcı : sykait
 #  Lisans  : LICENSE.md (kullanırsan kredi vermek zorunlu)
 # =====================================================================
-#  -Root      taşınabilir kurulumun klasörü (şimdilik kullanılmıyor)
+#  -Root      SyHost klasörü (Data ve Servers burada). Verilmezse uygulama klasörünün bir üstü.
+#  -Exe       SyHost.exe'nin yolu (başlatıcı verir): kurulum, kısayollar ve yeniden açma bunu kullanır
+#  -NoSplash  açılış animasyonunu atla (kurulumdan hemen sonra yeniden açılınca)
 #  -TestFrame senaryo.json -TestOut kare.txt
 #             test modu: senaryodaki durumu kurar, tek bir kareyi dosyaya yazar ve çıkar.
 #             C# sürümüyle (SyHost.exe --frame) aynı biçim; tests\parity iki çıktıyı karşılaştırır.
-param([string]$Root, [string]$TestFrame, [string]$TestOut)
+param([string]$Root, [string]$Exe, [switch]$NoSplash, [string]$TestFrame, [string]$TestOut)
 $ErrorActionPreference = 'Stop'
 $SrcDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
-$AppRoot = Split-Path -Parent $SrcDir
-$Title   = 'SyHost'
-$Version = '0.5.0'
+# Uygulama dosyaları (src, config, fonts, icons). Kurulumda SyHost klasöründeki gizli App klasörüdür.
+$AppDir  = Split-Path -Parent $SrcDir
+if (-not $Root) { $Root = Split-Path -Parent $AppDir }
+$AppRoot = [IO.Path]::GetFullPath($Root)
+# Testlerde pencere adı (ve tek kopya kilidi) değişebilir: açık olan gerçek SyHost'a dokunulmaz
+$Title   = if ($env:SYHOST_TEST_TITLE) { $env:SYHOST_TEST_TITLE } else { 'SyHost' }
+$Version = '1.0.0'
 $VersionText = $Version
 $Edition = 'Terminal'
+# SyHost.exe (başlatıcı): kısayollar onu açar, kurulum onu kopyalar
+$ExePath = if ($Exe) { [IO.Path]::GetFullPath($Exe) } else { Join-Path $AppRoot 'SyHost.exe' }
 
-# Kullanıcı verileri (ayarlar, sunucu listesi, playit anahtarı) kodun yanında değil, burada durur
-$Data = Join-Path $env:LOCALAPPDATA 'SyHost'
-New-Item -ItemType Directory -Force $Data, (Join-Path $Data 'cache') | Out-Null
-$Root = $Data
+# Kullanıcı verileri (ayarlar, sunucu listesi, playit anahtarı) SyHost klasöründeki gizli Data klasöründe durur.
+# İki sürüm de aynı düzeni ve aynı dosyaları kullanır; biri bırakıp diğeri devam edebilir.
+$Data = Join-Path $AppRoot 'Data'
+# Data yoksa SyHost bu klasörde kurulu değil (ör. İndirilenler'den açıldı): ilk açılışın 1. aşaması, diske yazılmaz
+$SetupMode = (-not $TestFrame) -and -not (Test-Path -LiteralPath $Data -PathType Container)
 
 # ---------- Tek kopya (test modunda atlanır: açık bir SyHost'a dokunmasın) ----------
+# İki sürüm aynı kilidi kullanır: aynı anda yalnızca bir SyHost açık olabilir
+$MutexName = 'Local\SyHostSunucuMerkezi' + $(if ($Title -eq 'SyHost') { '' } else { "-$Title" })
 if (-not $TestFrame) {
     $created = $false
-    $mutex = New-Object System.Threading.Mutex($true, 'Local\SyHostSunucuMerkezi', [ref]$created)
+    $mutex = New-Object System.Threading.Mutex($true, $MutexName, [ref]$created)
     if (-not $created) {
         Add-Type -Namespace W -Name U -MemberDefinition @'
 [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t);
@@ -45,77 +56,169 @@ $Host.UI.RawUI.WindowTitle = $(if ($TestFrame) { "$Title test" } else { $Title }
 [Console]::TreatControlCAsInput = $true
 try { (Get-Process -Id $PID).PriorityClass = 'High' } catch {}
 
-# ---------- Yardımcı kod ----------
-$cs  = Join-Path $SrcDir 'SyHost.Core.cs'
-$dll = Join-Path $Data 'cache\SyHost.Core.dll'
-if (-not (Test-Path $dll) -or (Get-Item $cs).LastWriteTimeUtc -gt (Get-Item $dll).LastWriteTimeUtc) {
-    Write-Host 'Preparing SyHost...'
-    Add-Type -Path $cs -ReferencedAssemblies System.Windows.Forms, System.Drawing, System.IO.Compression, System.IO.Compression.FileSystem -OutputAssembly $dll -OutputType Library
+# ---------- Yardımcı kod (C#) ----------
+# Başlatıcı (SyHost.exe) derlenmiş hâlini App\bin klasörüne koyar. Geliştirirken kaynaktan derlenip
+# App\cache klasörüne yazılır (yalnızca kaynak değişince).
+$CoreDll = Join-Path $AppDir 'bin\SyHost.Core.dll'
+if (-not (Test-Path -LiteralPath $CoreDll)) {
+    $CoreSrc = @(Get-ChildItem -LiteralPath $SrcDir -Filter 'SyHost.*.cs' | Sort-Object Name)
+    $CoreDll = Join-Path $AppDir 'cache\SyHost.Core.dll'
+    $CoreNewest = ($CoreSrc | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc
+    if (-not (Test-Path -LiteralPath $CoreDll) -or $CoreNewest -gt (Get-Item -LiteralPath $CoreDll).LastWriteTimeUtc) {
+        New-Item -ItemType Directory -Force (Split-Path $CoreDll) | Out-Null
+        Write-Host 'Preparing SyHost...'
+        Add-Type -Path @($CoreSrc | ForEach-Object { $_.FullName }) -ReferencedAssemblies System.Windows.Forms, System.Drawing, System.IO.Compression, System.IO.Compression.FileSystem -OutputAssembly $CoreDll -OutputType Library
+    }
 }
-Add-Type -Path $dll
+Add-Type -Path $CoreDll
 Add-Type -AssemblyName Microsoft.VisualBasic
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [SyHost.Native]::DpiAware()
 
-# ---------- Ayarlar ----------
-$CfgFile = Join-Path $Data 'ayarlar.json'
-if (-not (Test-Path $CfgFile)) { Copy-Item (Join-Path $AppRoot 'config\default-settings.json') $CfgFile }
-$Cfg = Get-Content $CfgFile -Raw -Encoding UTF8 | ConvertFrom-Json
-foreach ($f in 'arkadasAdresi', 'sesAdresi') { if ($null -eq $Cfg.PSObject.Properties[$f]) { $Cfg | Add-Member -NotePropertyName $f -NotePropertyValue '' } }
-if ($null -eq $Cfg.PSObject.Properties['playitKullan']) { $Cfg | Add-Member -NotePropertyName playitKullan -NotePropertyValue $false }
-$Cfg.sunucuKokKlasoru = [Environment]::ExpandEnvironmentVariables([string]$Cfg.sunucuKokKlasoru)
-# Dil: en (varsayılan), tr, ja
+# ---------- Dosyalar ----------
+$DefaultCfgFile = Join-Path $AppDir 'config\default-settings.json'
+$CfgFile      = Join-Path $Data 'ayarlar.json'
+$ServersFile  = Join-Path $Data 'sunucular.json'
+$WinFile      = Join-Path $Data 'pencere.json'
+$ErrorLog     = Join-Path $Data 'hata.log'
+$PlayitSecret = Join-Path $Data 'playit.toml'
+$Utf8NoBom    = New-Object Text.UTF8Encoding $false
+
+# Dil: en (varsayılan), tr, ja. Lang.Screens.ps1 üretilir (build\Sync-Lang.ps1).
 . (Join-Path $SrcDir 'Lang.ps1')
-$LangCode = if ($Cfg.PSObject.Properties['dil'] -and $Languages.Contains([string]$Cfg.dil)) { [string]$Cfg.dil } else { 'en' }
-$script:LangCode = $LangCode
-if (-not $Cfg.sunucuKokKlasoru) { $Cfg.sunucuKokKlasoru = Join-Path $env:USERPROFILE 'SyHost Sunuculari' }
-[void][SyHost.Native]::SetFont('Cascadia Mono', [int16]$(if ($Cfg.yaziTipiBoyutu) { $Cfg.yaziTipiBoyutu } else { 16 }))
-$PackKeys = @('dusuk', 'normal', 'yuksek')
-# İlk açılışta paketleri bu bilgisayarın RAM'ine ve çekirdek sayısına göre ayarla
-if ($null -eq $Cfg.PSObject.Properties['paketlerAyarlandi']) {
-    $totGb = [Math]::Floor((New-Object Microsoft.VisualBasic.Devices.ComputerInfo).TotalPhysicalMemory / 1GB)
-    $thr = [Environment]::ProcessorCount
-    function Clamp([double]$v, [int]$lo, [int]$hi) { [int][Math]::Max($lo, [Math]::Min($hi, [Math]::Round($v))) }
-    $plan = @{ dusuk = @((Clamp ($totGb * 0.2) 3 8), 2, [Math]::Max(2, [int]($thr / 4))); normal = @((Clamp ($totGb * 0.33) 4 12), 4, [Math]::Max(2, [int]($thr / 2))); yuksek = @((Clamp ($totGb * 0.5) 5 20), 6, $thr) }
-    foreach ($pk in $PackKeys) {
-        $mx = $plan[$pk][0]
-        $Cfg.paketler.$pk.ramMax = $mx
-        $Cfg.paketler.$pk.ramMin = [Math]::Max(2, $mx - $plan[$pk][1])
-        $Cfg.paketler.$pk.cekirdek = $plan[$pk][2]
-    }
-    $Cfg | Add-Member -NotePropertyName paketlerAyarlandi -NotePropertyValue $true
-    [IO.File]::WriteAllText($CfgFile, ($Cfg | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))
+. (Join-Path $SrcDir 'Lang.Screens.ps1')
+
+# Metni dosyaya güvenle yaz: önce geçici dosya, sonra yerine koy (yarım dosya kalmasın). UTF-8, BOM'suz.
+function Write-TextFile([string]$path, [string]$text) {
+    $tmp = $path + '.tmp'
+    [IO.File]::WriteAllText($tmp, $text, $Utf8NoBom)
+    if ([IO.File]::Exists($path)) { try { [IO.File]::Replace($tmp, $path, $null); return } catch { [IO.File]::Copy($tmp, $path, $true); [IO.File]::Delete($tmp); return } }
+    [IO.File]::Move($tmp, $path)
 }
-$Packs = $Cfg.paketler
+
+# ---------- Ayarlar ----------
+# C# sürümündeki Settings sınıfıyla aynı varsayılanlar (dosyada olmayan alan bu değeri alır)
+$CfgDefaults = [ordered]@{ dil = 'en'; sunucuKokKlasoru = 'Servers'; arkadasAdresi = ''; sesAdresi = ''; playitKullan = $false; maksOyuncu = 5; cokerseYenidenBaslat = $true; otomatikYedekSaat = 3; saklanacakYedek = 10; yaziTipiBoyutu = 16 }
+$PackKeys = @('dusuk', 'normal', 'yuksek')
+function Read-DefaultSettings { Get-Content -LiteralPath $DefaultCfgFile -Raw -Encoding UTF8 | ConvertFrom-Json }
+
+# sunucuKokKlasoru: boşsa SyHost klasöründeki Servers, göreliyse SyHost klasörüne göre
+function Resolve-RootDir([string]$v) {
+    $v = [Environment]::ExpandEnvironmentVariables([string]$v).Trim()
+    if ($v.Length -eq 0) { return [IO.Path]::Combine($AppRoot, 'Servers') }
+    if (-not [IO.Path]::IsPathRooted($v)) { return [IO.Path]::GetFullPath([IO.Path]::Combine($AppRoot, $v)) }
+    $v
+}
+# SyHost klasörünün içindeki yol göreli ("Servers\Ad") yazılır, dışındaki mutlak kalır
+function ConvertTo-StoredPath([string]$abs) {
+    if ([string]::IsNullOrEmpty($abs)) { return $abs }
+    try {
+        $full = [IO.Path]::GetFullPath($abs).TrimEnd('\')
+        $rootT = $AppRoot.TrimEnd('\')
+        if ($full.StartsWith($rootT + '\', [StringComparison]::OrdinalIgnoreCase)) { return $full.Substring($rootT.Length + 1) }
+        if ([string]::Equals($full, $rootT, [StringComparison]::OrdinalIgnoreCase)) { return '.' }
+        return $full
+    } catch { return $abs }
+}
+# Dosyadaki yolu mutlak yola çevir (göreliyse SyHost klasörüne göre)
+function ConvertFrom-StoredPath([string]$stored) {
+    if ([string]::IsNullOrEmpty($stored)) { return $stored }
+    $v = [Environment]::ExpandEnvironmentVariables($stored)
+    try { if ([IO.Path]::IsPathRooted($v)) { return $v }; return [IO.Path]::GetFullPath([IO.Path]::Combine($AppRoot, $v)) } catch { return $v }
+}
+
+function Load-Config {
+    if ($SetupMode) {
+        # Henüz kurulmadı: diske hiçbir şey yazma, Windows'un dilini öner
+        $cfg = Read-DefaultSettings
+        $cfg.dil = Get-UiLanguage
+    } else {
+        New-Item -ItemType Directory -Force -Path $Data | Out-Null
+        if (-not (Test-Path -LiteralPath $CfgFile)) { Write-TextFile $CfgFile ([IO.File]::ReadAllText($DefaultCfgFile, [Text.Encoding]::UTF8)) }
+        try {
+            $cfg = Get-Content -LiteralPath $CfgFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($cfg -isnot [System.Management.Automation.PSCustomObject]) { throw 'ayar dosyası bir nesne değil' }
+        } catch {
+            # Bozuk ayar dosyası: kenara al, varsayılanla devam et (veri kaybolmasın)
+            try { Copy-Item -LiteralPath $CfgFile -Destination ($CfgFile + '.bozuk') -Force } catch {}
+            $cfg = Read-DefaultSettings
+        }
+    }
+    foreach ($k in $CfgDefaults.Keys) {
+        if ($null -eq $cfg.PSObject.Properties[$k]) { $cfg | Add-Member -NotePropertyName $k -NotePropertyValue $CfgDefaults[$k] }
+        elseif ($null -eq $cfg.$k -and $k -in 'arkadasAdresi', 'sesAdresi', 'dil', 'sunucuKokKlasoru') { $cfg.$k = $CfgDefaults[$k] }
+    }
+    $cfg.sunucuKokKlasoru = Resolve-RootDir $cfg.sunucuKokKlasoru
+    # Dil: en (varsayılan), tr, ja
+    $script:LangCode = if ($Languages.Contains([string]$cfg.dil)) { [string]$cfg.dil } else { 'en' }
+    # Eksik paket varsa varsayılandan tamamla
+    $def = $null
+    if ($null -eq $cfg.PSObject.Properties['paketler'] -or $null -eq $cfg.paketler) { $def = Read-DefaultSettings; $cfg | Add-Member -NotePropertyName paketler -NotePropertyValue $def.paketler -Force }
+    foreach ($pk in $PackKeys) {
+        if ($null -eq $cfg.paketler.PSObject.Properties[$pk]) { if (-not $def) { $def = Read-DefaultSettings }; $cfg.paketler | Add-Member -NotePropertyName $pk -NotePropertyValue $def.paketler.$pk }
+    }
+    $script:Cfg = $cfg
+    # İlk açılışta paketleri bu bilgisayarın RAM'ine ve çekirdek sayısına göre ayarla
+    if ($null -eq $cfg.PSObject.Properties['paketlerAyarlandi'] -or $null -eq $cfg.paketlerAyarlandi) {
+        $totGb = [Math]::Floor((New-Object Microsoft.VisualBasic.Devices.ComputerInfo).TotalPhysicalMemory / 1GB)
+        $thr = [Environment]::ProcessorCount
+        function Clamp([double]$v, [int]$lo, [int]$hi) { [int][Math]::Max($lo, [Math]::Min($hi, [Math]::Round($v))) }
+        $plan = @{ dusuk = @((Clamp ($totGb * 0.2) 3 8), 2, [Math]::Max(2, [int]($thr / 4))); normal = @((Clamp ($totGb * 0.33) 4 12), 4, [Math]::Max(2, [int]($thr / 2))); yuksek = @((Clamp ($totGb * 0.5) 5 20), 6, $thr) }
+        foreach ($pk in $PackKeys) {
+            $mx = $plan[$pk][0]
+            $cfg.paketler.$pk.ramMax = $mx
+            $cfg.paketler.$pk.ramMin = [Math]::Max(2, $mx - $plan[$pk][1])
+            $cfg.paketler.$pk.cekirdek = $plan[$pk][2]
+        }
+        $cfg | Add-Member -NotePropertyName paketlerAyarlandi -NotePropertyValue $true -Force
+        if (-not $SetupMode) { Save-Config }
+    }
+    $script:Packs = $cfg.paketler
+    $script:MaxPlayers = if ($cfg.maksOyuncu) { [int]$cfg.maksOyuncu } else { 5 }
+    $script:Threads  = [Environment]::ProcessorCount
+    $script:TotalRam = (New-Object Microsoft.VisualBasic.Devices.ComputerInfo).TotalPhysicalMemory
+    $script:HasFriendAddr = [bool]$cfg.arkadasAdresi -and [bool]$cfg.playitKullan
+}
+# Ayarları kaydet. Sunucu kök klasörü SyHost klasörünün içindeyse göreli yazılır.
+function Save-Config {
+    $abs = $Cfg.sunucuKokKlasoru
+    $Cfg.sunucuKokKlasoru = ConvertTo-StoredPath $abs
+    try { Write-TextFile $CfgFile ($Cfg | ConvertTo-Json -Depth 6) } finally { $Cfg.sunucuKokKlasoru = $abs }
+}
+
+# Taşınabilir klasör: kurulum, eski verinin taşınması, kısayollar, klasör görünümü, yazı tipi (Portable.ps1)
+. (Join-Path $SrcDir 'Portable.ps1')
+
+Load-Config
+[void][SyHost.Native]::SetFont('Cascadia Mono', [int16]$(if ($Cfg.yaziTipiBoyutu) { $Cfg.yaziTipiBoyutu } else { 16 }))
 $PackNameKey = @{ dusuk = 'DÜŞÜK'; normal = 'NORMAL'; yuksek = 'YÜKSEK' }
 $PackDescKey = @{ dusuk = 'Ağır bir oyun oynarken. Sistemini en az yoran ayar.'; normal = 'Günlük kullanım. 2-5 kişi için en dengeli ayar.'; yuksek = 'Dev fabrikalar ve hızlı keşif için tam güç.' }
 function PackName([string]$k) { L $PackNameKey[$k] }
 function PackDesc([string]$k) { L $PackDescKey[$k] }
-$MaxPlayers = if ($Cfg.maksOyuncu) { [int]$Cfg.maksOyuncu } else { 5 }
-$Threads  = [Environment]::ProcessorCount
-$TotalRam = (New-Object Microsoft.VisualBasic.Devices.ComputerInfo).TotalPhysicalMemory
-$HasFriendAddr = [bool]$Cfg.arkadasAdresi -and [bool]$Cfg.playitKullan
 $FriendAddr = if ($HasFriendAddr) { $Cfg.arkadasAdresi } else { (L 'henüz yok') }
 
-$ServersFile = Join-Path $Root 'sunucular.json'
+# ---------- Sunucu listesi ----------
+# Dosyada SyHost klasörünün içindeki sunucular göreli ("Servers\Ad") durur; bellekte hep mutlak yoldur.
 $Servers = New-Object System.Collections.Generic.List[object]
 function Load-Servers {
     $script:Servers.Clear()
-    if (Test-Path $ServersFile) {
-        $data = Get-Content $ServersFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (Test-Path -LiteralPath $ServersFile) {
+        $data = Get-Content -LiteralPath $ServersFile -Raw -Encoding UTF8 | ConvertFrom-Json
         foreach ($sv in $data) {
+            if ($null -eq $sv) { continue }
             foreach ($f in 'paket', 'sonAcilis', 'sonBaslatmaSn', 'eklenme') { if ($null -eq $sv.PSObject.Properties[$f]) { $sv | Add-Member -NotePropertyName $f -NotePropertyValue $null -Force } }
             if (-not $sv.paket) { $sv.paket = 'normal' }
+            if ($null -ne $sv.PSObject.Properties['klasor']) { $sv.klasor = ConvertFrom-StoredPath ([string]$sv.klasor) }
             $script:Servers.Add($sv)
         }
     }
 }
 function Save-Servers {
-    $arr = $Servers.ToArray()
+    $arr = @(foreach ($sv in $Servers) { $o = $sv.PSObject.Copy(); if ($null -ne $o.PSObject.Properties['klasor']) { $o.klasor = ConvertTo-StoredPath ([string]$sv.klasor) }; $o })
     $json = if ($arr.Count -eq 0) { '[]' } elseif ($arr.Count -eq 1) { '[' + ($arr[0] | ConvertTo-Json -Depth 5) + ']' } else { $arr | ConvertTo-Json -Depth 5 }
-    [IO.File]::WriteAllText($ServersFile, $json, (New-Object Text.UTF8Encoding $false))
+    Write-TextFile $ServersFile $json
 }
-Load-Servers
+if (-not $SetupMode) { Load-Servers }
 
 # ---------- Java yardımcıları (kurulumda da kullanılır) ----------
 $JavaFuncs = {
@@ -309,10 +412,20 @@ $Quit = $false
 $RestartApp = $false
 $Wiz = $null
 
+# ---------- Yeni ekranlar: ilk açılış, ayarlar, kaldır (FirstRun.ps1, Settings.ps1, Uninstall.ps1) ----------
+$NextAfterSplash = 'home'      # açılış animasyonundan sonra gidilecek ekran
+$LaunchAfterExit = $null       # SyHost kapanınca açılacak SyHost.exe (kurulum ya da güncellemeden sonra)
+$DeleteRootAfterExit = $false  # kaldır: SyHost kapanınca klasörü de sil
+$FrMigrated = $null            # açılışta eski veriler kopyalandıysa: [pscustomobject]@{ Servers = <sayı>; Playit = <bool> }
+$FrMovedTo = $null             # eski veriler daha önce başka bir SyHost klasörüne taşınmışsa o klasör
+$Fr = $null                    # ilk açılış durumu (New-FirstRunState)
+# Test modunda sabitlenen sistem bilgileri (C#: App.FirstRun.cs Test* alanları). $null: gerçek değer kullanılır.
+$TestJava = $null; $TestJavaOwn = $null; $TestFontOk = $null; $TestPlayitReady = $null; $TestDryRun = $null
+$TestShortcut = $null; $TestOsBuild = $null; $TestDefaultRoot = $null; $TestLegacyDir = $null
+
 # ---------- Pencere modu ----------
-$WinFile = Join-Path $Root 'pencere.json'
 $Win = [pscustomobject]@{ mod = 'buyuk'; buyukX = $null; buyukY = $null; kucukX = $null; kucukY = $null; ustte = $true }
-if (Test-Path $WinFile) { try { $w0 = Get-Content $WinFile -Raw | ConvertFrom-Json; foreach ($pn in $w0.PSObject.Properties.Name) { $Win.$pn = $w0.$pn } } catch {} }
+if (-not $SetupMode -and (Test-Path -LiteralPath $WinFile)) { try { $w0 = Get-Content -LiteralPath $WinFile -Raw | ConvertFrom-Json; foreach ($pn in $w0.PSObject.Properties.Name) { $Win.$pn = $w0.$pn } } catch {} }
 $UiMode = 'buyuk'
 $BigSize = @(130, 42); $MiniSize = @(54, 15)
 
@@ -330,7 +443,8 @@ function Save-WinState {
             if ($UiMode -eq 'kucuk') { $Win.kucukX = $rc[0]; $Win.kucukY = $rc[1] } else { $Win.buyukX = $rc[0]; $Win.buyukY = $rc[1] }
         }
         if ($Screen -eq 'server') { $Win.mod = $UiMode }
-        $Win | ConvertTo-Json | Set-Content $WinFile -Encoding ASCII
+        if ($TestFrame) { return }
+        Write-TextFile $WinFile ($Win | ConvertTo-Json)
     } catch {}
 }
 function Wait-WinRect {
@@ -394,9 +508,8 @@ function Add-Log([string]$kind, [string]$msg, [string]$time, [bool]$vis = $true)
 function Switch-Language {
     $codes = @($Languages.Keys)
     $next = $codes[([Array]::IndexOf($codes, $LangCode) + 1) % $codes.Count]
-    $j = Get-Content $CfgFile -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($null -eq $j.PSObject.Properties['dil']) { $j | Add-Member -NotePropertyName dil -NotePropertyValue $next } else { $j.dil = $next }
-    [IO.File]::WriteAllText($CfgFile, ($j | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))
+    $Cfg.dil = $next
+    Save-Config
     $script:RestartApp = $true; $script:Quit = $true
 }
 function Home-Msg([string]$msg) { $script:HomeMsg = $msg; $script:HomeMsgUntil = (Get-Date).AddSeconds(6); $script:Dirty = $true }
@@ -431,13 +544,18 @@ function Set-Pack([string]$name) {
 }
 
 # ---------- playit (sadece SyHost açıkken) ----------
-$PlayitExe = 'C:\Program Files\playit_gg\bin\playitd.exe'
-$PlayitSecret = Join-Path $Data 'playit.toml'
+# playit 2.x: playitd.exe tünelleri çalıştırır. Data\tools\playit içine iner (FirstRun.ps1, arkadaş adımı);
+# eski sürümün Program Files'taki kopyası da kullanılabilir. Yalnızca SyHost açıkken çalışır.
+$PlayitToolDir = Join-Path $Data 'tools\playit'
+$PlayitLegacyBin = 'C:\Program Files\playit_gg\bin'
+$PlayitExe = $null
 $Pl = $null
 function Start-Playit {
     if (-not $Cfg.playitKullan) { return }
     if ($Pl -and $Pl.Running) { return }
-    if (-not (Test-Path $PlayitExe) -or -not (Test-Path $PlayitSecret)) { $script:Cfg.playitKullan = $false; $script:HasFriendAddr = $false; return }
+    $script:PlayitExe = Find-PlayitDaemon
+    # Program ya da anahtar yoksa playit'i bu oturum için kapat (ayar dosyadaki gibi kalır; program gelince yeniden denenir)
+    if (-not $PlayitExe -or -not (Test-Path -LiteralPath $PlayitSecret)) { $script:HasFriendAddr = $false; return }
     $script:Pl = New-Object SyHost.Server
     try { $Pl.Start($PlayitExe, "--secret-path `"$PlayitSecret`" --socket-path \\.\pipe\syhost-playit --log-path `"$(Join-Path (Split-Path $PlayitSecret) 'playit.log')`"", (Split-Path $PlayitSecret)) } catch {}
 }
@@ -937,10 +1055,13 @@ function Handle-Key([ConsoleKeyInfo]$k) {
     $script:Dirty = $true
     $ctrl = ($k.Modifiers -band [ConsoleModifiers]::Control) -ne 0
     switch ($Screen) {
-        'splash' { $script:Screen = 'home'; Reset-Frame; return }
+        'splash' { After-Splash; return }
         'outro' { $script:Quit = $true; return }
         'home' { Handle-HomeKey $k $ctrl; return }
         'wizard' { Handle-WizardKey $k $ctrl; return }
+        'firstrun' { Handle-FirstRunKey $k $ctrl; return }
+        'settings' { Handle-SettingsKey $k $ctrl; return }
+        'uninstall' { Handle-UninstallKey $k $ctrl; return }
     }
     # --- sunucu ekranı ---
     if ($Mode -eq 'closing') { return }
@@ -1009,6 +1130,7 @@ function Handle-HomeKey([ConsoleKeyInfo]$k, [bool]$ctrl) {
         }
         'Delete' { if ($HomeSel -lt $Servers.Count) { $script:HomeMode = 'sil' }; return }
         'F2' { if (Allow 'F2') { Hide-Panel }; return }
+        'F9' { Open-Settings; return }
         'F10' { if (Allow 'F10') { Start-Outro }; return }
         'Escape' { return }
     }
@@ -1054,11 +1176,14 @@ function Handle-WizardKey([ConsoleKeyInfo]$k, [bool]$ctrl) {
 }
 
 # ---------- Çizim: ortak ----------
-$Badge = @{
-    info = @((L 'BİLGİ'), $c.dim, $c.soft); warn = @((L 'UYARI'), $c.yellow, (Rgb 253 230 138)); error = @((L 'HATA'), $c.red, (Rgb 254 202 202))
-    panel = @('SYHOST', $c.brass, $c.brass); ok = @('SYHOST', $c.green, (Rgb 187 247 208)); join = @((L 'GİRİŞ'), $c.green, $c.green)
-    leave = @((L 'ÇIKIŞ'), $c.orange, $c.orange); chat = @((L 'SOHBET'), $c.cyan, $c.cyan); cmd = @((L 'KOMUT'), $c.violet, $c.violet)
+function New-Badges {
+    @{
+        info = @((L 'BİLGİ'), $c.dim, $c.soft); warn = @((L 'UYARI'), $c.yellow, (Rgb 253 230 138)); error = @((L 'HATA'), $c.red, (Rgb 254 202 202))
+        panel = @('SYHOST', $c.brass, $c.brass); ok = @('SYHOST', $c.green, (Rgb 187 247 208)); join = @((L 'GİRİŞ'), $c.green, $c.green)
+        leave = @((L 'ÇIKIŞ'), $c.orange, $c.orange); chat = @((L 'SOHBET'), $c.cyan, $c.cyan); cmd = @((L 'KOMUT'), $c.violet, $c.violet)
+    }
 }
+$Badge = New-Badges
 function Card([string]$title, [string[]]$lines, [int]$w) {
     $bc = $c.dark
     $top = $bc + '╭─ ' + $R + $Bo + $c.brass + $title + $R + ' ' + $bc + ('─' * [Math]::Max(0, $w - (VLen $title) - 5)) + '╮' + $R
@@ -1301,7 +1426,7 @@ function Render-Home([int]$W, [int]$H) {
         ($c.dim + "v$VersionText  ·  $Edition  ·  sykait" + $R),
         ($c.dark + ('─' * 38) + $R),
         ($c.soft + (L 'Arkadaş adresi  ') + $R + $(if ($HasFriendAddr) { $Bo + $c.cyan + $FriendAddr } else { $c.dim + (L 'henüz yok') }) + $R),
-        ($c.soft + (L 'Dış erişim      ') + $R + $(if (PlayitOn) { $c.green + (L '● açık (playit)') } elseif ($HasFriendAddr) { $c.yellow + (L '● bağlanıyor') } else { $c.yellow + (L '● kurulu değil') + $c.dim + (L '  (Setup.bat)') }) + $R),
+        ($c.soft + (L 'Dış erişim      ') + $R + $(if (PlayitOn) { $c.green + (L '● açık (playit)') } elseif ($HasFriendAddr) { $c.yellow + (L '● bağlanıyor') } else { $c.yellow + (L '● kurulu değil') + $c.dim + (L '  (F9 ayarlar)') }) + $R),
         ($c.soft + (L 'Bilgisayar      ') + $R + $c.text + ((L '{0:0.0} GB boş') -f ($SysFree / 1GB)) + $R + $c.dim + (' / {0:0} GB' -f ($TotalRam / 1GB)) + $R)
     )
     $rows.Add('')
@@ -1346,7 +1471,7 @@ function Render-Home([int]$W, [int]$H) {
             $WorldSizeCache[$sv.id] = if (Test-Path $wd) { '{0:0} MB' -f ((Get-ChildItem $wd -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB) } else { (L 'henüz oluşmadı') }
         }
         $pk = if ($PackKeys -contains $sv.paket) { $sv.paket } else { 'normal' }
-        foreach ($l in (Card $sv.ad.ToUpper() @(
+        foreach ($l in (Card (Up $sv.ad) @(
             ($c.soft + (L 'Sürüm     ') + $R + $c.text + "Minecraft $($sv.mc)  ·  $($LoaderName[$sv.loader]) $($sv.loaderSurum)" + $R),
             ($c.soft + (L 'Paket     ') + $R + $Bo + $PackColor[$pk] + (PackName $pk) + $R + $c.dim + (L '   ·   Java {0}   ·   dünya {1}' $sv.java $WorldSizeCache[$sv.id]) + $R),
             ($c.soft + (L 'Klasör    ') + $R + $c.dim + $sv.klasor + $R),
@@ -1366,7 +1491,7 @@ function Render-Home([int]$W, [int]$H) {
     Update-Sky $W $H 0.07 1 $false 0.75
     for ($r1 = 0; $r1 -lt $rows.Count; $r1++) { if ($rows[$r1] -eq '') { $rows[$r1] = Sky-Seg $r1 0 $W } }
     $rows.Add($c.dark + ('─' * $W) + $R)
-    $rows.Add(' ' + (Key '↑↓' (L 'seç')) + (Key 'Enter' (L 'aç')) + (Key '+' (L 'yeni sunucu')) + (Key 'Del' (L 'listeden kaldır')) + (Key 'L' ((L 'dil') + ': ' + $Languages[$LangCode])) + (Key 'F2' (L 'gizle')) + $c.dark + '│  ' + $R + (Pill '200;30;45' '255;255;255' (L 'F10 ÇIK')))
+    $rows.Add(' ' + (Key '↑↓' (L 'seç')) + (Key 'Enter' (L 'aç')) + (Key '+' (L 'yeni sunucu')) + (Key 'Del' (L 'listeden kaldır')) + (Key 'L' ((L 'dil') + ': ' + $Languages[$LangCode])) + (Key 'F9' (L 'ayarlar')) + (Key 'F2' (L 'gizle')) + $c.dark + '│  ' + $R + (Pill '200;30;45' '255;255;255' (L 'F10 ÇIK')))
     , $rows
 }
 
@@ -1425,7 +1550,7 @@ function Render-Wizard([int]$W, [int]$H) {
             $rows.Add('  ' + $c.soft + (L 'İndirilecek') + $R + $c.text + (L ' {0} mod' $inf.Mods) + $(if (-not (Find-Java $inf.Java)) { " + Java $($inf.Java)" } else { '' }) + " + $($LoaderName[$inf.Loader])" + $R)
             $rows.Add('')
             $rows.Add('  ' + $c.dim + (L 'Kurarak Minecraft kullanım sözleşmesini (aka.ms/MinecraftEULA) kabul etmiş olursun.') + $R)
-            if (-not (Find-Java $inf.Java)) { $rows.Add('  ' + $c.yellow + (L 'Java {0} kurulurken Windows izin isteyebilir, Evet demen yeterli.' $inf.Java) + $R) }
+            if (-not (Find-Java $inf.Java)) { $rows.Add('  ' + $c.dim + (L 'Java {0} otomatik olarak SyHost klasörüne indirilecek.' $inf.Java) + $R) }
             $rows.Add('')
             $rows.Add('  ' + (Pill '240;240;240' '18;18;20' 'Enter') + $c.text + (L ' Kur   ') + $R + (Pill '50;50;56' '235;235;235' 'Esc') + $c.text + (L ' Geri') + $R)
         }
@@ -1509,7 +1634,7 @@ function Render-Header([int]$W) {
     if ($script:ShowLogo) {
         $logo = Render-Logo 1.0 (Logo-Shine)
         $info = @(
-            ($Bo + $c.brass + $Cur.ad.ToUpper() + $R),
+            ($Bo + $c.brass + (Up $Cur.ad) + $R),
             ($c.dim + (L '{0} {1}  ·  {2} mod  ·  en fazla {3} oyuncu' $LoaderName[$Cur.loader] $Cur.mc $ModCount $MaxPlayers) + $R),
             ($c.dark + ('─' * 38) + $R),
             ($c.soft + (L 'Adres  ') + $R + $(if ($HasFriendAddr) { $Bo + $c.cyan + $FriendAddr } else { $c.dim + (L 'dış adres yok') }) + $R),
@@ -1641,7 +1766,7 @@ function Mark([int]$state) { switch ($state) { 2 { $c.green + $Bo + '✓' + $R }
 function Render-Confirm([int]$W, [int]$H) {
     $rows = New-Object System.Collections.Generic.List[string]
     $rows.Add('')
-    $rows.Add('  ' + $Bo + $c.red + (L '{0} KAPATILSIN MI?' $Cur.ad.ToUpper()) + $R)
+    $rows.Add('  ' + $Bo + $c.red + (L '{0} KAPATILSIN MI?' (Up $Cur.ad)) + $R)
     $rows.Add('')
     if ($Players.Count) { $rows.Add('  ' + $c.yellow + (L 'Dikkat: şu an {0} kişi oyunda ({1})' $Players.Count ($Players -join ', ')) + $R); $rows.Add('') }
     $rows.Add('  ' + $c.soft + (L 'Oyunculara haber verilir, dünya kaydedilir, sunucu kapanır.') + $R)
@@ -1742,6 +1867,87 @@ function Render-Server([int]$W, [int]$H) {
 
 # ---------- Çizim: kare ----------
 # Bir kareyi hazırla: her satır tam $W genişliğinde. Test modunda dosyaya yazılan şey de budur.
+# ---------- Yeni ekranlar için ortak yardımcılar (C#: App.FirstRun.cs, App.Settings.cs) ----------
+# İlk açılış durumu (C#: FirstRunState). Arka plan işi: Job (çalışırken $null değil), Sync (iş ile paylaşılan tablo:
+# Done bitti mi, Text ekranda görünen ilerleme yazısı, Error hata metni).
+function New-FirstRunState {
+    [pscustomobject]@{
+        Steps = New-Object System.Collections.Generic.List[string]; Index = 0; Sel = 0
+        ReturnTo = $null      # $null: ilk açılış; 'settings': Ayarlar'dan açılan tek adım
+        Target = $null        # kurulum yeri
+        OtherInstall = $null  # bilgisayardaki başka bir SyHost
+        Note = $null; NoteCol = $null   # adımın altındaki kısa not
+        Confirm = $false      # OneDrive uyarısından sonra ikinci Enter bekleniyor
+        Job = $null; Sync = [hashtable]::Synchronized(@{ Done = $true; Text = ''; Error = $null })
+        Desk = $true; Start = $true
+        Phase = ''            # arkadaş adımının alt aşaması: soru, indir, bagla, adres, hazir
+        Code = $null          # playit eşleştirme kodu
+        Field = 0             # 0: Minecraft adresi, 1: sesli sohbet adresi
+        McAddr = ''; VoiceAddr = ''
+    }
+}
+# Test modunda sabitlenebilen bilgiler (C#: FontOk, OsBuild, DefaultRootShown, LegacyDirShown, DryRunShown, ShortcutState)
+function FontOk { if ($null -ne $TestFontOk) { return [bool]$TestFontOk }; [bool](Test-FontAvailable) }
+function OsBuild { if ($null -ne $TestOsBuild) { return [int]$TestOsBuild }; [Environment]::OSVersion.Version.Build }
+function DefaultRootShown { if ($null -ne $TestDefaultRoot) { return [string]$TestDefaultRoot }; Get-DefaultRoot }
+function LegacyDirShown { if ($null -ne $TestLegacyDir) { return [string]$TestLegacyDir }; Get-LegacyDir }
+function DryRunShown { if ($null -ne $TestDryRun) { return [bool]$TestDryRun }; [bool](Test-DryRun) }
+# Kısayol durumu: 0 Masaüstü, 1 Başlat menüsü. Değer: Missing | Ours | Dead | OtherLive | Foreign
+function Get-ShortcutState([int]$i) {
+    if ($null -ne $TestShortcut) { $k = if ($i -eq 0) { 'desktop' } else { 'start' }; if ($TestShortcut.ContainsKey($k)) { return $TestShortcut[$k] }; return 'Missing' }
+    Get-LinkState (Get-ShortcutLocations)[$i] $ExePath
+}
+# Seçili satır vurgusu (nabız gibi atan koyu kırmızı zemin; C#: SelLine)
+function SelLine([string]$line, [int]$W) {
+    $pulse = ([Math]::Sin((T) * 4) + 1) / 2
+    $hlBg = "$E[48;2;$([int](45 + 35 * $pulse));$([int](14 + 6 * $pulse));$([int](20 + 8 * $pulse))m"
+    $vl = VLen $line
+    $hlBg + $line.Replace($R, $R + $hlBg) + (' ' * [Math]::Max(0, $W - 1 - $vl)) + $R
+}
+function VersionLine { $c.dim + 'v' + $VersionText + '  ·  ' + $Edition + '  ·  sykait' + $R }
+# Arayüz dilinin kurallarıyla büyük harf (Türkçede i → İ; İngilizce ve Japoncada i → I)
+function Up([string]$s) { if ($null -eq $s) { return '' }; $s.ToUpper([Globalization.CultureInfo]::GetCultureInfo($(if ($LangCode -eq 'tr') { 'tr-TR' } else { 'en-US' }))) }
+# Kısayolları istenen hâle getir: açıksa yaz (başka bir SyHost'unkini de değiştirir), kapalıysa bizimkini sil
+function Apply-Shortcuts([bool]$desk, [bool]$start) {
+    foreach ($p in @(@('kisayolMasaustu', $desk), @('kisayolBaslat', $start))) { $Cfg | Add-Member -NotePropertyName $p[0] -NotePropertyValue $p[1] -Force }
+    Save-Config
+    $desc = L 'SyHost - modlu Minecraft sunucu merkezi'
+    $locs = @(Get-ShortcutLocations)
+    $want = @($desk, $start)
+    for ($i = 0; $i -lt $locs.Count; $i++) {
+        try {
+            if ($want[$i]) { Write-Shortcut $locs[$i] $ExePath $desc }
+            elseif ((Get-LinkState $locs[$i] $ExePath) -eq 'Ours') { Remove-Item -LiteralPath $locs[$i] -Force }
+        } catch {}
+    }
+}
+# Dile bağlı tablolar (açılışta bir kez hesaplananlar): dil değişince ve eski veriler taşınınca yeniden hesaplanır
+function Init-Tables {
+    $script:FriendAddr = if ($HasFriendAddr) { $Cfg.arkadasAdresi } else { (L 'henüz yok') }
+    $script:PrioTr = @{ Normal = (L 'Normal'); AboveNormal = (L 'Normal Üstü'); High = (L 'Yüksek'); BelowNormal = (L 'Düşük'); Idle = (L 'En Düşük') }
+    $script:Verbs = @((L 'Dişliler hizalanıyor'), (L 'Çarklar yağlanıyor'), (L 'Pirinç parlatılıyor'), (L 'Redstone ısıtılıyor'), (L "Chunk'lar örülüyor"),
+        (L "Creeper'lar sakinleştiriliyor"), (L 'Köylüler pazarlığa hazırlanıyor'), (L 'Elmaslar sayılıyor'), (L 'Su çarkı çevriliyor'),
+        (L 'Biyomlar boyanıyor'), (L 'Ender incileri cilalanıyor'), (L 'Mekanik presler ayarlanıyor'), (L 'Trenler raya oturtuluyor'), (L 'Rüzgar değirmeni kuruluyor'))
+    $script:StatusLook = @{ KAPALI = @($c.red, (L 'KAPALI')); BASLIYOR = @($c.yellow, (L 'AÇILIYOR')); ACIK = @($c.green, (L 'AÇIK')); DURUYOR = @($c.orange, (L 'KAPANIYOR')) }
+    $script:StageNames = @{ 0 = (L 'Java açılıyor'); 1 = (L 'Java açılıyor'); 2 = (L 'Modlar yükleniyor'); 3 = (L 'Sunucu ayarları yükleniyor'); 4 = (L 'Dünya hazırlanıyor') }
+    $script:Badge = New-Badges
+    $script:Builtins = if ($LangCode -eq 'tr') { $BuiltinsTr } else { $BuiltinsEn }
+}
+# SyHost'u (yeniden) aç: başlatıcı varsa onu, yoksa (geliştirirken) betiği doğrudan
+function Start-SyHost([string]$exe, [switch]$NoSplash) {
+    if ($exe -and (Test-Path -LiteralPath $exe -PathType Leaf)) {
+        if ($NoSplash) { Start-Process -FilePath $exe -ArgumentList '--no-splash' } else { Start-Process -FilePath $exe }
+        return
+    }
+    $a = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$SrcDir\SyHost.ps1`" -Root `"$AppRoot`"" + $(if ($NoSplash) { ' -NoSplash' } else { '' })
+    Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList $a
+}
+
+# Yeni ekranlar (her biri kendi dosyasında; C# App.FirstRun.cs + App.PlayitSetup.cs, App.Settings.cs, App.Uninstall.cs)
+. (Join-Path $SrcDir 'FirstRun.ps1')
+. (Join-Path $SrcDir 'Settings.ps1')
+. (Join-Path $SrcDir 'Uninstall.ps1')
+
 function Build-Frame([int]$W, [int]$H) {
     $showCursor = $false; $cursorCol = 1
     switch ($Screen) {
@@ -1749,6 +1955,9 @@ function Build-Frame([int]$W, [int]$H) {
         'outro' { $rows = Render-Outro $W $H }
         'home' { $rows = Render-Home $W $H }
         'wizard' { $rows = Render-Wizard $W $H }
+        'firstrun' { $rows = Render-FirstRun $W $H }
+        'settings' { $rows = Render-Settings $W $H }
+        'uninstall' { $rows = Render-Uninstall $W $H }
         default {
             $rows = Render-Server $W $H
             $promptCol = if ($S -and $S.Running) { $c.green } else { $c.red }
@@ -1784,7 +1993,7 @@ function Render {
     [Console]::Write($sb.ToString())
 }
 function Animating {
-    if ($Screen -in 'splash', 'wizard', 'home', 'outro') { return $true }
+    if ($Screen -in 'splash', 'wizard', 'home', 'outro', 'firstrun', 'settings', 'uninstall') { return $true }
     if ($Screen -eq 'server' -and $UiMode -eq 'buyuk') { return $true }
     if ($Screen -eq 'server' -and ($Status -in 'BASLIYOR', 'DURUYOR' -or $Mode -in 'closing', 'kapat' -or $BackupStage)) { return $true }
     $false
@@ -1922,6 +2131,63 @@ if ($TestFrame) {
             }
         }
 
+        # ---------- Yeni ekranlar (ilk açılış, ayarlar, kaldır): C# App.TestScenario.cs ile aynı alanlar ----------
+        if ($TestSt -is [System.Management.Automation.PSCustomObject]) {
+            function Get-ScnStr($o, [string]$n) { if ($null -ne $o.PSObject.Properties[$n] -and $o.$n -is [string]) { [string]$o.$n } else { $null } }
+            function Get-ScnBool($o, [string]$n, [bool]$def = $false) { if ($null -ne $o.PSObject.Properties[$n] -and $o.$n -is [bool]) { [bool]$o.$n } else { $def } }
+            function Get-ScnInt($o, [string]$n, [int]$def = 0) { if ($null -ne $o.PSObject.Properties[$n] -and $null -ne $o.$n -and $o.$n -isnot [string] -and $o.$n -isnot [bool]) { [int]$o.$n } else { $def } }
+            function Get-ScnColor([string]$n) { switch ($n) { 'yellow' { $c.yellow } 'red' { $c.red } 'green' { $c.green } 'dim' { $c.dim } 'soft' { $c.soft } 'text' { $c.text } 'brass' { $c.brass } default { $null } } }
+            if (Test-ScnHas $TestSt 'appRoot') { $AppRoot = [string]$TestSt.appRoot }
+            if (Test-ScnHas $TestSt 'setupMode') { $SetupMode = [bool]$TestSt.setupMode }
+            if (Test-ScnHas $TestSt 'defaultRoot') { $TestDefaultRoot = [string]$TestSt.defaultRoot }
+            if (Test-ScnHas $TestSt 'legacyDir') { $TestLegacyDir = [string]$TestSt.legacyDir }
+            if (Test-ScnHas $TestSt 'osBuild') { $TestOsBuild = [int]$TestSt.osBuild }
+            if (Test-ScnHas $TestSt 'dryRun') { $TestDryRun = [bool]$TestSt.dryRun }
+            if (Test-ScnHas $TestSt 'fontOk') { $TestFontOk = [bool]$TestSt.fontOk }
+            if (Test-ScnHas $TestSt 'javaOwn') { $TestJavaOwn = [bool]$TestSt.javaOwn }
+            if (Test-ScnHas $TestSt 'playitReady') { $TestPlayitReady = [bool]$TestSt.playitReady }
+            if ((Test-ScnHas $TestSt 'javaFound') -and $TestSt.javaFound -is [System.Management.Automation.PSCustomObject]) {
+                $TestJava = @{}
+                foreach ($TestP in $TestSt.javaFound.PSObject.Properties) { $TestJava[[int]::Parse($TestP.Name, $TestInv)] = [bool]$TestP.Value }
+                function Find-Java([int]$major) { if ($script:TestJava.ContainsKey($major) -and $script:TestJava[$major]) { 'java.exe' } else { $null } }
+            }
+            if (Test-ScnHas $TestSt 'shortcuts') {
+                $TestShortcut = @{}
+                foreach ($TestP in $TestSt.shortcuts.PSObject.Properties) {
+                    $TestShortcut[$TestP.Name] = switch -CaseSensitive ([string]$TestP.Value) { 'ours' { 'Ours' } 'other' { 'OtherLive' } 'dead' { 'Dead' } 'foreign' { 'Foreign' } default { 'Missing' } }
+                }
+            }
+            if (Test-ScnHas $TestSt 'migrated') { $FrMigrated = [pscustomobject]@{ Servers = (Get-ScnInt $TestSt.migrated 'servers'); Playit = (Get-ScnBool $TestSt.migrated 'playit') } }
+            if (Test-ScnHas $TestSt 'movedTo') { $FrMovedTo = [string]$TestSt.movedTo }
+            if (Test-ScnHas $TestSt 'firstRun') {
+                $TestF = $TestSt.firstRun
+                $Fr = New-FirstRunState
+                $Fr.Index = Get-ScnInt $TestF 'index'; $Fr.Sel = Get-ScnInt $TestF 'sel'; $Fr.ReturnTo = Get-ScnStr $TestF 'returnTo'
+                $Fr.Target = Get-ScnStr $TestF 'target'; $Fr.OtherInstall = Get-ScnStr $TestF 'otherInstall'
+                $Fr.Note = Get-ScnStr $TestF 'note'; $Fr.NoteCol = Get-ScnColor (Get-ScnStr $TestF 'noteCol'); $Fr.Confirm = Get-ScnBool $TestF 'confirm'
+                $Fr.Sync.Text = $(if ($null -ne (Get-ScnStr $TestF 'jobText')) { Get-ScnStr $TestF 'jobText' } else { '' })
+                $Fr.Desk = Get-ScnBool $TestF 'desk' $true; $Fr.Start = Get-ScnBool $TestF 'start' $true
+                $Fr.Phase = $(if ($null -ne (Get-ScnStr $TestF 'phase')) { Get-ScnStr $TestF 'phase' } else { '' }); $Fr.Field = Get-ScnInt $TestF 'field'
+                $Fr.McAddr = $(if ($null -ne (Get-ScnStr $TestF 'mcAddr')) { Get-ScnStr $TestF 'mcAddr' } else { '' })
+                $Fr.VoiceAddr = $(if ($null -ne (Get-ScnStr $TestF 'voiceAddr')) { Get-ScnStr $TestF 'voiceAddr' } else { '' })
+                foreach ($TestX in $TestF.steps) { $Fr.Steps.Add([string]$TestX) }
+                if (Get-ScnBool $TestF 'busy') { $Fr.Job = 'test'; $Fr.Sync.Done = $false }
+            }
+            if (Test-ScnHas $TestSt 'settings') {
+                $SetSel = Get-ScnInt $TestSt.settings 'sel'; $SetNote = Get-ScnStr $TestSt.settings 'note'; $SetNoteCol = Get-ScnColor (Get-ScnStr $TestSt.settings 'noteCol')
+            }
+            if (Test-ScnHas $TestSt 'uninstall') {
+                $UnItems = New-Object System.Collections.Generic.List[object]
+                foreach ($TestX in $TestSt.uninstall.items) {
+                    $UnItems.Add([pscustomobject]@{
+                        Key = (Get-ScnStr $TestX 'key'); Title = (Get-ScnStr $TestX 'title'); Detail = $(if ($null -ne (Get-ScnStr $TestX 'detail')) { Get-ScnStr $TestX 'detail' } else { '' })
+                        On = (Get-ScnBool $TestX 'on'); NeedsAdmin = (Get-ScnBool $TestX 'needsAdmin'); State = (Get-ScnInt $TestX 'state'); Error = (Get-ScnStr $TestX 'error')
+                    })
+                }
+                $UnSel = Get-ScnInt $TestSt.uninstall 'sel'; $UnPhase = $(if ($null -ne (Get-ScnStr $TestSt.uninstall 'phase')) { Get-ScnStr $TestSt.uninstall 'phase' } else { 'liste' })
+            }
+        }
+
         # Kareyi çiz ve yaz: her satır "\n" ile biter, en sonda imleç satırı; UTF-8 (BOM'suz)
         $TestFr = Build-Frame $TestW $TestH
         $TestSb = New-Object Text.StringBuilder
@@ -1939,20 +2205,24 @@ if ($TestFrame) {
 # ---------- Başlangıç ----------
 [SyHost.Native]::PrepareConsole()
 [SyHost.Native]::DisableCloseButton()
+Set-WindowIcon
 [SyHost.CloseGuard]::Install()
 [SyHost.Tray]::Start($Title)
 [SyHost.Native]::MakeOpaque()
 Set-UiMode 'buyuk' -NoSave
-$SplashStart = T
+# Eski verileri taşı, taşınmış klasörün kısayollarını düzelt, klasör görünümünü uygula (Portable.ps1)
+Invoke-PortableStartup
+Init-Tables
+$SplashStart = if ($NoSplash) { (T) - $SplashLen - 1 } else { T }
 Start-Playit
 $SysFree = (New-Object Microsoft.VisualBasic.Devices.ComputerInfo).AvailablePhysicalMemory
 
-$ErrorLog = Join-Path $Root 'hata.log'
 try {
     while (-not $Quit) {
         $now = Get-Date
 
-        if ($Screen -eq 'splash' -and ((T) - $SplashStart) -gt $SplashLen) { $script:Screen = 'home'; Reset-Frame }
+        if ($Screen -eq 'splash' -and ((T) - $SplashStart) -gt $SplashLen) { After-Splash }
+        Fr-Poll
         if ($Screen -eq 'outro' -and ((T) - $OutroStart) -gt $OutroLen) { $script:Quit = $true; break }
 
         # Tepsi menüsü ve kısayollar
@@ -2053,7 +2323,7 @@ try {
 }
 catch {
     $msg = $_ | Out-String
-    Add-Content -Path $ErrorLog -Value ("[{0}] {1}" -f (Get-Date), $msg) -Encoding UTF8
+    try { [IO.File]::AppendAllText($ErrorLog, ("[{0}] {1}" -f (Get-Date), $msg) + [Environment]::NewLine, $Utf8NoBom) } catch {}
     [SyHost.Native]::Show()
     [Console]::Write("$E[0m$E[2J$E[H$E[?25h")
     Write-Host (L 'SyHost bir hatayla karşılaştı:') -ForegroundColor Red
@@ -2069,6 +2339,8 @@ finally {
     Stop-Playit
     [SyHost.Tray]::Close()
     try { $mutex.ReleaseMutex(); $mutex.Dispose() } catch {}
-    if ($RestartApp) { Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$SrcDir\SyHost.ps1`"" }
+    # Kurulumdan/güncellemeden sonra yeni yerden aç; dil değişince yeniden aç; kaldırdıysa klasörü sil
+    if ($LaunchAfterExit) { Start-SyHost $LaunchAfterExit -NoSplash } elseif ($RestartApp) { Start-SyHost $ExePath }
+    if ($DeleteRootAfterExit) { Remove-RootAfterExit $AppRoot }
 }
 [Environment]::Exit(0)

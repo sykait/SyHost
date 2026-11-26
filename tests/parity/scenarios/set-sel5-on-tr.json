@@ -1,0 +1,86 @@
+{
+    "t":  4.85,
+    "now":  "2026-11-27 14:30:00",
+    "w":  129,
+    "h":  41,
+    "version":  "1.0.0",
+    "edition":  "Test",
+    "lang":  "tr",
+    "cfg":  {
+                "sunucuKokKlasoru":  "C:\\SyHostTest\\Root\\Servers",
+                "maksOyuncu":  8,
+                "arkadasAdresi":  "ornek-ad.joinmc.link",
+                "sesAdresi":  "",
+                "playitKullan":  true
+            },
+    "servers":  [
+                    {
+                        "id":  "icerde",
+                        "ad":  "Create Plus",
+                        "klasor":  "C:\\SyHostTest\\Root\\Servers\\CreatePlus",
+                        "mc":  "1.21.1",
+                        "loader":  "neoforge",
+                        "loaderSurum":  "21.1.172",
+                        "java":  21,
+                        "baslat":  "x nogui",
+                        "paket":  "normal",
+                        "eklenme":  "2026-10-02 18:44",
+                        "sonAcilis":  "2026-11-27 09:15",
+                        "sonBaslatmaSn":  48
+                    },
+                    {
+                        "id":  "icerde2",
+                        "ad":  "Skyblock",
+                        "klasor":  "C:\\SyHostTest\\Root\\Servers\\Skyblock",
+                        "mc":  "26.1",
+                        "loader":  "fabric",
+                        "loaderSurum":  "0.17.2",
+                        "java":  25,
+                        "baslat":  "-jar fabric-server-launch.jar nogui",
+                        "paket":  "dusuk",
+                        "eklenme":  "2026-11-20 21:03",
+                        "sonAcilis":  null,
+                        "sonBaslatmaSn":  null
+                    },
+                    {
+                        "id":  "disarda",
+                        "ad":  "Eski Dunya",
+                        "klasor":  "C:\\SyHostTest\\Elsewhere\\OldWorld",
+                        "mc":  "1.20.1",
+                        "loader":  "forge",
+                        "loaderSurum":  "47.3.0",
+                        "java":  17,
+                        "baslat":  "x nogui",
+                        "paket":  "yuksek",
+                        "eklenme":  "2026-09-01 10:00",
+                        "sonAcilis":  "2026-09-02 10:00",
+                        "sonBaslatmaSn":  60
+                    }
+                ],
+    "state":  {
+                  "appRoot":  "C:\\SyHostTest\\Root",
+                  "defaultRoot":  "C:\\Users\\Test\\SyHost",
+                  "legacyDir":  "C:\\Users\\Test\\AppData\\Local\\SyHost",
+                  "osBuild":  26200,
+                  "totalRam":  34359738368,
+                  "threads":  16,
+                  "sysFree":  17179869184,
+                  "fontOk":  true,
+                  "dryRun":  false,
+                  "javaFound":  {
+                                    "21":  true,
+                                    "17":  true,
+                                    "25":  false,
+                                    "8":  false
+                                },
+                  "shortcuts":  {
+                                    "desktop":  "ours",
+                                    "start":  "none"
+                                },
+                  "playitOn":  true,
+                  "screen":  "settings",
+                  "settings":  {
+                                   "sel":  5
+                               }
+              }
+}

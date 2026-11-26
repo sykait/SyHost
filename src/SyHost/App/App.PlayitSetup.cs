@@ -35,7 +35,7 @@ sealed partial class App
     bool PlayitDaemonAvailable() => File.Exists(Path.Combine(PlayitToolDir, "playitd.exe")) || File.Exists(Path.Combine(PlayitLegacyBin, "playitd.exe"));
 
     /// <summary>Bağlantı zaten kurulu mu (anahtar, adres ve program var)?</summary>
-    bool PlayitReady() => Cfg.playitKullan && File.Exists(PlayitSecret) && !string.IsNullOrEmpty(Cfg.arkadasAdresi) && PlayitDaemonAvailable();
+    bool PlayitReady() => TestPlayitReady ?? Cfg.playitKullan && File.Exists(PlayitSecret) && !string.IsNullOrEmpty(Cfg.arkadasAdresi) && PlayitDaemonAvailable();
 
     /// <summary>playit'in iki programını indir (GitHub'daki son sürüm, Windows x64, imzalı).</summary>
     void PlayitDownload()

@@ -31,6 +31,25 @@ sealed partial class App
 
     FirstRunState Fr;
 
+    // ---------- Test modunda sabitlenebilen sistem bilgileri (iki sürümün aynı çizdiğini ölçmek için) ----------
+    public Dictionary<int, bool> TestJava;
+    public bool? TestJavaOwn, TestFontOk, TestPlayitReady, TestDryRun;
+    public Dictionary<string, Shortcuts.State> TestShortcut;
+    public int? TestOsBuild;
+    public string TestDefaultRoot, TestLegacyDir;
+
+    bool FontOk() => TestFontOk ?? Fonts.IsAvailable();
+    int OsBuild => TestOsBuild ?? Environment.OSVersion.Version.Build;
+    string DefaultRootShown => TestDefaultRoot ?? Portable.DefaultRoot();
+    string LegacyDirShown => TestLegacyDir ?? Migration.LegacyDir();
+    bool DryRunShown => TestDryRun ?? Uninstall.DryRun;
+    /// <summary>Kısayol durumu: 0 Masaüstü, 1 Başlat menüsü.</summary>
+    Shortcuts.State ShortcutState(int i)
+    {
+        if (TestShortcut != null) return TestShortcut.TryGetValue(i == 0 ? "desktop" : "start", out var s) ? s : Shortcuts.State.Missing;
+        return Shortcuts.StateOf(Shortcuts.Locations()[i], ExePath);
+    }
+
     sealed class FirstRunState
     {
         public List<string> Steps = new();
@@ -426,6 +445,9 @@ sealed partial class App
 
     string VersionLine() => c.dim + "v" + VersionText + "  ·  " + Edition + "  ·  sykait" + R;
 
+    /// <summary>Arayüz dilinin kurallarıyla büyük harf (Türkçede i → İ; İngilizce ve Japoncada i → I).</summary>
+    static string Up(string s) => (s ?? "").ToUpper(System.Globalization.CultureInfo.GetCultureInfo(Lang.Code == "tr" ? "tr-TR" : "en-US"));
+
     string Check(string text) => "  " + c.green + Bo + "✓" + R + "  " + c.text + text + R;
     string Warn(string text) => "  " + c.yellow + Bo + "!" + R + "  " + c.soft + text + R;
 
@@ -483,7 +505,7 @@ sealed partial class App
                 {
                     bool s = i == Fr.Sel;
                     string label = opts[i].Label;
-                    string extra = opts[i].Value == "target" && Fr.Target.Equals(Portable.DefaultRoot(), StringComparison.OrdinalIgnoreCase) ? c.green + "   " + Lang.L("önerilen") + R : "";
+                    string extra = opts[i].Value == "target" && Fr.Target.Equals(DefaultRootShown, StringComparison.OrdinalIgnoreCase) ? c.green + "   " + Lang.L("önerilen") + R : "";
                     string line = "   " + (s ? c.brass + Bo + "❯ " + c.text : "  " + c.soft) + label + R + extra;
                     rows.Add(s ? SelLine(line, W) : line);
                 }
@@ -500,7 +522,7 @@ sealed partial class App
                     rows.Add("");
                     rows.Add("     " + c.soft + Lang.L("{0} sunucu ve ayarların bu klasöre kopyalandı.", FrMigrated.Servers) + R);
                     if (FrMigrated.Playit) rows.Add("     " + c.soft + Lang.L("playit bağlantın da taşındı.") + R);
-                    rows.Add("     " + c.dim + Lang.L("Eski klasör silinmedi: {0}", Migration.LegacyDir()) + R);
+                    rows.Add("     " + c.dim + Lang.L("Eski klasör silinmedi: {0}", LegacyDirShown) + R);
                     keys = Key("Enter", Lang.L("devam"));
                 }
                 else
@@ -521,11 +543,11 @@ sealed partial class App
 
             case "sistem":
             {
-                var os = Environment.OSVersion.Version;
+                var os = Environment.OSVersion.Version; int build = OsBuild;
                 if (os.Major < 10) rows.Add("  " + c.red + Bo + "x" + R + "  " + c.red + Lang.L("SyHost Windows 10 veya 11 ister.") + R);
-                else rows.Add(Check("Windows " + (os.Build >= 22000 ? "11" : "10") + " (" + os.Build + ")"));
+                else rows.Add(Check("Windows " + (build >= 22000 ? "11" : "10") + " (" + build + ")"));
                 int ramGb = Ps.Int(Math.Round(TotalRam / 1073741824.0));
-                rows.Add(Check(Lang.L("{0} GB RAM, {1} çekirdek", ramGb, Environment.ProcessorCount)));
+                rows.Add(Check(Lang.L("{0} GB RAM, {1} çekirdek", ramGb, Threads)));
                 if (ramGb < 8) rows.Add(Warn(Lang.L("Modlu sunucular için en az 8 GB RAM önerilir.")));
                 rows.Add(Check(Lang.L("SyHost klasörü: {0}", AppRoot)));
                 keys = Key("Enter", Lang.L("devam")) + Key("Esc", Lang.L("geri"));
@@ -542,7 +564,7 @@ sealed partial class App
                 }
                 else if (j != null)
                 {
-                    bool own = Portable.IsInside(j, AppRoot);
+                    bool own = TestJavaOwn ?? Portable.IsInside(j, AppRoot);
                     rows.Add(Check(Lang.L("Java 21 hazır") + c.dim + (own ? Lang.L(" (SyHost klasöründe)") : Lang.L(" (bilgisayarında kurulu)"))));
                     rows.Add("");
                     rows.Add("  " + c.dim + Lang.L("Eski paketlerin istediği Java 8 ve 17 gerekince kendiliğinden iner.") + R);
@@ -570,10 +592,10 @@ sealed partial class App
                 break;
 
             case "yazi":
-                if (Fonts.IsAvailable()) rows.Add(Check(Lang.L("Cascadia Mono yazı tipi hazır")));
+                if (FontOk()) rows.Add(Check(Lang.L("Cascadia Mono yazı tipi hazır")));
                 else foreach (string l in WordWrap(Lang.L("Logonun ve animasyonların doğru görünmesi için Cascadia Mono yazı tipi yalnızca senin kullanıcına kurulacak (yönetici izni gerekmez)."), W - 8)) rows.Add("  " + c.soft + l + R);
                 if (Fr.Note != null) { rows.Add(""); rows.Add("  " + Fr.NoteCol + Fr.Note + R); }
-                keys = Key("Enter", Fonts.IsAvailable() || Fr.Confirm ? Lang.L("devam") : Lang.L("kur")) + Key("Esc", Lang.L("geri"));
+                keys = Key("Enter", FontOk() || Fr.Confirm ? Lang.L("devam") : Lang.L("kur")) + Key("Esc", Lang.L("geri"));
                 break;
 
             case "kisayol":

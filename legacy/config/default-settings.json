@@ -1,6 +1,6 @@
 {
     "dil":  "en",
-    "sunucuKokKlasoru":  "%USERPROFILE%\\SyHost Sunuculari",
+    "sunucuKokKlasoru":  "Servers",
     "arkadasAdresi":  "",
     "sesAdresi":  "",
     "playitKullan":  false,

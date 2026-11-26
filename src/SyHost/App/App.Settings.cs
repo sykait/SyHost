@@ -39,9 +39,9 @@ sealed partial class App
 
     string OnOff(bool on) => on ? c.green + "● " + Lang.L("açık") + R : c.dim + "○ " + Lang.L("kapalı") + R;
 
-    string ShortcutValue(string lnk)
+    string ShortcutValue(int i)
     {
-        var st = Shortcuts.StateOf(lnk, ExePath);
+        var st = ShortcutState(i);
         if (st == Shortcuts.State.Ours) return OnOff(true);
         if (st == Shortcuts.State.OtherLive) return c.yellow + "● " + Lang.L("başka bir SyHost'u açıyor") + R;
         return OnOff(false);
@@ -53,8 +53,8 @@ sealed partial class App
         {
             case "dil": return c.text + Lang.NameOf(Lang.Code) + R;
             case "klasor": return c.text + Cfg.sunucuKokKlasoru + R;
-            case "masaustu": return ShortcutValue(Shortcuts.DesktopPath);
-            case "baslat": return ShortcutValue(Shortcuts.StartMenuPath);
+            case "masaustu": return ShortcutValue(0);
+            case "baslat": return ShortcutValue(1);
             case "yazi": return c.text + (Cfg.yaziTipiBoyutu != 0 ? Cfg.yaziTipiBoyutu : 16) + R + c.dark + "   ‹ ›" + R;
             case "arkadas":
                 if (PlayitOn()) return c.green + Lang.L("● açık (playit)") + R + "  " + Bo + c.cyan + Cfg.arkadasAdresi + R;
@@ -97,7 +97,7 @@ sealed partial class App
         var lines = new List<string>();
         foreach (string l in WordWrap(Lang.L(cur.Help), Math.Min(W, 90) - 6)) lines.Add(c.soft + l + R);
         if (SetNote != null) foreach (string l in WordWrap(SetNote, Math.Min(W, 90) - 6)) lines.Add(SetNoteCol + l + R);
-        foreach (string l in Card(Lang.L(cur.Label).ToUpper(), lines, Math.Min(W, 90))) rows.Add(" " + l);
+        foreach (string l in Card(Up(Lang.L(cur.Label)), lines, Math.Min(W, 90))) rows.Add(" " + l);
 
         while (rows.Count < H - 2) rows.Add("");
         UpdateSky(W, H, 0.07, 1, false, 0.75);
