@@ -187,7 +187,7 @@ function Spin([double]$speed = 12) { [string]$SpinFrames[[int]((T) * $speed) % $
 $PulseFrames = @('∙', '•', '◉', '⬤', '◉', '•')
 function Pulse { [string]$PulseFrames[[int]((T) * 7) % $PulseFrames.Count] }
 
-# Claude Code tarzı parıltı: metnin üzerinden ışık geçer
+# Parıltı: metnin üzerinden ışık geçer
 function Shimmer([string]$text, [int[]]$base, [int[]]$hi, [double]$speed = 16, [double]$width = 4) {
     $len = $text.Length
     if ($len -eq 0) { return '' }
