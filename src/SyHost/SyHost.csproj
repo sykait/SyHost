@@ -39,6 +39,8 @@
   <ItemGroup>
     <!-- Exe'nin içine gömülen dosyalar (yazı tipi, simgeler) -->
     <EmbeddedResource Include="Assets\**\*" Exclude="Assets\SyHost.ico" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Cascadia Mono (SIL OFL 1.1): bilgisayarda yoksa kullanıcıya kurulur -->
+    <EmbeddedResource Include="..\..\legacy\fonts\CascadiaMono-Regular.ttf;..\..\legacy\fonts\CascadiaMono-Bold.ttf;..\..\legacy\fonts\OFL.txt" LogicalName="fonts\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

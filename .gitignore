@@ -33,3 +33,6 @@ TestResults/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Claude Code calisma kopyalari ve yerel ayarlari
+.claude/

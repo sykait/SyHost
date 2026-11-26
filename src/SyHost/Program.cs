@@ -16,6 +16,9 @@ static class Program
         // Test modu: tek bir kareyi dosyaya yaz (iki sürümün ekranlarını karşılaştırmak için)
         if (args.Length >= 3 && args[0] == "--frame")
             return App.RunFrameTest(args[1], args[2], ArgValue(args, "--root") ?? Path.GetDirectoryName(Path.GetFullPath(args[1])));
+        // Gizli öz denetim komutları (geliştirme ve otomatik testler)
+        if (args.Length >= 2 && args[0] == "--selftest")
+            return SelfTest.Run(args);
 
         bool hosted = Array.IndexOf(args, "--hosted") >= 0;
 

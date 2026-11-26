@@ -28,6 +28,13 @@ public sealed class Settings
     public int yaziTipiBoyutu { get; set; } = 16;
     public Dictionary<string, Pack> paketler { get; set; }
     public bool? paketlerAyarlandi { get; set; }
+    /// <summary>İlk açılış ekranı bitti mi? (null: eski sürümden gelen ayar, kurulum zaten yapılmış sayılır)</summary>
+    public bool? kurulumTamam { get; set; }
+    /// <summary>Masaüstü ve Başlat menüsü kısayolu istensin mi?</summary>
+    public bool? kisayolMasaustu { get; set; }
+    public bool? kisayolBaslat { get; set; }
+    /// <summary>SyHost yazı tipini bu kullanıcıya kendisi kurdu mu? (kaldırırken silinir)</summary>
+    public bool? yaziTipiKuruldu { get; set; }
     [JsonExtensionData] public Dictionary<string, JsonElement> Extra { get; set; }
 }
 
