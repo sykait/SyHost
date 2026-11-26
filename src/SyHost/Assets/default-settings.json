@@ -1,0 +1,38 @@
+{
+    "dil":  "en",
+    "sunucuKokKlasoru":  "Servers",
+    "arkadasAdresi":  "",
+    "sesAdresi":  "",
+    "playitKullan":  false,
+    "maksOyuncu":  5,
+    "cokerseYenidenBaslat":  true,
+    "otomatikYedekSaat":  3,
+    "saklanacakYedek":  10,
+    "yaziTipiBoyutu":  16,
+    "paketler":  {
+                     "dusuk":  {
+                                   "ad":  "DÜŞÜK",
+                                   "ramMin":  4,
+                                   "ramMax":  6,
+                                   "cekirdek":  4,
+                                   "oncelik":  "Normal",
+                                   "aciklama":  "Ağır bir oyun oynarken. Sistemini en az yoran ayar."
+                               },
+                     "normal":  {
+                                    "ad":  "NORMAL",
+                                    "ramMin":  6,
+                                    "ramMax":  10,
+                                    "cekirdek":  8,
+                                    "oncelik":  "High",
+                                    "aciklama":  "Günlük kullanım. 2-5 kişi için en dengeli ayar."
+                                },
+                     "yuksek":  {
+                                    "ad":  "YÜKSEK",
+                                    "ramMin":  10,
+                                    "ramMax":  16,
+                                    "cekirdek":  16,
+                                    "oncelik":  "High",
+                                    "aciklama":  "Dev fabrikalar ve hızlı keşif için tam güç."
+                                }
+                 }
+}
