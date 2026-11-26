@@ -121,7 +121,8 @@ Load-Servers
 $JavaFuncs = {
     function Get-JavaMajor([string]$mc) {
         $p = $mc -split '\.'
-        if ($p[0] -ne '1') { return 21 }
+        # Yıl numaralı sürümler (26.x) Java 25 ister
+        if ($p[0] -ne '1') { if ([int]($p[0] -replace '\D.*$', '') -ge 26) { return 25 }; return 21 }
         $minor = [int]$p[1]; $patch = if ($p.Count -gt 2) { [int]($p[2] -replace '\D.*$', '') } else { 0 }
         if ($minor -ge 21) { return 21 }
         if ($minor -eq 20 -and $patch -ge 5) { return 21 }
@@ -134,7 +135,7 @@ $JavaFuncs = {
         foreach ($pt in $pats) { $j = Get-ChildItem $pt -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1; if ($j) { return $j.FullName } }
         $null
     }
-    function Get-JavaWingetId([int]$major) { switch ($major) { 21 { 'Microsoft.OpenJDK.21' } 17 { 'Microsoft.OpenJDK.17' } default { 'EclipseAdoptium.Temurin.8.JRE' } } }
+    function Get-JavaWingetId([int]$major) { switch ($major) { 25 { 'Microsoft.OpenJDK.25' } 21 { 'Microsoft.OpenJDK.21' } 17 { 'Microsoft.OpenJDK.17' } default { 'EclipseAdoptium.Temurin.8.JRE' } } }
 }
 . $JavaFuncs
 

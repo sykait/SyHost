@@ -173,7 +173,7 @@ sealed partial class App
         bool ctrl = (k.Modifiers & ConsoleModifiers.Control) != 0;
         switch (Screen)
         {
-            case "splash": Screen = "home"; ResetFrame(); return;
+            case "splash": AfterSplash(); return;
             case "outro": Quit = true; return;
             case "home": HandleHomeKey(k, ctrl); return;
             case "wizard": HandleWizardKey(k, ctrl); return;

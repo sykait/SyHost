@@ -16,21 +16,28 @@ sealed partial class App
     static readonly Regex AddrRx = new(@"^[\w\.-]+\.\w+(:\d+)?$", RegexOptions.Compiled);
     Process PlayitClaimProc;
 
-    /// <summary>SyHost'un indirdiği playit programı.</summary>
-    string PlayitToolExe => Path.Combine(Data, "tools", "playit", "playit.exe");
+    // playit 2.x iki programdır: playitd.exe tünelleri çalıştırır (StartPlayit bunu açar),
+    // playit.exe yalnızca komut satırı aracıdır (hesap bağlama: claim generate/url/exchange).
+    // İkisi de Data\tools\playit içine iner; eski sürümün Program Files'taki kopyası da kullanılabilir.
+    string PlayitToolDir => Path.Combine(Data, "tools", "playit");
+    const string PlayitLegacyBin = @"C:\Program Files\playit_gg\bin";
 
-    /// <summary>Eşleştirme komutlarını çalıştıracak playit programı (yoksa null).</summary>
+    /// <summary>Hesap bağlama komutlarını çalıştıracak playit aracı (yoksa null).</summary>
     string PlayitCliExe()
     {
-        if (File.Exists(PlayitToolExe)) return PlayitToolExe;
-        string legacy = @"C:\Program Files\playit_gg\bin\playit.exe";
+        string own = Path.Combine(PlayitToolDir, "playit.exe");
+        if (File.Exists(own)) return own;
+        string legacy = Path.Combine(PlayitLegacyBin, "playit.exe");
         return File.Exists(legacy) ? legacy : null;
     }
 
-    /// <summary>Bağlantı zaten kurulu mu (anahtar ve program var, adres kayıtlı)?</summary>
-    bool PlayitReady() => Cfg.playitKullan && File.Exists(PlayitSecret) && !string.IsNullOrEmpty(Cfg.arkadasAdresi) && (PlayitCliExe() != null || File.Exists(@"C:\Program Files\playit_gg\bin\playitd.exe"));
+    /// <summary>Tünelleri çalıştıracak program var mı?</summary>
+    bool PlayitDaemonAvailable() => File.Exists(Path.Combine(PlayitToolDir, "playitd.exe")) || File.Exists(Path.Combine(PlayitLegacyBin, "playitd.exe"));
 
-    /// <summary>playit programını indir (GitHub'daki son sürüm, Windows x64).</summary>
+    /// <summary>Bağlantı zaten kurulu mu (anahtar, adres ve program var)?</summary>
+    bool PlayitReady() => Cfg.playitKullan && File.Exists(PlayitSecret) && !string.IsNullOrEmpty(Cfg.arkadasAdresi) && PlayitDaemonAvailable();
+
+    /// <summary>playit'in iki programını indir (GitHub'daki son sürüm, Windows x64, imzalı).</summary>
     void PlayitDownload()
     {
         Fr.JobText = Lang.L("playit indiriliyor...");
@@ -39,23 +46,19 @@ sealed partial class App
         http.Timeout = TimeSpan.FromMinutes(5);
         string json = http.GetStringAsync("https://api.github.com/repos/playit-cloud/playit-agent/releases/latest").GetAwaiter().GetResult();
         using var doc = System.Text.Json.JsonDocument.Parse(json);
-        string url = null;
+        var urls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in doc.RootElement.GetProperty("assets").EnumerateArray())
+            urls[a.GetProperty("name").GetString() ?? ""] = a.GetProperty("browser_download_url").GetString();
+        Directory.CreateDirectory(PlayitToolDir);
+        foreach (var (asset, target) in new[] { ("playitd-windows-x86_64", "playitd.exe"), ("playit-windows-x86_64", "playit.exe") })
         {
-            string name = a.GetProperty("name").GetString() ?? "";
-            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && name.Contains("windows", StringComparison.OrdinalIgnoreCase)
-                && (name.Contains("x86_64", StringComparison.OrdinalIgnoreCase) || name.Contains("x64", StringComparison.OrdinalIgnoreCase)))
-            {
-                url = a.GetProperty("browser_download_url").GetString();
-                if (name.Contains("signed", StringComparison.OrdinalIgnoreCase)) break;
-            }
+            string url = urls.TryGetValue(asset + "-signed.exe", out var u1) ? u1 : urls.TryGetValue(asset + ".exe", out var u2) ? u2 : null;
+            if (url == null) throw new Exception(Lang.L("playit kurulamadı, bu adım atlanıyor."));
+            string dst = Path.Combine(PlayitToolDir, target), tmp = dst + ".indiriliyor";
+            using (var s = http.GetStreamAsync(url).GetAwaiter().GetResult())
+            using (var f = File.Create(tmp)) s.CopyTo(f);
+            File.Move(tmp, dst, true);
         }
-        if (url == null) throw new Exception(Lang.L("playit kurulamadı, bu adım atlanıyor."));
-        Directory.CreateDirectory(Path.GetDirectoryName(PlayitToolExe));
-        string tmp = PlayitToolExe + ".indiriliyor";
-        using (var s = http.GetStreamAsync(url).GetAwaiter().GetResult())
-        using (var f = File.Create(tmp)) s.CopyTo(f);
-        File.Move(tmp, PlayitToolExe, true);
     }
 
     /// <summary>playit komutunu çalıştır, son satırı döndür.</summary>
@@ -143,7 +146,7 @@ sealed partial class App
                     Cfg.playitKullan = false; SaveConfig(); HasFriendAddr = false; FriendAddr = Lang.L("henüz yok");
                     FrNext(); return;
                 }
-                if (PlayitCliExe() == null) { Fr.Phase = "indir"; FrRun(PlayitDownload); }
+                if (PlayitCliExe() == null || !PlayitDaemonAvailable()) { Fr.Phase = "indir"; FrRun(PlayitDownload); }
                 else { Fr.Phase = "bagla"; FrRun(PlayitClaim); }
                 return;
 

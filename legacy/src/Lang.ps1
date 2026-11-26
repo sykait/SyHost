@@ -16,7 +16,8 @@ function L {
         $e = $TextTable[$Key]
         if ($e) { $t = $e[$script:LangCode]; if (-not $t) { $t = $e['en'] } }
     }
-    if ($Args2 -and $Args2.Count) { return ($t -f $Args2) }
+    # Tek argüman 0 ya da boş olsa da biçimle (eskiden "{0} sunucu" yazıyordu)
+    if ($Args2.Count) { return ($t -f $Args2) }
     $t
 }
 

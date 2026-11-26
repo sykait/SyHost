@@ -282,7 +282,7 @@ sealed partial class App
             rows.Add("  " + c.soft + Lang.L("İndirilecek") + R + c.text + Lang.L(" {0} mod", inf.Mods) + (string.IsNullOrEmpty(FindJava(inf.Java)) ? " + Java " + inf.Java : "") + " + " + WizLoaderName(inf.Loader) + R);
             rows.Add("");
             rows.Add("  " + c.dim + Lang.L("Kurarak Minecraft kullanım sözleşmesini (aka.ms/MinecraftEULA) kabul etmiş olursun.") + R);
-            if (string.IsNullOrEmpty(FindJava(inf.Java))) rows.Add("  " + c.yellow + Lang.L("Java {0} kurulurken Windows izin isteyebilir, Evet demen yeterli.", inf.Java) + R);
+            if (string.IsNullOrEmpty(FindJava(inf.Java))) rows.Add("  " + c.dim + Lang.L("Java {0} otomatik olarak SyHost klasörüne indirilecek.", inf.Java) + R);
             rows.Add("");
             rows.Add("  " + Pill("240;240;240", "18;18;20", "Enter") + c.text + Lang.L(" Kur   ") + R + Pill("50;50;56", "235;235;235", "Esc") + c.text + Lang.L(" Geri") + R);
         }

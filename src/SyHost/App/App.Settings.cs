@@ -63,7 +63,7 @@ sealed partial class App
             case "java":
             {
                 var parts = new List<string>();
-                foreach (int m in new[] { 21, 17, 8 }) parts.Add(FindJava(m) != null ? c.text + m + " " + c.green + "✓" + R : c.dark + m + " —" + R);
+                foreach (int m in new[] { 25, 21, 17, 8 }) parts.Add(FindJava(m) != null ? c.text + m + " " + c.green + "✓" + R : c.dark + m + " —" + R);
                 return string.Join("   ", parts);
             }
             case "oyuncu": return c.text + MaxPlayers + R + c.dark + "   ‹ ›" + R;

@@ -298,7 +298,7 @@ sealed partial class App
                         {
                             S.P.Refresh(); RamNow = S.P.WorkingSet64;
                             double cpuMs = S.P.TotalProcessorTime.TotalMilliseconds;
-                            if (LastCpuMs > 0) CpuNow = Math.Min(100, (cpuMs - LastCpuMs) / (now - LastStat).TotalMilliseconds / Threads * 100);
+                            if (LastCpuMs > 0) CpuNow = Math.Min(100, Ps.Int((cpuMs - LastCpuMs) / (now - LastStat).TotalMilliseconds / Threads * 100));   // PowerShell: Int32 Min
                             LastCpuMs = cpuMs;
                         }
                         catch { }

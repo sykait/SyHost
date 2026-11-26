@@ -156,7 +156,7 @@ sealed partial class App
         if (Pl != null && Pl.Running) return;
         PlayitExe = SrvFindPlayit();
         // Ajan ya da anahtar yoksa playit'i bu oturum için kapat (dosyaya yazılmaz)
-        if (PlayitExe == null || !File.Exists(PlayitSecret)) { Cfg.playitKullan = false; HasFriendAddr = false; return; }
+        if (PlayitExe == null || !File.Exists(PlayitSecret)) { HasFriendAddr = false; return; }   // ayar dosyadaki gibi kalır; program gelince yeniden denenir
         string dir = Path.GetDirectoryName(PlayitSecret);
         Pl = new ServerProcess();
         try { Pl.Start(PlayitExe, $"--secret-path \"{PlayitSecret}\" --socket-path {SrvPlayitPipe} --log-path \"{Path.Combine(dir, "playit.log")}\"", dir); } catch { }

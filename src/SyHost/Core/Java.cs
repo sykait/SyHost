@@ -32,7 +32,8 @@ static class Java
     public static int GetMajor(string mc)
     {
         string[] p = (mc ?? "").Split('.');           // $mc -split '\.'
-        if (!Ps.Eq(p[0], "1")) return 21;
+        // Yıl numaralı sürümler (26.1, 26.2 ...) Java 25 ister (Mojang sürüm listesi: javaVersion.majorVersion = 25)
+        if (!Ps.Eq(p[0], "1")) return Lead(p[0]) >= 26 ? 25 : 21;
         // PowerShell [int]$p[1] "1.21-rc1" gibi ön sürümlerde hata verir; burada da yamadaki gibi baştaki sayı alınır
         int minor = p.Length > 1 ? Lead(p[1]) : 0;
         int patch = p.Length > 2 ? Lead(p[2]) : 0;   // [int]($p[2] -replace '\D.*$', '')

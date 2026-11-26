@@ -391,7 +391,8 @@ sealed partial class App
         string caret = (el > 0.9 && (typed.Length < tag.Length || Ps.Int(T() * 3) % 2 == 0)) ? c.brass + "▌" : " ";
         int tc = Ps.Int(Math.Max(0, (W - tag.Length) / 2.0));
         items[top + 7] = (c.text + typed + caret + Ps.Rep(" ", tag.Length - typed.Length), tc);
-        double pct = Math.Min(100, el / (SplashLen - 0.2) * 100);
+        // PowerShell 5.1: [Math]::Min(100, <ondalık>) Int32 sürümünü seçer, ondalık önce [int]e yuvarlanır
+        double pct = Math.Min(100, Ps.Int(el / (SplashLen - 0.2) * 100));
         items[top + 9] = (BarP(pct, 30), Ps.Int(Math.Max(0, (W - 30) / 2.0)));
         string word = pct < 100 ? Lang.L("hazırlanıyor") : Lang.L("hazır       ");
         items[top + 10] = (c.brass + (pct < 100 ? Spin() : "✓") + R + " " + Shimmer(word, new[] { 120, 120, 126 }, new[] { 255, 255, 255 }), Ps.Int(Math.Max(0, (W - 16) / 2.0)));

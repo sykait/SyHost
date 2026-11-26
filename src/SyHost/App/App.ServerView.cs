@@ -15,7 +15,7 @@ sealed partial class App
     {
         if (StartTime == null) return 0;
         double el = (Now() - StartTime.Value).TotalSeconds;
-        double pct = Math.Min(95, el / Math.Max(5, ExpectedStart) * 100);
+        int pct = Math.Min(95, Ps.Int(el / Math.Max(5, ExpectedStart) * 100));   // PowerShell: [Math]::Min(95, <ondalık>) Int32 sürümü
         int min = Stage switch { 2 => 8, 3 => 55, 4 => 75, _ => 0 };
         return Ps.Int(Math.Max(pct, min));
     }

@@ -48,6 +48,7 @@ sealed partial class App
                 if (HomeSel >= Servers.Count) StartWizard(); else EnterServer(Servers[HomeSel]);
                 return;
             case ConsoleKey.Delete: if (HomeSel < Servers.Count) HomeMode = "sil"; return;
+            case ConsoleKey.F9: OpenSettings(); return;
             case ConsoleKey.F2: if (Allow("F2")) HidePanel(); return;
             case ConsoleKey.F10: if (Allow("F10")) StartOutro(); return;
             case ConsoleKey.Escape: return;
@@ -69,7 +70,7 @@ sealed partial class App
             c.dim + "v" + VersionText + "  ·  " + Edition + "  ·  sykait" + R,
             c.dark + Ps.Rep("─", 38) + R,
             c.soft + Lang.L("Arkadaş adresi  ") + R + (HasFriendAddr ? Bo + c.cyan + FriendAddr : c.dim + Lang.L("henüz yok")) + R,
-            c.soft + Lang.L("Dış erişim      ") + R + (PlayitOn() ? c.green + Lang.L("● açık (playit)") : HasFriendAddr ? c.yellow + Lang.L("● bağlanıyor") : c.yellow + Lang.L("● kurulu değil") + c.dim + Lang.L("  (Setup.bat)")) + R,
+            c.soft + Lang.L("Dış erişim      ") + R + (PlayitOn() ? c.green + Lang.L("● açık (playit)") : HasFriendAddr ? c.yellow + Lang.L("● bağlanıyor") : c.yellow + Lang.L("● kurulu değil") + c.dim + Lang.L("  (F9 ayarlar)")) + R,
             c.soft + Lang.L("Bilgisayar      ") + R + c.text + Ps.F(Lang.L("{0:0.0} GB boş"), SysFree / (1024.0 * 1024 * 1024)) + R + c.dim + Ps.F(" / {0:0} GB", TotalRam / (1024.0 * 1024 * 1024)) + R,
         };
         rows.Add("");
@@ -150,7 +151,7 @@ sealed partial class App
         UpdateSky(W, H, 0.07, 1, false, 0.75);
         for (int r1 = 0; r1 < rows.Count; r1++) { if (rows[r1] == "") rows[r1] = SkySeg(r1, 0, W); }
         rows.Add(c.dark + Ps.Rep("─", W) + R);
-        rows.Add(" " + Key("↑↓", Lang.L("seç")) + Key("Enter", Lang.L("aç")) + Key("+", Lang.L("yeni sunucu")) + Key("Del", Lang.L("listeden kaldır")) + Key("L", Lang.L("dil") + ": " + Lang.NameOf(Lang.Code)) + Key("F2", Lang.L("gizle")) + c.dark + "│  " + R + Pill("200;30;45", "255;255;255", Lang.L("F10 ÇIK")));
+        rows.Add(" " + Key("↑↓", Lang.L("seç")) + Key("Enter", Lang.L("aç")) + Key("+", Lang.L("yeni sunucu")) + Key("Del", Lang.L("listeden kaldır")) + Key("L", Lang.L("dil") + ": " + Lang.NameOf(Lang.Code)) + Key("F9", Lang.L("ayarlar")) + Key("F2", Lang.L("gizle")) + c.dark + "│  " + R + Pill("200;30;45", "255;255;255", Lang.L("F10 ÇIK")));
         return rows;
     }
 
