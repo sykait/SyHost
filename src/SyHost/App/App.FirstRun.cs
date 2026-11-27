@@ -30,6 +30,9 @@ sealed partial class App
     string FrMovedTo;
 
     FirstRunState Fr;
+    /// <summary>Açılışta oluşan ana menü mesajı (Türkçe anahtar): ana menü ilk görününce gösterilir.</summary>
+    string PendingHomeMsg;
+    void ShowPendingHomeMsg() { if (PendingHomeMsg != null) { ShowHomeMsg(Lang.L(PendingHomeMsg)); PendingHomeMsg = null; } }
 
     // ---------- Test modunda sabitlenebilen sistem bilgileri (iki sürümün aynı çizdiğini ölçmek için) ----------
     public Dictionary<int, bool> TestJava;
@@ -88,6 +91,7 @@ sealed partial class App
     void AfterSplash()
     {
         Screen = NextAfterSplash;
+        if (Screen == "home") ShowPendingHomeMsg();
         if (Screen == "firstrun" && Fr == null) StartFirstRun(null);
         ResetFrame();
     }
@@ -149,7 +153,7 @@ sealed partial class App
         if (Fr.ReturnTo != null) { Fr = null; Screen = "settings"; ResetFrame(); return; }
         Cfg.kurulumTamam = true;
         SaveConfig();
-        Fr = null; Screen = "home"; ResetFrame();
+        Fr = null; Screen = "home"; ShowPendingHomeMsg(); ResetFrame();
     }
 
     void FrBack()

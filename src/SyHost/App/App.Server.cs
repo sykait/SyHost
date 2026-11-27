@@ -325,6 +325,7 @@ sealed partial class App
                 {
                     double mb = Math.Round(new FileInfo(BackupDst).Length / (1024.0 * 1024.0));
                     AddLog("ok", Lang.L("Yedek alındı: {0}  ({1} MB)", Path.GetFileName(BackupDst), mb));
+                    RefreshFolderLook();   // ilk yedekte açılan yedekler klasörü de simgesini ve adını alsın
                     int keep = Cfg.saklanacakYedek;
                     if (keep > 0) SrvPruneBackups(Path.GetDirectoryName(BackupDst), keep);
                 }

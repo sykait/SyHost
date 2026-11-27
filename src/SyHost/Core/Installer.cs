@@ -650,7 +650,12 @@ static class Installer
         Ensure(resp);
         Uri final = resp.RequestMessage?.RequestUri ?? new Uri(url);
         long length = resp.Content.Headers.ContentLength ?? -1;
-        string name = Uri.UnescapeDataString(Path.GetFileName(final.AbsolutePath));
+        // Görünen ad: sunucunun bildirdiği dosya adı (GitHub indirmeleri son adreste anlamsız bir kimlikle gelir),
+        // yoksa ilk adresin, o da yoksa son adresin dosya adı
+        string name = resp.Content.Headers.ContentDisposition?.FileNameStar ?? resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+        if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) name = null;
+        name ??= new[] { new Uri(url), final }.Select(u => Uri.UnescapeDataString(Path.GetFileName(u.AbsolutePath))).FirstOrDefault(n => Path.HasExtension(n))
+               ?? Uri.UnescapeDataString(Path.GetFileName(final.AbsolutePath));
         var tick = System.Diagnostics.Stopwatch.StartNew();
         progress?.Invoke(name, 0, length);
         byte[] buf = ArrayPool<byte>.Shared.Rent(1 << 16);

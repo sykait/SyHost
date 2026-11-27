@@ -81,6 +81,7 @@ static class SelfTest
         Console.WriteLine("      kopyalanan: " + string.Join(", ", r.Copied) + $"  sunucu: {r.Servers}  playit: {r.Playit}");
         fail += Check(File.Exists(Path.Combine(legacy, Migration.NoteName)), "eski klasöre not bırakıldı");
         fail += Check(Migration.MovedTo() == root, "not okunuyor: " + Migration.MovedTo());
+        try { var s = Json.ReadSettings(Path.Combine(data, "ayarlar.json")); Console.WriteLine($"      sunucu klasörü: {s.sunucuKokKlasoru}  dil: {s.dil}  kurulumTamam: {s.kurulumTamam}"); } catch { }
         Console.WriteLine(fail == 0 ? "SONUÇ: geçti" : $"SONUÇ: {fail} hata");
         return fail == 0 ? 0 : 1;
     }

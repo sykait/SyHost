@@ -80,6 +80,9 @@ static class Migration
                 var s = Json.ReadSettings(cfg);
                 if (!string.IsNullOrEmpty(lang)) s.dil = lang;
                 s.kurulumTamam ??= false;
+                // 0.5.0'ın varsayılan sunucu yeri taşınabilir klasöre çevrilir: yeni sunucular SyHost klasörünün
+                // içine kurulsun. Kullanıcının kendi seçtiği yer aynen kalır; var olan sunucular yerinden oynamaz.
+                if (IsOldDefaultRoot(s.sunucuKokKlasoru)) s.sunucuKokKlasoru = Portable.ServersName;
                 Json.WriteText(cfg, Json.WriteSettings(s));
             }
             catch { }
@@ -91,6 +94,15 @@ static class Migration
         r.Playit = File.Exists(Path.Combine(dataDir, "playit.toml"));
         WriteNote(src, root);
         return r;
+    }
+
+    /// <summary>0.5.0'ın varsayılanı mı: boş ya da %USERPROFILE%\SyHost Sunuculari (açılmış hâli de).</summary>
+    public static bool IsOldDefaultRoot(string v)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return true;
+        string a = Environment.ExpandEnvironmentVariables(v.Trim()).TrimEnd('\\');
+        string b = Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\SyHost Sunuculari");
+        return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
     }
 
     static void WriteNote(string legacy, string root)

@@ -186,8 +186,7 @@ sealed partial class App
     {
         Lang.Code = code; Cfg.dil = code; SaveConfig();
         InitTables();
-        string root = AppRoot; var dirs = Servers.Select(s => s.klasor).ToList();
-        if (!TestMode) Task.Run(() => FolderLook.Apply(root, code, dirs));   // test modunda gerçek klasörlere dokunulmaz
+        RefreshFolderLook();
         string desc = Lang.L("SyHost - modlu Minecraft sunucu merkezi");
         foreach (string lnk in Shortcuts.Locations())
             try { if (Shortcuts.StateOf(lnk, ExePath) == Shortcuts.State.Ours) Shortcuts.Write(lnk, ExePath, desc); } catch { }

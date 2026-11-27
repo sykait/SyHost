@@ -112,11 +112,19 @@ sealed partial class App
         }
         LoadServers();
         // Klasör taşındıysa eski yeri gösteren kısayolları buraya çevir
-        try { if (Shortcuts.FixMoved(ExePath, Lang.L("SyHost - modlu Minecraft sunucu merkezi")) > 0) ShowHomeMsg(Lang.L("Kısayollar yeni yere güncellendi.")); } catch { }
+        // Mesaj açılış animasyonundan sonra, ana menü görününce gösterilir (yoksa animasyon sırasında kaybolurdu)
+        try { if (Shortcuts.FixMoved(ExePath, Lang.L("SyHost - modlu Minecraft sunucu merkezi")) > 0) PendingHomeMsg = "Kısayollar yeni yere güncellendi."; } catch { }
+        RefreshFolderLook();
+        NextAfterSplash = (Cfg.kurulumTamam == false || FrMigrated != null || FrMovedTo != null) ? "firstrun" : "home";
+    }
+
+    /// <summary>Klasör simgelerini ve dile göre adlarını arka planda yeniden uygula (yeni sunucu, ilk yedek, dil değişimi).</summary>
+    void RefreshFolderLook()
+    {
+        if (TestMode) return;   // test modunda gerçek klasörlere dokunulmaz
         string root = AppRoot, lang = Lang.Code;
         var dirs = Servers.Select(s => s.klasor).ToList();
         Task.Run(() => FolderLook.Apply(root, lang, dirs));
-        NextAfterSplash = (Cfg.kurulumTamam == false || FrMigrated != null || FrMovedTo != null) ? "firstrun" : "home";
     }
 
     /// <summary>sunucuKokKlasoru: boşsa SyHost klasöründeki Servers, göreliyse SyHost klasörüne göre.</summary>

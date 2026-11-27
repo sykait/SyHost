@@ -213,6 +213,7 @@ sealed partial class App
             paket = "normal", eklenme = Now().ToString("yyyy-MM-dd HH:mm"), sonAcilis = null, sonBaslatmaSn = null,
         };
         Servers.Add(entry); SaveServers();
+        RefreshFolderLook();   // yeni sunucunun klasörü hemen kendi simgesini alsın
         HomeSel = Servers.Count - 1;
         w.Step = "bitti";
     }
