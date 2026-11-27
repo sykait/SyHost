@@ -4,6 +4,7 @@
 //    SyHost.exe --selftest folderlook <SyHost klasörü> <dil>
 //    SyHost.exe --selftest migration <eski veri kopyası> <SyHost klasörü>
 //    SyHost.exe --selftest paths <klasör>
+//    SyHost.exe --selftest uninstall <SyHost klasörü> [<silinecek deneme klasörü>]   (Uninstall.SelfTest; deneme modunda)
 //  Kullanıcının gerçek kısayollarına ve verilerine dokunmaz: hepsi verilen klasörlerde çalışır.
 // =====================================================================
 namespace SyHost;
@@ -21,6 +22,7 @@ static class SelfTest
                 case "folderlook": return TestFolderLook(args[2], args.Length > 3 ? args[3] : "tr");
                 case "migration": return TestMigration(args[2], args[3]);
                 case "paths": return TestPaths(args[2]);
+                case "uninstall": return Uninstall.SelfTest(args[2], args.Length > 3 ? args[3] : null);
                 default: Console.WriteLine("bilinmeyen test: " + what); return 2;
             }
         }
