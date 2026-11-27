@@ -7,6 +7,7 @@
 #    ... -Windows                                             klasör seçiciyi ve uyarıyı gizli bir konsolda gerçekten açıp kapatır
 #    ... -Font                                                yazı tipini BU KULLANICIYA gerçekten kurar ve hemen kaldırır
 #    ... -Java                                                Java 17'yi WorkRoot\Data'ya gerçekten indirir (~45 MB, iki kez)
+#    ... -App                                                 gerçek SyHost.ps1'i gizli bir konsolda açar, açılışı denetler ve kapatır
 #
 #  Gerçek kullanıcı verisine dokunmaz: kısayollar (SYHOST_SHORTCUT_DIR), eski veri (SYHOST_LEGACY_DATA) ve
 #  varsayılan kurulum yeri (SYHOST_DEFAULT_ROOT) WorkRoot'a yönlendirilir; değişkenler yalnızca bu süreçte geçerlidir.
@@ -18,7 +19,8 @@ param(
     [string]$CsExe,
     [switch]$Windows,
     [switch]$Font,
-    [switch]$Java
+    [switch]$Java,
+    [switch]$App
 )
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -29,10 +31,12 @@ if ($CsExe) { $CsExe = (Resolve-Path $CsExe).Path }
 $WorkRoot = [IO.Path]::GetFullPath($WorkRoot)
 if ($WorkRoot.TrimEnd('\').Length -lt 8) { throw "WorkRoot çok kısa: $WorkRoot" }
 function Clear-Dir([string]$dir) {
-    if (-not (Test-Path -LiteralPath $dir)) { return }
-    # desktop.ini klasörleri salt okunur, ini dosyaları gizli+sistem: önce öznitelikleri temizle
-    foreach ($i in @(Get-ChildItem -LiteralPath $dir -Recurse -Force)) { try { $i.Attributes = 'Normal' } catch {} }
-    Remove-Item -LiteralPath $dir -Recurse -Force
+    # desktop.ini klasörleri salt okunur, ini dosyaları gizli+sistem: önce öznitelikleri temizle.
+    # Virüs tarayıcısı ya da Explorer yeni dosyaları kısa süre tutabilir ("klasör boş değil"): birkaç kez dene.
+    for ($try = 0; $try -lt 6 -and (Test-Path -LiteralPath $dir); $try++) {
+        foreach ($i in @(Get-ChildItem -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue)) { try { $i.Attributes = 'Normal' } catch {} }
+        try { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction Stop } catch { if ($try -eq 5) { throw }; Start-Sleep -Milliseconds 500 }
+    }
 }
 Clear-Dir $WorkRoot
 New-Item -ItemType Directory -Force $WorkRoot | Out-Null
@@ -916,6 +920,42 @@ Set-WindowIcon
     Check ($pick -like 'pick=True|SyHost deneme: klasör seç|*') "Pick-Folder: modern seçici başlığıyla açıldı, kapatılınca `$null ($pick)"
     Check ($alert -ceq 'alert=SyHost|SyHost deneme uyarısı:\nikinci satır' -or $alert -ceq 'alert=SyHost|SyHost deneme uyarısı:\r\nikinci satır') "Show-Alert: başlık SyHost, metin aynen ($alert)"
     Check ($icon -like 'icon=True|True|True|*') "Set-WindowIcon: konsol penceresinin büyük ve küçük simgesi kondu (SyHost.ico'dan; $icon)"
+}
+
+# =====================================================================
+if ($App) {
+    Section 'Gerçek açılış: SyHost.ps1 gizli bir konsolda (taşıma, kısayollar, klasör görünümü), sonra kapatılır'
+    $eRoot = Join-Path $WorkRoot 'e2e\SyHost'; $eData = Join-Path $eRoot 'Data'
+    New-Item -ItemType Directory -Force $eData, "$eRoot\Servers\A\yedekler" | Out-Null
+    $c = Read-DefaultSettings; $c | Add-Member -NotePropertyName paketlerAyarlandi -NotePropertyValue $true -Force; $c | Add-Member -NotePropertyName kurulumTamam -NotePropertyValue $true -Force
+    [IO.File]::WriteAllText("$eData\ayarlar.json", ($c | ConvertTo-Json -Depth 6), $Utf8NoBom)
+    $eExe = Join-Path $eRoot 'SyHost.exe'
+    if ($CsExe) { Copy-Item $CsExe $eExe } else { [IO.File]::WriteAllText($eExe, 'x') }
+    # 0.5.0 verisi (playit kapalı: gerçek playitd başlamasın) ve iki kısayol: C# biçiminde bizimki, taşınmış klasörün ölüsü
+    New-FakeLegacy $legacy
+    [IO.File]::WriteAllText("$legacy\ayarlar.json", '{ "dil": "en", "sunucuKokKlasoru": "Servers", "playitKullan": false, "maksOyuncu": 9 }', $Utf8NoBom)
+    [IO.File]::WriteAllText("$legacy\sunucular.json", ('[ { "id": "a", "ad": "A", "klasor": "' + "$eRoot\Servers\A".Replace('\', '\\') + '" } ]'), $Utf8NoBom)
+    Clear-Dir $env:SYHOST_SHORTCUT_DIR
+    Write-CsLink $desk $eExe 'C#'
+    Write-Shortcut $start (Join-Path $WorkRoot 'e2e\eski\SyHost.exe') 'eski'
+    $savedTitle = $env:SYHOST_TEST_TITLE; $env:SYHOST_TEST_TITLE = 'SyHostPortableE2E'
+    $con = Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$SrcDir\SyHost.ps1`" -Root `"$eRoot`"" -WindowStyle Hidden -PassThru
+    $env:SYHOST_TEST_TITLE = $savedTitle
+    $sw = [Diagnostics.Stopwatch]::StartNew(); $ps = $null
+    function Test-E2eDone { (Test-Path "$eData\sunucular.json") -and $null -ne (Get-Ini "$eRoot\Servers\A\yedekler") -and (Test-TerminalLink (Read-Shortcut $desk) $eExe) -and (Test-TerminalLink (Read-Shortcut $start) $eExe) }
+    while ($sw.Elapsed.TotalSeconds -lt 45 -and -not (Test-E2eDone)) {
+        if ($null -eq $ps) { $ps = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($con.Id) AND Name = 'powershell.exe'" -ErrorAction SilentlyContinue | Select-Object -First 1 }
+        Start-Sleep -Milliseconds 250
+    }
+    Start-Sleep -Seconds 3   # açılış bitsin, ana döngü dönsün
+    $psProc = if ($ps) { Get-Process -Id $ps.ProcessId -ErrorAction SilentlyContinue } else { $null }
+    $alive = $null -ne $psProc -and -not $psProc.HasExited
+    Check (Test-E2eDone) ("açılış {0:0.0} sn içinde: eski veri taşındı, klasör görünümü yazıldı, iki kısayol Terminal biçiminde" -f $sw.Elapsed.TotalSeconds)
+    Check $alive 'SyHost açık kaldı: açılış hatasız bitti, ana döngü çalışıyor'
+    Check (-not (Test-Path "$eData\hata.log")) "hata.log yok $(if (Test-Path "$eData\hata.log") { [IO.File]::ReadAllText("$eData\hata.log") })"
+    Check ((Get-MovedTo) -eq $eRoot -and ([IO.File]::ReadAllText("$eData\ayarlar.json") | ConvertFrom-Json).maksOyuncu -eq 9) 'eski klasöre not bırakıldı, ayarlar taşındı'
+    if ($psProc) { try { $psProc.Kill(); $psProc.WaitForExit(5000) | Out-Null } catch {} }
+    try { if (-not $con.HasExited) { $con.Kill() } } catch {}
 }
 
 # =====================================================================
