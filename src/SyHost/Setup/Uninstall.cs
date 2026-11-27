@@ -299,6 +299,7 @@ static class Uninstall
     /// </summary>
     internal static int SelfTest(string root, string deleteDir)
     {
+        Console.OutputEncoding = new System.Text.UTF8Encoding(false);   // Türkçe adlar karşılaştırılabilsin
         root = Path.GetFullPath(root);
         if (deleteDir != null)
         {
