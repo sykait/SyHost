@@ -974,50 +974,474 @@ function Hide-Panel {
 
 # ---------- Kurulum sihirbazı ----------
 function Read-Pack([string]$path) {
-    $zip = [IO.Compression.ZipFile]::OpenRead($path)
     try {
-        $ie = $zip.GetEntry('modrinth.index.json')
-        if (-not $ie) { throw (L 'Bu dosya bir Modrinth paketi (.mrpack) değil.') }
-        $sr = New-Object IO.StreamReader($ie.Open()); $idx = $sr.ReadToEnd() | ConvertFrom-Json; $sr.Close()
-        $deps = $idx.dependencies
-        $loader = $null; $lv = $null
-        foreach ($k in 'neoforge', 'forge', 'fabric-loader', 'quilt-loader') { if ($deps.PSObject.Properties.Name -contains $k) { $loader = ($k -replace '-loader', ''); $lv = $deps.$k; break } }
-        if (-not $loader) { throw (L 'Paketin mod yükleyicisi anlaşılamadı.') }
-        $saves = @($zip.Entries | Where-Object { $_.FullName -match '^overrides/saves/([^/]+)/level\.dat$' } | ForEach-Object { ($_.FullName -split '/')[2] } | Sort-Object -Unique)
-        $srvFiles = @($idx.files | Where-Object { $_.env.server -ne 'unsupported' -and $_.path -like 'mods/*' })
-        [pscustomobject]@{
-            Path = $path; Name = $idx.name; Version = $idx.versionId; Mc = $deps.minecraft; Loader = $loader; LoaderVer = $lv
-            Java = (Get-JavaMajor $deps.minecraft); Mods = $srvFiles.Count; ClientOnly = @($idx.files | Where-Object { $_.env.server -eq 'unsupported' }).Count
-            Saves = $saves; SizeMb = [Math]::Round((Get-Item $path).Length / 1MB)
-        }
-    } finally { $zip.Dispose() }
+        $zip = [IO.Compression.ZipFile]::OpenRead($path)
+        try {
+            $ie = $zip.GetEntry('modrinth.index.json')
+            if (-not $ie) { throw (L 'Bu dosya bir Modrinth paketi (.mrpack) değil.') }
+            $sr = New-Object IO.StreamReader($ie.Open()); $idx = $sr.ReadToEnd() | ConvertFrom-Json; $sr.Close()
+            $deps = $idx.dependencies
+            $loader = $null; $lv = $null
+            foreach ($k in 'neoforge', 'forge', 'fabric-loader', 'quilt-loader') { if ($deps.PSObject.Properties.Name -contains $k) { $loader = ($k -replace '-loader', ''); $lv = $deps.$k; break } }
+            if (-not $loader) { throw (L 'Paketin mod yükleyicisi anlaşılamadı.') }
+            $saves = @($zip.Entries | Where-Object { $_.FullName -match '^overrides/saves/([^/]+)/level\.dat$' } | ForEach-Object { ($_.FullName -split '/')[2] } | Sort-Object -Unique)
+            $srvFiles = @($idx.files | Where-Object { $_.env.server -ne 'unsupported' -and $_.path -like 'mods/*' })
+            # Name hep metin: adı olmayan pakette sihirbaz Enter'da çökmesin (C#: Name ?? "")
+            [pscustomobject]@{
+                Path = $path; Name = [string]$idx.name; Version = $idx.versionId; Mc = $deps.minecraft; Loader = $loader; LoaderVer = $lv
+                Java = (Get-JavaMajor $deps.minecraft); Mods = $srvFiles.Count; ClientOnly = @($idx.files | Where-Object { $_.env.server -eq 'unsupported' }).Count
+                # Get-Item [ ] karakterlerini joker sayar ('Paket [1.21].mrpack' okunamazdı): .NET ile oku
+                Saves = $saves; SizeMb = [Math]::Round((New-Object IO.FileInfo $path).Length / 1MB)
+            }
+        } finally { $zip.Dispose() }
+    } catch {
+        # .NET hatalarının asıl metni (C# sürümündeki gibi), 'Exception calling "OpenRead"...' sarmalı olmadan
+        $ex = $_.Exception
+        while ($ex -is [Management.Automation.ExtendedTypeSystemException] -and $ex.InnerException) { $ex = $ex.InnerException }
+        throw $ex
+    }
 }
 
 function Safe-FolderName([string]$name) {
     $n = ($name -replace '[\\/:*?"<>|]', '').Trim().TrimEnd('.')
     $n = $n -replace '\s+', ''
     if (-not $n) { $n = 'Sunucu' }
-    $base = Join-Path $Cfg.sunucuKokKlasoru $n; $p = $base; $i = 2
-    while (Test-Path $p) { $p = "$base-$i"; $i++ }
+    # C# Path.Combine gibi: Join-Path takılı olmayan sürücüde hata verir, ekran çizilemezdi
+    $root = [string]$Cfg.sunucuKokKlasoru
+    $base = if (-not $root) { $n } elseif ($root.EndsWith('\') -or $root.EndsWith('/') -or $root.EndsWith(':')) { $root + $n } else { $root + '\' + $n }
+    $p = $base; $i = 2
+    # Test-Path [ ] karakterlerini joker sayar: 'x[1]' klasörü varken boş sanılır, kurulum başka sunucunun klasörüne yazardı
+    while ([IO.File]::Exists($p) -or [IO.Directory]::Exists($p)) { $p = "$base-$i"; $i++ }
     $p
 }
 
+# ---------- Kurulum: indirme ve yükleyici yardımcıları ----------
+# C# Core/Installer.cs'teki Fetch, FetchVerified, DownloadAll, DownloadFile, GetText ve RunToLog'un karşılıkları.
+# Kurulumun arka plan iş parçacığında ve modları paralel indiren iş parçacıklarında tanımlanır. Yalnızca .NET
+# çağrıları kullanır (joker karakter yorumu yapan cmdlet yok: [ ] içeren adlar sorun olmaz); L burada yoktur.
+#   - her indirme önce '<dosya>.<n>.part' dosyasına yazılır, SHA-1 / SHA-512 tutunca yerine taşınır
+#   - yükleyici dosyaları ve Fabric bilgisi 3 kez denenir (4xx hatada, 408 ve 429 dışında, tekrar denenmez)
+#   - mod yükleyicisi 15 dakika hiçbir şey yazmazsa kapatılır, SyHost kapanırsa onunla kapanır (JobGuard)
+$InstallFuncs = {
+    $InstTries = 3                  # her iş 3 kez denenir
+    $InstAtOnce = 6                 # aynı anda inen dosya sayısı
+    $InstMaxFile = 4GB              # tek dosya için akıl sınırı (bitmeyen indirmeye karşı)
+    $InstSilenceMin = 15            # yükleyici bu kadar dakika hiçbir şey yazmazsa takılmış sayılır
+    $InstUserAgent = 'SyHost/1.0 (+https://github.com/sykait/SyHost)'
+    $InstBadChars = [char[]]('<>"|?*' + [string]::new([char[]](0..31)))
+    # Paralel indirmede her dosya için çalışan betik (kendi iş parçacığında, bu yardımcılarla)
+    $InstModWorker = 'param($f, $ctx, $funcs) $ErrorActionPreference = ''Stop''; . ([scriptblock]::Create($funcs)); Inst-ModJob $f $ctx'
+
+    # PowerShell'in .NET çağrısı sarmalını ('Exception calling "X" with "1" argument(s): ...') aç: asıl hata
+    function Inst-BaseError($ex) {
+        while ($ex -is [Management.Automation.ExtendedTypeSystemException] -and $ex.InnerException) { $ex = $ex.InnerException }
+        $ex
+    }
+    # Ağ hatası: asıl hata; sunucu hata kodu döndürdüyse kodu Data['SyHostCode']'a yazılır, yanıt kapatılır
+    # (kapatılmazsa bağlantı boşa çıkmaz). Metin .NET Framework'ün: "The remote server returned an error: (404) Not Found."
+    function Inst-NetError($ex) {
+        $ex = Inst-BaseError $ex
+        if ($ex -is [Net.WebException] -and $ex.Response) {
+            try { $ex.Data['SyHostCode'] = [int]$ex.Response.StatusCode } catch {}
+            try { $ex.Response.Close() } catch {}
+        }
+        $ex
+    }
+    # Tekrar denemek boşuna mı (4xx: dosya yok, yasak...; 408 ve 429 hariç)
+    function Inst-Permanent($ex) {
+        if ($ex -isnot [Net.WebException] -or $null -eq $ex.Data['SyHostCode']) { return $false }
+        $code = [int]$ex.Data['SyHostCode']
+        $code -ge 400 -and $code -lt 500 -and $code -ne 408 -and $code -ne 429
+    }
+    function Inst-Delete([string]$path) { try { if ([IO.File]::Exists($path)) { [IO.File]::Delete($path) } } catch {} }
+
+    function Inst-Request([string]$url) {
+        if ($url -notmatch '^https?://') { throw (New-Object NotSupportedException ('Only http and https downloads are supported: ' + $url)) }
+        $req = [Net.WebRequest]::Create($url)
+        $req.UserAgent = $InstUserAgent
+        $req.Timeout = 100000             # yanıt başlıkları 100 sn içinde gelmeli (.NET Framework varsayılanı)
+        $req.ReadWriteTimeout = 60000     # sonra 60 sn hiç veri gelmezse bağlantı kopmuş sayılır
+        $req.AllowAutoRedirect = $true; $req.MaximumAutomaticRedirections = 10
+        $req.AutomaticDecompression = [Net.DecompressionMethods]::None   # dosyalar baytı baytına insin (karma doğrulaması)
+        $req
+    }
+
+    # Tek deneme: adresi dosyaya indirir, inerken karmaları hesaplar. $max baytı aşan indirme kesilir.
+    function Inst-Fetch([string]$url, [string]$path, $hashes, [long]$max) {
+        $resp = $null; $body = $null; $fs = $null
+        try {
+            $resp = (Inst-Request $url).GetResponse()
+            $body = $resp.GetResponseStream()
+            $fs = New-Object IO.FileStream($path, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None, 65536)
+            $buf = New-Object byte[] 65536
+            [long]$total = 0
+            while (($n = $body.Read($buf, 0, $buf.Length)) -gt 0) {
+                $total += $n
+                if ($max -gt 0 -and $total -gt $max) { throw (New-Object IO.InvalidDataException 'The download is larger than expected.') }
+                foreach ($h in $hashes) { [void]$h.TransformBlock($buf, 0, $n, $null, 0) }
+                $fs.Write($buf, 0, $n)
+            }
+            foreach ($h in $hashes) { [void]$h.TransformFinalBlock($buf, 0, 0) }
+        } catch { throw (Inst-NetError $_.Exception) }
+        finally {
+            if ($fs) { $fs.Dispose() }
+            if ($body) { $body.Dispose() }
+            if ($resp) { $resp.Close() }
+        }
+    }
+
+    function Inst-Hex($h) { [BitConverter]::ToString($h.Hash).Replace('-', '').ToLowerInvariant() }
+
+    # .part dosyasını yerine koy, varsa üzerine yaz (C#: File.Move(part, dst, true)); aynı yola iki kayıt varsa sırayla
+    function Inst-Move([string]$part, [string]$dst, $gate) {
+        if ($gate) { [Threading.Monitor]::Enter($gate) }
+        try {
+            if ([IO.File]::Exists($dst)) {
+                try { [IO.File]::Replace($part, $dst, $null, $true); return } catch { [IO.File]::Delete($dst) }
+            }
+            [IO.File]::Move($part, $dst)
+        } finally { if ($gate) { [Threading.Monitor]::Exit($gate) } }
+    }
+
+    # 3 tur, her turda downloads[] içindeki her adres; karma tutunca dosya yerine konur (C# FetchVerified).
+    # Yarım ya da bozuk dosya hiç yerine geçmez. sha512'si olan dosya da kabul edilir (eskiden yalnızca sha1);
+    # adresi ya da karması olmayan hemen başarısız sayılır. Boyut sınırı: paketteki boyutun 2 katı + 1 MB.
+    function Inst-Verified($f, [string]$outp, $gate) {
+        if ($f.Urls.Count -eq 0 -or (-not $f.Sha1 -and -not $f.Sha512)) { return $false }
+        $part = $outp + '.' + $f.Index + '.part'
+        [long]$max = if ($f.Size -gt 0) { [long]$f.Size * 2 + 1MB } else { $InstMaxFile }
+        for ($round = 0; $round -lt $InstTries; $round++) {
+            if ($round -gt 0) { [Threading.Thread]::Sleep(500 * $round) }   # geçici ağ sorununa kısa bir nefes
+            foreach ($url in $f.Urls) {
+                $h1 = $null; $h5 = $null
+                try {
+                    $hs = New-Object System.Collections.Generic.List[Security.Cryptography.HashAlgorithm]
+                    if ($f.Sha1) { $h1 = [Security.Cryptography.SHA1]::Create(); $hs.Add($h1) }
+                    if ($f.Sha512) { $h5 = [Security.Cryptography.SHA512]::Create(); $hs.Add($h5) }
+                    Inst-Fetch $url $part $hs $max
+                    if ((-not $h1 -or (Inst-Hex $h1) -eq $f.Sha1) -and (-not $h5 -or (Inst-Hex $h5) -eq $f.Sha512)) {
+                        Inst-Move $part $outp $gate
+                        return $true
+                    }
+                } catch {
+                } finally {
+                    if ($h1) { $h1.Dispose() }
+                    if ($h5) { $h5.Dispose() }
+                }
+                Inst-Delete $part
+            }
+        }
+        $false
+    }
+
+    # Invoke-WebRequest -OutFile'ın yerine (C# DownloadFile): 3 kez dener, yarım dosya bırakmaz; olmazsa son hatayı fırlatır
+    function Inst-SaveUrl([string]$url, [string]$path) {
+        $part = $path + '.part'; $last = $null
+        for ($i = 0; $i -lt $InstTries; $i++) {
+            if ($i -gt 0) { [Threading.Thread]::Sleep(1500 * $i) }
+            try {
+                Inst-Fetch $url $part $null $InstMaxFile
+                Inst-Move $part $path $null
+                return
+            } catch {
+                $last = Inst-NetError $_.Exception
+                Inst-Delete $part
+                if (Inst-Permanent $last) { break }
+            }
+        }
+        throw $last
+    }
+
+    # Metin indir (API yanıtları, C# GetText): 3 kez dener; olmazsa son hatayı fırlatır
+    function Inst-GetText([string]$url) {
+        $last = $null
+        for ($i = 0; $i -lt $InstTries; $i++) {
+            if ($i -gt 0) { [Threading.Thread]::Sleep(1000 * $i) }
+            $resp = $null
+            try {
+                $resp = (Inst-Request $url).GetResponse()
+                $sr = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
+                try { return $sr.ReadToEnd() } finally { $sr.Dispose() }
+            } catch {
+                $last = Inst-NetError $_.Exception
+                if (Inst-Permanent $last) { break }
+            } finally { if ($resp) { $resp.Close() } }
+        }
+        throw $last
+    }
+
+    # Pakette verilen göreli yol kök klasörün içinde kalıyorsa tam yolu, değilse $null (C# Inside).
+    # Eskiden yalnızca "kökle başlıyor mu" diye bakılırdı: '../Sunucu-kardes/x' kardeş klasöre yazabiliyordu.
+    # Sürücü ya da akış adı (':'), geçersiz karakter ya da tam yola çevrilemeyen yol da geçmez.
+    function Inst-Inside([string]$baseDir, [string]$rel, [string]$rootFull) {
+        if ([string]::IsNullOrEmpty($rel)) { return $null }
+        $r = $rel.Replace('/', '\')
+        if ($r.IndexOf(':') -ge 0 -or $r.IndexOfAny($InstBadChars) -ge 0) { return $null }
+        try { $p = [IO.Path]::GetFullPath($baseDir.TrimEnd('\') + '\' + $r.TrimStart('\')) } catch { return $null }
+        $root = $rootFull.TrimEnd('\') + '\'
+        if ($p.Length -gt $root.Length -and $p.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { return $p }
+        $null
+    }
+    # Split-Path -Leaf gibi ($null'da hata vermez)
+    function Inst-Leaf([string]$p) { if (-not $p) { return '' }; $i = $p.LastIndexOfAny([char[]]'/\'); if ($i -ge 0) { $p.Substring($i + 1) } else { $p } }
+    # JSON değerinin metni (C# Text): metin olduğu gibi, null $null, diğerleri metne çevrilir
+    function Inst-JsonText($v) {
+        if ($null -eq $v -or $v -is [string]) { return $v }
+        if ($v -is [bool]) { if ($v) { return 'true' }; return 'false' }
+        [string]$v
+    }
+
+    # Sunucuya inecek dosyalar (C# ServerFiles): env.server 'unsupported' değil, resourcepacks/shaderpacks değil.
+    # Her biri bir tablo (iş parçacıkları arasında güvenle okunur): Index, Path, Leaf, Sha1, Sha512, Size, Urls
+    function Inst-ServerFiles($index) {
+        $list = New-Object System.Collections.Generic.List[object]
+        if ($index -isnot [Management.Automation.PSCustomObject] -or $index.files -isnot [array]) { return , $list }
+        foreach ($f in $index.files) {
+            if ($f -isnot [Management.Automation.PSCustomObject]) { continue }
+            $server = $null
+            if ($f.env -is [Management.Automation.PSCustomObject]) { $server = Inst-JsonText $f.env.server }
+            if ($server -eq 'unsupported') { continue }
+            $path = Inst-JsonText $f.path
+            if ([string]$path -match '^(resourcepacks|shaderpacks)/') { continue }
+            $urls = New-Object System.Collections.Generic.List[string]
+            $dl = $f.downloads
+            $dlAll = if ($dl -is [array]) { $dl } elseif ($null -ne $dl) { , $dl } else { @() }
+            foreach ($u in $dlAll) { $t = Inst-JsonText $u; if (-not [string]::IsNullOrWhiteSpace($t)) { $urls.Add($t) } }
+            $sha1 = $null; $sha512 = $null
+            if ($f.hashes -is [Management.Automation.PSCustomObject]) {
+                $sha1 = Inst-JsonText $f.hashes.sha1; if (-not $sha1) { $sha1 = $null }
+                $sha512 = Inst-JsonText $f.hashes.sha512; if (-not $sha512) { $sha512 = $null }
+            }
+            $size = [long]0
+            if ($f.fileSize -is [int] -or $f.fileSize -is [long]) { $size = [long]$f.fileSize }
+            $list.Add(@{ Index = $list.Count; Path = $path; Leaf = (Inst-Leaf $path); Sha1 = $sha1; Sha512 = $sha512; Size = $size; Urls = $urls.ToArray() })
+        }
+        , $list
+    }
+
+    # Paralel işlerden birinde beklenmedik hata: ilki saklanır, kurulum onunla durur (C# Parallel.ForEachAsync gibi)
+    function Inst-Fail($ctx, $ex) {
+        [Threading.Monitor]::Enter($ctx.Gate)
+        try { if (-not $ctx.Error) { $ctx.Error = Inst-BaseError $ex } } finally { [Threading.Monitor]::Exit($ctx.Gate) }
+    }
+
+    # Tek bir dosya (C# DownloadAll'daki iş). Ekranda hâlâ inen en son dosyanın adı görünür; % ve n/toplam dosyalar
+    # bittikçe ilerler. Kök klasörün dışına çıkan yol indirilmez ama sayılır (eskiden de öyleydi).
+    function Inst-ModJob($f, $ctx) {
+        if ($ctx.Error) { return }   # başka bir dosyada beklenmedik hata: yenisine başlama
+        $sync = $ctx.Sync; $gate = $ctx.Gate
+        [Threading.Monitor]::Enter($gate)
+        try { [void]$ctx.Running.Add($f.Index); $ctx.Shown = $f.Index; $sync.Detail = $f.Leaf } finally { [Threading.Monitor]::Exit($gate) }
+        try {
+            $outp = Inst-Inside $ctx.Target $f.Path $ctx.Full
+            if ($outp) {
+                [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($outp))
+                if (-not (Inst-Verified $f $outp $ctx.MoveGate)) { $ctx.Failed[$f.Index] = $true }
+            }
+        } catch { Inst-Fail $ctx $_.Exception }
+        finally {
+            [Threading.Monitor]::Enter($gate)
+            try {
+                $ctx.Running.Remove($f.Index)
+                # Ekranda biten dosyanın adı kalmasın: hâlâ inen en son dosyayı göster
+                if ($ctx.Shown -eq $f.Index -and $ctx.Running.Count -gt 0) { $ctx.Shown = $ctx.Running[$ctx.Running.Count - 1]; $sync.Detail = $ctx.Leaves[$ctx.Shown] }
+                $ctx.Done = $ctx.Done + 1
+                $sync.Pct = [int]($ctx.Done / [Math]::Max(1, $ctx.Total) * 100)
+                $sync.Count = '' + $ctx.Done + '/' + $ctx.Total
+            } finally { [Threading.Monitor]::Exit($gate) }
+        }
+    }
+
+    # Dosyaları $InstAtOnce'ar $InstAtOnce'ar indirir (C# DownloadAll): her dosya kendi iş parçacığında (RunspacePool),
+    # havuz açılamazsa sırayla. İnemeyenlerin adlarını paketteki sırayla döner.
+    function Inst-AllMods($sync, $files, [string]$target, [string]$full, [string]$funcs) {
+        $total = $files.Count
+        $leaves = New-Object string[] $total
+        for ($i = 0; $i -lt $total; $i++) { $leaves[$i] = $files[$i].Leaf }
+        $ctx = [hashtable]::Synchronized(@{
+            Sync = $sync; Gate = (New-Object object); MoveGate = (New-Object object); Running = (New-Object System.Collections.ArrayList)
+            Failed = (New-Object bool[] $total); Leaves = $leaves; Total = $total; Done = 0; Shown = -1; Target = $target; Full = $full; Error = $null
+        })
+        if ($total -gt 0) { $sync.Count = '0/' + $total }
+        $pool = $null
+        if ($total -gt 1) { try { $pool = [runspacefactory]::CreateRunspacePool(1, $InstAtOnce); $pool.Open() } catch { $pool = $null } }
+        if ($pool) {
+            $jobs = New-Object System.Collections.Generic.List[object]
+            try {
+                foreach ($f in $files) {
+                    $ps = [powershell]::Create(); $ps.RunspacePool = $pool
+                    [void]$ps.AddScript($InstModWorker).AddArgument($f).AddArgument($ctx).AddArgument($funcs)
+                    $jobs.Add(@($ps, $ps.BeginInvoke()))
+                }
+                foreach ($j in $jobs) { try { [void]$j[0].EndInvoke($j[1]) } catch { Inst-Fail $ctx $_.Exception } }
+            } finally {
+                foreach ($j in $jobs) { try { $j[0].Dispose() } catch {} }
+                try { $pool.Close() } catch {}
+                try { $pool.Dispose() } catch {}
+            }
+        } else {
+            foreach ($f in $files) { Inst-ModJob $f $ctx }
+        }
+        if ($ctx.Error) { throw $ctx.Error }
+        if ($total -gt 0) { $sync.Detail = $leaves[$total - 1] }   # eskisi gibi son dosyanın adı kalır
+        for ($i = 0; $i -lt $total; $i++) { if ($ctx.Failed[$i]) { $leaves[$i] } }
+    }
+
+    # (Invoke-RestMethod .../v2/versions/installer | Where-Object { $_.stable } | Select-Object -First 1).version
+    # Windows PowerShell 5.1 JSON dizisini boru hattına tek nesne olarak verdiği için bu satır bütün sürümleri boşlukla
+    # birleştirip adrese koyuyordu ve sunucu 400 dönüyordu. Burada amaçlanan yapılır: ilk kararlı sürüm (yoksa ilki).
+    function Inst-FabricVersion {
+        $arr = ConvertFrom-Json (Inst-GetText 'https://meta.fabricmc.net/v2/versions/installer')
+        $first = $null
+        if ($arr -is [array]) {
+            foreach ($v in $arr) {
+                if ($v -isnot [Management.Automation.PSCustomObject]) { continue }
+                $ver = Inst-JsonText $v.version
+                if (-not $ver) { continue }
+                if ($null -eq $first) { $first = $ver }
+                if ($v.stable -is [bool] -and $v.stable) { return $ver }
+            }
+        }
+        if ($null -ne $first) { $first } else { '' }
+    }
+
+    # Komut satırı (C# ArgumentList gibi): boşluk ya da tırnak içeren argüman tırnaklanır, ters bölüler korunur
+    function Inst-Args([string[]]$argv) {
+        $out = New-Object System.Collections.Generic.List[string]
+        foreach ($a in $argv) {
+            if ($a.Length -gt 0 -and $a.IndexOfAny([char[]]" `t`n`v`"") -lt 0) { $out.Add($a); continue }
+            $sb = New-Object Text.StringBuilder
+            [void]$sb.Append('"'); $bs = 0
+            foreach ($ch in $a.ToCharArray()) {
+                if ($ch -eq [char]'\') { $bs++; continue }
+                if ($ch -eq [char]'"') { [void]$sb.Append([char]'\', 2 * $bs + 1).Append('"'); $bs = 0; continue }
+                if ($bs) { [void]$sb.Append([char]'\', $bs); $bs = 0 }
+                [void]$sb.Append($ch)
+            }
+            [void]$sb.Append([char]'\', 2 * $bs).Append('"')
+            $out.Add($sb.ToString())
+        }
+        $out -join ' '
+    }
+
+    # Programı ve başlattıklarını kapat (C#: Kill(entireProcessTree: true))
+    function Inst-StopTree($p) {
+        try {
+            $k = New-Object Diagnostics.ProcessStartInfo ([IO.Path]::Combine([Environment]::SystemDirectory, 'taskkill.exe'))
+            $k.Arguments = '/PID ' + $p.Id + ' /T /F'
+            $k.UseShellExecute = $false; $k.CreateNoWindow = $true; $k.RedirectStandardOutput = $true; $k.RedirectStandardError = $true
+            $kp = [Diagnostics.Process]::Start($k)
+            [void]$kp.StandardOutput.ReadToEnd(); [void]$kp.StandardError.ReadToEnd()
+            [void]$kp.WaitForExit(15000); $kp.Dispose()
+        } catch {}
+        try { if (-not $p.HasExited) { $p.Kill() } } catch {}
+    }
+
+    # Programı çalıştırır, çıktısını ve hatalarını geldikleri sırayla dosyaya yazar (her denemede baştan), çıkış kodunu
+    # döner (C# RunToLog). Latin1 baytı baytına geçirir: Java'nın yazdığı metin dosyaya aynen gider. $silenceMin dakika
+    # hiçbir şey yazmazsa takılmış sayılır ve kapatılır (eskiden sonsuza kadar beklenirdi). SyHost kapanırsa yetim
+    # kalmasın diye JobGuard'a eklenir.
+    function Inst-RunToLog([string]$exe, [string[]]$argv, [string]$dir, [string]$logPath, [double]$silenceMin = $InstSilenceMin) {
+        $latin1 = [Text.Encoding]::GetEncoding(28591)
+        $log = New-Object IO.StreamWriter($logPath, $false, $latin1)
+        $p = $null
+        try {
+            $psi = New-Object Diagnostics.ProcessStartInfo $exe
+            $psi.Arguments = Inst-Args $argv
+            $psi.WorkingDirectory = $dir
+            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+            $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+            $psi.StandardOutputEncoding = $latin1; $psi.StandardErrorEncoding = $latin1
+            $p = New-Object Diagnostics.Process
+            $p.StartInfo = $psi
+            try { [void]$p.Start() }
+            catch { $log.WriteLine('SyHost: could not start ' + $exe + ': ' + (Inst-BaseError $_.Exception).Message); return -1 }
+            try { [SyHost.JobGuard]::Add($p) } catch {}
+            $rd = @($p.StandardOutput, $p.StandardError)
+            $tk = @($rd[0].ReadLineAsync(), $rd[1].ReadLineAsync())
+            $quiet = [Diagnostics.Stopwatch]::StartNew(); $gone = $null
+            while ($tk[0] -or $tk[1]) {
+                [void][Threading.Tasks.Task]::WaitAny([Threading.Tasks.Task[]]@($tk | Where-Object { $_ }), 1000)
+                for ($i = 0; $i -lt 2; $i++) {
+                    while ($tk[$i] -and $tk[$i].IsCompleted) {
+                        $line = $null
+                        try { $line = $tk[$i].Result } catch {}
+                        if ($null -eq $line) { $tk[$i] = $null; break }
+                        $log.WriteLine($line); $quiet.Restart()
+                        $tk[$i] = $rd[$i].ReadLineAsync()
+                    }
+                }
+                if ($quiet.Elapsed.TotalMinutes -ge $silenceMin) {
+                    $log.WriteLine('SyHost: the installer wrote nothing for ' + [int][Math]::Floor($silenceMin) + ' minutes, stopping it.')
+                    Inst-StopTree $p
+                    break
+                }
+                # Program bitti ama çıktı boruları kapanmıyor (açık kalan bir alt süreç tutuyor): fazla bekleme
+                if ($p.HasExited) { if (-not $gone) { $gone = [Diagnostics.Stopwatch]::StartNew() } elseif ($gone.Elapsed.TotalSeconds -ge 5) { break } }
+            }
+            [void]$p.WaitForExit(60000)
+            $log.Flush()
+            try { $p.ExitCode } catch { -1 }
+        } finally {
+            try { $log.Dispose() } catch {}
+            if ($p) { try { $p.Dispose() } catch {} }
+        }
+    }
+
+    # for ($try = 0; $try -lt 3 -and -not $ok; $try++) { & $java -jar $inst <bayrak> $target *> kurulum.log; $ok = ($LASTEXITCODE -eq 0) }
+    function Inst-RunInstaller([string]$java, [string]$jar, [string]$flag, [string]$target) {
+        $log = [IO.Path]::Combine($target, 'kurulum.log')
+        for ($t = 0; $t -lt $InstTries; $t++) {
+            if ($t -gt 0) { [Threading.Thread]::Sleep(2000) }
+            $code = @(Inst-RunToLog $java @('-jar', $jar, $flag, $target) $target $log)[-1]
+            if ($code -eq 0) { return $true }
+        }
+        $false
+    }
+
+    # kurulum.log'a SyHost'un notu (ör. Java neden hazırlanamadı)
+    function Inst-Note([string]$target, [string]$text) {
+        try { [IO.File]::AppendAllText([IO.Path]::Combine($target, 'kurulum.log'), 'SyHost: ' + $text + [Environment]::NewLine, (New-Object Text.UTF8Encoding $false)) } catch {}
+    }
+    function Inst-Chain($ex) {
+        $parts = New-Object System.Collections.Generic.List[string]
+        for ($e = $ex; $null -ne $e; $e = $e.InnerException) { $parts.Add([string]$e.Message) }
+        if ($parts.Count) { $parts -join ' <- ' } else { 'not found after download' }
+    }
+}
+
+# Sihirbazın arka plan kurulumu (C# Core/Installer.cs Run): aynı 7 adım, aynı ekran metinleri, aynı dosyalar.
+# İlerlemeyi $sync'e yazar; ne olursa olsun en sonda $sync.Done = $true olur (ekran "kuruluyor"da takılı kalmaz).
 $InstallScript = {
-    param($sync, $info, $target, $worldName, $voiceHost, $maxPlayers, $motd, $javaFuncs, $tt)
-    $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'
-    . ([scriptblock]::Create($javaFuncs))
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $cur = 0
-    function Step([int]$i, [int]$st) { $sync.Steps[$i].S = $st; if ($st -eq 1) { Set-Variable -Name cur -Value $i -Scope 1 } }
-    function Det([string]$t) { $sync.Detail = $t }
+    param($sync, $info, $target, $worldName, $voiceHost, $maxPlayers, $motd, $dataDir, $javaFuncs, $installFuncs, $tt)
+    $zip = $null; $cur = 0
     try {
+        $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'
+        # Ekran metinleri ana iş parçacığında çevrildi ($tt); L burada aynı anahtarlarla o tablodan okur
+        function L([string]$Key) { $t = $tt[$Key]; if ($null -eq $t) { $t = $Key }; if ($args.Count) { return ($t -f $args) }; $t }
+        function Step([int]$i, [int]$st) { if ($i -ge 0 -and $i -lt $sync.Steps.Count) { $sync.Steps[$i].S = $st }; if ($st -eq 1) { Set-Variable -Name cur -Value $i -Scope 1 } }
+        function Det([string]$t) { $sync.Detail = $t }
+        . ([scriptblock]::Create($installFuncs))
+        # Java yardımcıları (Get-JavaMajor, Find-Java, Install-Java) SyHost'un Data klasörünü $DataDir'den okur
+        $DataDir = $dataDir; $Data = $dataDir
+        . ([scriptblock]::Create($javaFuncs))
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        # Paralel indirmeler aynı sunucuya gider: .NET Framework'ün varsayılanı sunucu başına 2 bağlantı
+        if ([Net.ServicePointManager]::DefaultConnectionLimit -lt 2 * $InstAtOnce) { [Net.ServicePointManager]::DefaultConnectionLimit = 2 * $InstAtOnce }
+
         $zip = [IO.Compression.ZipFile]::OpenRead($info.Path)
-        $sr = New-Object IO.StreamReader($zip.GetEntry('modrinth.index.json').Open()); $index = $sr.ReadToEnd() | ConvertFrom-Json; $sr.Close()
+        $ie = $zip.GetEntry('modrinth.index.json')
+        if (-not $ie) { throw (L 'Bu dosya bir Modrinth paketi (.mrpack) değil.') }
+        $sr = New-Object IO.StreamReader($ie.Open())
+        try { $index = $sr.ReadToEnd() | ConvertFrom-Json } finally { $sr.Dispose() }
+        $files = Inst-ServerFiles $index
         $mc = $info.Mc; $lv = $info.LoaderVer
+        $full = [IO.Path]::GetFullPath($target)
 
         # 0 klasör
         $cur = 0; Step 0 1
-        New-Item -ItemType Directory -Force $target, (Join-Path $target 'mods') | Out-Null
+        [void][IO.Directory]::CreateDirectory($target)
+        [void][IO.Directory]::CreateDirectory([IO.Path]::Combine($target, 'mods'))
         Step 0 2
 
         # 1 Java
@@ -1025,12 +1449,25 @@ $InstallScript = {
         $jm = Get-JavaMajor $mc
         $java = Find-Java $jm
         if (-not $java) {
-            Det ($tt.javaDl -f $jm)
-            & winget install --id (Get-JavaWingetId $jm) -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity | Out-Null
+            # Eskiden winget ile bilgisayara kurulurdu; artık SyHost'un kendi klasörüne iner (Install-Java)
+            $why = $null; $got = @()
+            Det (L 'Java {0} indiriliyor...' $jm)
+            try {
+                $onDetail = { param($t) $sync.Detail = [string]$t }.GetNewClosure()
+                $more = @{}
+                $ij = Get-Command Install-Java -CommandType Function -ErrorAction SilentlyContinue
+                if ($ij -and $ij.Parameters.ContainsKey('HeadText')) { $more.HeadText = (L 'Java {0} indiriliyor...' $jm) }
+                $got = @(Install-Java $jm $onDetail @more)
+            } catch { $why = Inst-BaseError $_.Exception }
             $java = Find-Java $jm
-            if (-not $java) { throw ($tt.javaFail -f $jm) }
+            # Find-Java bulamadı ama Install-Java denetlenmiş java.exe'nin yolunu verdi
+            if (-not $java -and $got.Count -gt 0 -and $got[-1] -is [string] -and [IO.File]::Exists($got[-1])) { $java = $got[-1] }
+            if (-not $java) {
+                Inst-Note $target ('Java ' + $jm + ' could not be prepared: ' + (Inst-Chain $why))
+                throw (L 'Java {0} kurulamadı.' $jm)
+            }
         }
-        Det ($tt.javaOk -f $jm)
+        Det (L 'Java {0} hazır' $jm)
         Step 1 2
 
         # 2 Mod yükleyici
@@ -1038,130 +1475,118 @@ $InstallScript = {
         $launch = $null
         switch ($info.Loader) {
             'neoforge' {
-                Det ($tt.dl -f 'NeoForge', $lv)
-                $inst = Join-Path $target 'neoforge-installer.jar'
-                Invoke-WebRequest "https://maven.neoforged.net/releases/net/neoforged/neoforge/$lv/neoforge-$lv-installer.jar" -OutFile $inst -UseBasicParsing
-                Det ($tt.inst -f 'NeoForge', $lv)
-                $ok = $false
-                for ($try = 0; $try -lt 3 -and -not $ok; $try++) { Push-Location $target; & $java -jar $inst --install-server $target *> (Join-Path $target 'kurulum.log'); $ok = ($LASTEXITCODE -eq 0); Pop-Location }
-                if (-not $ok) { throw ($tt.instFail -f 'NeoForge') }
-                Remove-Item $inst, (Join-Path $target 'neoforge-installer.jar.log') -ErrorAction SilentlyContinue
+                Det (L '{0} {1} indiriliyor' 'NeoForge' $lv)
+                $inst = [IO.Path]::Combine($target, 'neoforge-installer.jar')
+                Inst-SaveUrl "https://maven.neoforged.net/releases/net/neoforged/neoforge/$lv/neoforge-$lv-installer.jar" $inst
+                Det (L '{0} {1} kuruluyor (biraz sürebilir)' 'NeoForge' $lv)
+                if (-not (Inst-RunInstaller $java $inst '--install-server' $target)) { throw (L '{0} kurulamadı (kurulum.log dosyasına bak).' 'NeoForge') }
+                Inst-Delete $inst; Inst-Delete ([IO.Path]::Combine($target, 'neoforge-installer.jar.log'))
                 $launch = "@libraries/net/neoforged/neoforge/$lv/win_args.txt nogui"
             }
             'forge' {
                 $fv = "$mc-$lv"
-                Det ($tt.dl -f 'Forge', $fv)
-                $inst = Join-Path $target 'forge-installer.jar'
-                Invoke-WebRequest "https://maven.minecraftforge.net/net/minecraftforge/forge/$fv/forge-$fv-installer.jar" -OutFile $inst -UseBasicParsing
-                Det ($tt.inst -f 'Forge', $fv)
-                $ok = $false
-                for ($try = 0; $try -lt 3 -and -not $ok; $try++) { Push-Location $target; & $java -jar $inst --installServer $target *> (Join-Path $target 'kurulum.log'); $ok = ($LASTEXITCODE -eq 0); Pop-Location }
-                if (-not $ok) { throw ($tt.instFail -f 'Forge') }
-                Remove-Item $inst, (Join-Path $target 'forge-installer.jar.log') -ErrorAction SilentlyContinue
-                if (Test-Path (Join-Path $target "libraries\net\minecraftforge\forge\$fv\win_args.txt")) { $launch = "@libraries/net/minecraftforge/forge/$fv/win_args.txt nogui" }
+                Det (L '{0} {1} indiriliyor' 'Forge' $fv)
+                $inst = [IO.Path]::Combine($target, 'forge-installer.jar')
+                Inst-SaveUrl "https://maven.minecraftforge.net/net/minecraftforge/forge/$fv/forge-$fv-installer.jar" $inst
+                Det (L '{0} {1} kuruluyor (biraz sürebilir)' 'Forge' $fv)
+                if (-not (Inst-RunInstaller $java $inst '--installServer' $target)) { throw (L '{0} kurulamadı (kurulum.log dosyasına bak).' 'Forge') }
+                Inst-Delete $inst; Inst-Delete ([IO.Path]::Combine($target, 'forge-installer.jar.log'))
+                $winArgs = [IO.Path]::Combine($target, "libraries\net\minecraftforge\forge\$fv\win_args.txt")
+                if ([IO.File]::Exists($winArgs) -or [IO.Directory]::Exists($winArgs)) { $launch = "@libraries/net/minecraftforge/forge/$fv/win_args.txt nogui" }
                 else {
-                    $jar = Get-ChildItem $target -Filter 'forge-*.jar' | Where-Object { $_.Name -notmatch 'installer' } | Select-Object -First 1
-                    if (-not $jar) { throw $tt.forgeNoJar }
+                    # Eski Forge (1.16 ve öncesi): forge-*.jar ile başlar
+                    $jar = Get-ChildItem -LiteralPath $target -Filter 'forge-*.jar' | Where-Object { $_.Name -notmatch 'installer' } | Select-Object -First 1
+                    if (-not $jar) { throw (L 'Forge başlatma dosyası bulunamadı.') }
                     $launch = "-jar $($jar.Name) nogui"
                 }
             }
             'fabric' {
-                Det ($tt.dl -f 'Fabric', $lv)
-                $instVer = (Invoke-RestMethod 'https://meta.fabricmc.net/v2/versions/installer' | Where-Object { $_.stable } | Select-Object -First 1).version
-                Invoke-WebRequest "https://meta.fabricmc.net/v2/versions/loader/$mc/$lv/$instVer/server/jar" -OutFile (Join-Path $target 'fabric-server-launch.jar') -UseBasicParsing
+                Det (L '{0} {1} indiriliyor' 'Fabric' $lv)
+                $instVer = Inst-FabricVersion
+                Inst-SaveUrl "https://meta.fabricmc.net/v2/versions/loader/$mc/$lv/$instVer/server/jar" ([IO.Path]::Combine($target, 'fabric-server-launch.jar'))
                 $launch = '-jar fabric-server-launch.jar nogui'
             }
-            default { throw ($tt.unsupported -f $info.Loader) }
+            default { throw (L '{0} henüz desteklenmiyor (NeoForge, Forge ve Fabric destekleniyor).' $info.Loader) }
         }
         Step 2 2
 
-        # 3 Modlar
+        # 3 Modlar (aynı anda 6 dosya; doğrulanmayan dosya yerine konmaz)
         $cur = 3; Step 3 1
-        $files = @($index.files | Where-Object { $_.env.server -ne 'unsupported' -and $_.path -notmatch '^(resourcepacks|shaderpacks)/' })
-        $n = 0; $fail = @()
-        $full = [IO.Path]::GetFullPath($target)
-        foreach ($f in $files) {
-            $n++
-            $sync.Pct = [int]($n / [Math]::Max(1, $files.Count) * 100); $sync.Count = "$n/$($files.Count)"
-            Det (Split-Path $f.path -Leaf)
-            $out = [IO.Path]::GetFullPath((Join-Path $target ($f.path -replace '/', '\')))
-            if (-not $out.StartsWith($full)) { continue }
-            New-Item -ItemType Directory -Force (Split-Path $out) | Out-Null
-            $ok = $false
-            for ($try = 0; $try -lt 3 -and -not $ok; $try++) {
-                foreach ($url in $f.downloads) {
-                    try {
-                        Invoke-WebRequest $url -OutFile $out -UseBasicParsing
-                        if ((Get-FileHash $out -Algorithm SHA1).Hash.ToLower() -eq $f.hashes.sha1) { $ok = $true; break }
-                    } catch {}
-                }
-            }
-            if (-not $ok) { $fail += (Split-Path $f.path -Leaf); Remove-Item $out -ErrorAction SilentlyContinue }
-        }
-        $sync.Failed = $fail
+        $sync.Failed = @(Inst-AllMods $sync $files $target $full $installFuncs)
         $sync.Pct = 100
         Step 3 2
 
-        # 4 Ayar dosyaları
+        # 4 Ayar dosyaları: önce overrides, sonra server-overrides (Modrinth kuralı: sunucuya özel olan kazanır;
+        # eskiden zip'teki sıraya göre hangisi sonra geldiyse o kalıyordu)
         $cur = 4; Step 4 1
-        foreach ($en in $zip.Entries) {
-            $fn = $en.FullName
-            if (-not ($fn.StartsWith('overrides/') -or $fn.StartsWith('server-overrides/')) -or -not $en.Name) { continue }
-            $rel = $fn.Substring($fn.IndexOf('/') + 1)
-            if ($rel -match '^(resourcepacks|shaderpacks|saves)/') { continue }
-            $dst = [IO.Path]::GetFullPath((Join-Path $target ($rel -replace '/', '\')))
-            if (-not $dst.StartsWith($full)) { continue }
-            New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
-            [IO.Compression.ZipFileExtensions]::ExtractToFile($en, $dst, $true)
+        foreach ($pre in 'overrides/', 'server-overrides/') {
+            foreach ($en in $zip.Entries) {
+                $fn = $en.FullName
+                if (-not $fn.StartsWith($pre, [StringComparison]::Ordinal) -or -not $en.Name) { continue }
+                $rel = $fn.Substring($pre.Length)
+                if ($rel -match '^(resourcepacks|shaderpacks|saves)/') { continue }
+                $dst = Inst-Inside $target $rel $full
+                if (-not $dst) { continue }
+                [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($dst))
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($en, $dst, $true)
+            }
         }
         Step 4 2
 
         # 5 Dünya
         $cur = 5; Step 5 1
         if ($worldName) {
-            Det $tt.worldCopy
+            Det (L 'Paketteki dünya kopyalanıyor')
             $pre = "overrides/saves/$worldName/"
+            $worldDir = [IO.Path]::Combine($target, 'world')
             foreach ($en in $zip.Entries) {
-                if (-not $en.FullName.StartsWith($pre) -or -not $en.Name) { continue }
+                if (-not $en.FullName.StartsWith($pre, [StringComparison]::Ordinal) -or -not $en.Name) { continue }
                 $rel = $en.FullName.Substring($pre.Length)
                 if ($rel -eq 'session.lock') { continue }
-                $dst = [IO.Path]::GetFullPath((Join-Path (Join-Path $target 'world') ($rel -replace '/', '\')))
-                if (-not $dst.StartsWith($full)) { continue }
-                New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
+                $dst = Inst-Inside $worldDir $rel $full
+                if (-not $dst) { continue }
+                [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($dst))
                 [IO.Compression.ZipFileExtensions]::ExtractToFile($en, $dst, $true)
             }
-        } else { Det $tt.worldNew }
+        } else { Det (L 'İlk açılışta yeni bir dünya oluşturulacak') }
         Step 5 2
 
         # 6 Son ayarlar
         $cur = 6; Step 6 1
         $props = [ordered]@{ 'motd' = $motd; 'level-name' = 'world'; 'max-players' = "$maxPlayers"; 'online-mode' = 'true'; 'difficulty' = 'normal'; 'spawn-protection' = '0'; 'view-distance' = '10'; 'simulation-distance' = '8'; 'allow-flight' = 'true'; 'server-port' = '25565'; 'enable-command-block' = 'true' }
-        $pf = Join-Path $target 'server.properties'
+        $pf = [IO.Path]::Combine($target, 'server.properties')
         $lines = New-Object System.Collections.Generic.List[string]
-        if (Test-Path $pf) { foreach ($ln in [IO.File]::ReadAllLines($pf)) { $lines.Add($ln) } }
+        if ([IO.File]::Exists($pf) -or [IO.Directory]::Exists($pf)) { foreach ($ln in [IO.File]::ReadAllLines($pf)) { $lines.Add($ln) } }
         foreach ($k in $props.Keys) {
             $found = $false
             for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match "^$([regex]::Escape($k))=") { $lines[$i] = "$k=$($props[$k])"; $found = $true } }
             if (-not $found) { $lines.Add("$k=$($props[$k])") }
         }
         [IO.File]::WriteAllLines($pf, $lines.ToArray(), (New-Object Text.UTF8Encoding $false))
-        Set-Content (Join-Path $target 'eula.txt') 'eula=true' -Encoding ASCII
-        if ($voiceHost -and @(Get-ChildItem (Join-Path $target 'mods') -Filter '*voicechat*' -ErrorAction SilentlyContinue).Count) {
-            $vd = Join-Path $target 'config\voicechat'; New-Item -ItemType Directory -Force $vd | Out-Null
-            $vp = Join-Path $vd 'voicechat-server.properties'
-            if (-not (Test-Path $vp)) { [IO.File]::WriteAllLines($vp, [string[]]@('port=24454', 'bind_address=', "voice_host=$voiceHost"), (New-Object Text.UTF8Encoding $false)) }
+        [IO.File]::WriteAllText([IO.Path]::Combine($target, 'eula.txt'), "eula=true`r`n", [Text.Encoding]::ASCII)
+        $modsDir = [IO.Path]::Combine($target, 'mods')
+        if ($voiceHost -and [IO.Directory]::Exists($modsDir) -and @(Get-ChildItem -LiteralPath $modsDir -Filter '*voicechat*' -ErrorAction SilentlyContinue).Count) {
+            $vd = [IO.Path]::Combine($target, 'config\voicechat'); [void][IO.Directory]::CreateDirectory($vd)
+            $vp = [IO.Path]::Combine($vd, 'voicechat-server.properties')
+            if (-not ([IO.File]::Exists($vp) -or [IO.Directory]::Exists($vp))) { [IO.File]::WriteAllLines($vp, [string[]]@('port=24454', 'bind_address=', "voice_host=$voiceHost"), (New-Object Text.UTF8Encoding $false)) }
             else { $vt = [IO.File]::ReadAllText($vp); if ($vt -match '(?m)^voice_host=') { $vt = [regex]::Replace($vt, '(?m)^voice_host=.*$', "voice_host=$voiceHost") } else { $vt = $vt.TrimEnd() + "`nvoice_host=$voiceHost`n" }; [IO.File]::WriteAllText($vp, $vt, (New-Object Text.UTF8Encoding $false)) }
         }
         Step 6 2
-        $zip.Dispose()
+        $zip.Dispose(); $zip = $null
         $sync.Result = @{ mc = $mc; loader = $info.Loader; loaderSurum = $lv; java = $jm; baslat = $launch }
     } catch {
-        $sync.Error = $_.Exception.Message
+        # Ekranda olduğu gibi görünür: .NET hatasının asıl metni ('Exception calling ...' sarmalı olmadan)
+        $ex = $_.Exception
+        while ($ex -is [Management.Automation.ExtendedTypeSystemException] -and $ex.InnerException) { $ex = $ex.InnerException }
+        $sync.Error = $(if ($ex.Message) { $ex.Message } else { $ex.GetType().Name })
         try { $sync.Steps[$cur].S = 3 } catch {}
-        try { $zip.Dispose() } catch {}
+    } finally {
+        try { if ($zip) { $zip.Dispose() } } catch {}
+        $sync.Done = $true   # en sonda: ekran bunu görünce sonucu okur (Check-Install)
     }
-    $sync.Done = $true
 }
+# Kurulumun ekran metinleri: arka planda dil tablosu yok. Begin-Install $InstallScript'teki L anahtarlarını çevirip verir.
+$InstallTextKeys = @([regex]::Matches($InstallScript.ToString(), "\bL '((?:[^']|'')*)'") | ForEach-Object { $_.Groups[1].Value.Replace("''", "'") } | Select-Object -Unique)
 
 function Start-Wizard {
     $path = [SyHost.Native]::PickFile((L 'Kurulacak modpack dosyasını seç (.mrpack)'), (L 'Modrinth paketi (*.mrpack)|*.mrpack'))
@@ -1194,13 +1619,13 @@ function Begin-Install {
     $sync = [hashtable]::Synchronized(@{ Steps = @(); Pct = 0; Count = ''; Detail = ''; Done = $false; Error = $null; Result = $null; Failed = @() })
     $names = Get-InstallStepNames $w.Info
     $sync.Steps = @($names | ForEach-Object { [hashtable]::Synchronized(@{ N = $_; S = 0 }) })
+    # Arka planda dil tablosu yok: kurulumun metinleri burada, seçili dilde çevrilir
+    $tt = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)
+    foreach ($k in $InstallTextKeys) { $tt[$k] = L $k }
+    # Paketin kurulumda gereken bilgileri (ekranın çizdiği nesne iki iş parçacığından birden okunmasın)
+    $inf = @{ Path = [string]$w.Info.Path; Mc = [string]$w.Info.Mc; Loader = [string]$w.Info.Loader; LoaderVer = [string]$w.Info.LoaderVer }
     $ps = [powershell]::Create()
-    [void]$ps.AddScript($InstallScript.ToString()).AddArgument($sync).AddArgument($w.Info).AddArgument($w.Target).AddArgument($worldName).AddArgument($(if ($Cfg.playitKullan) { $Cfg.sesAdresi } else { '' })).AddArgument($MaxPlayers).AddArgument("$($w.Name) | SyHost").AddArgument($JavaFuncs.ToString()).AddArgument(@{
-        javaDl = (L 'Java {0} indiriliyor... (Windows izin isteyebilir, Evet de)'); javaFail = (L 'Java {0} kurulamadı.'); javaOk = (L 'Java {0} hazır')
-        dl = (L '{0} {1} indiriliyor'); inst = (L '{0} {1} kuruluyor (biraz sürebilir)'); instFail = (L '{0} kurulamadı (kurulum.log dosyasına bak).')
-        forgeNoJar = (L 'Forge başlatma dosyası bulunamadı.'); unsupported = (L '{0} henüz desteklenmiyor (NeoForge, Forge ve Fabric destekleniyor).')
-        worldCopy = (L 'Paketteki dünya kopyalanıyor'); worldNew = (L 'İlk açılışta yeni bir dünya oluşturulacak')
-    })
+    [void]$ps.AddScript($InstallScript.ToString()).AddArgument($sync).AddArgument($inf).AddArgument($w.Target).AddArgument($worldName).AddArgument($(if ($Cfg.playitKullan) { $Cfg.sesAdresi } else { '' })).AddArgument($MaxPlayers).AddArgument("$($w.Name) | SyHost").AddArgument($Data).AddArgument($JavaFuncs.ToString()).AddArgument($InstallFuncs.ToString()).AddArgument($tt)
     $w.Sync = $sync; $w.PS = $ps; $w.Handle = $ps.BeginInvoke(); $w.StartedAt = Get-Date
     $w.Step = 'kurulum'
 }
