@@ -1,0 +1,126 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    SyHost Terminal sürümü: PowerShell uygulamasını (legacy) içinde taşıyan tek exe.
+    Kullanıcı yalnızca indirir ve çift tıklar; exe uygulamayı gizli App klasörüne (kuruluysa)
+    ya da %TEMP%'te geçici bir klasöre (kurulum ekranı) çıkarır ve conhost içinde açar.
+    Derleme: build\Build.ps1 -Publish -Terminal  ->  dist\SyHost-Terminal.exe
+  -->
+  <PropertyGroup>
+    <!-- WinExe: açılırken boş bir konsol penceresi yanıp sönmez (konsolu conhost açar) -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>SyHost</AssemblyName>
+    <RootNamespace>SyHost</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Ana sürümle aynı simge ve manifest -->
+    <ApplicationIcon>..\SyHost\Assets\SyHost.ico</ApplicationIcon>
+    <ApplicationManifest>..\SyHost\app.manifest</ApplicationManifest>
+
+    <Version>1.0.0</Version>
+    <Product>SyHost</Product>
+    <Company>sykait</Company>
+    <Authors>sykait</Authors>
+    <Copyright>© 2026 sykait</Copyright>
+    <Description>SyHost - modded Minecraft server hub (Terminal edition)</Description>
+    <AssemblyTitle>SyHost</AssemblyTitle>
+    <NeutralLanguage>en</NeutralLanguage>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- Tek exe: NativeAOT. Başlatıcı hızlı olmaktan çok küçük olsun -->
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <!-- Hata penceresi .NET'in hata metnini (sebebi) gösterir: metinler exe'de kalsın -->
+    <UseSystemResourceKeys>false</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <!-- Ana sürümün dosyaları: uyarı metinleri (dil tablosu, Lang.L) ve PowerShell biçimlendirmesi (Ps.F) -->
+  <ItemGroup>
+    <Compile Include="..\SyHost\App\Lang.cs" Link="Shared\Lang.cs" />
+    <Compile Include="..\SyHost\App\Lang.Table.cs" Link="Shared\Lang.Table.cs" />
+    <Compile Include="..\SyHost\Setup\Lang.Portable.cs" Link="Shared\Lang.Portable.cs" />
+    <Compile Include="..\SyHost\Core\Ps.cs" Link="Shared\Ps.cs" />
+  </ItemGroup>
+
+  <!--
+    Gömülü uygulama = kullanıcının App klasörü:
+      App\src\       legacy\src\*.ps1, *.cs
+      App\config\    default-settings.json
+      App\fonts\     Cascadia Mono + OFL.txt
+      App\icons\     klasör simgeleri, SyHost.ico, server-icon.png
+      App\bin\       SyHost.Core.dll (derleme sırasında legacy\src\SyHost.*.cs'ten)
+      App\version.txt  sürüm + gömülü dosyaların karması (başlatıcı yazar)
+    SyHostLegacyDir başka bir klasöre çevrilebilir (testlerde "yeni sürüm" exe'si üretmek için).
+  -->
+  <PropertyGroup>
+    <SyHostLegacyDir Condition="'$(SyHostLegacyDir)' == ''">$(MSBuildThisFileDirectory)..\..\legacy\</SyHostLegacyDir>
+    <SyHostLegacyDir Condition="!HasTrailingSlash('$(SyHostLegacyDir)')">$(SyHostLegacyDir)\</SyHostLegacyDir>
+    <SyHostAssetsDir>$(MSBuildThisFileDirectory)..\SyHost\Assets\</SyHostAssetsDir>
+    <SyHostPayloadDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(BaseIntermediateOutputPath)', 'payload'))</SyHostPayloadDir>
+    <SyHostCoreDll>$(SyHostPayloadDir)bin\SyHost.Core.dll</SyHostCoreDll>
+    <!-- SyHost.ps1'deki Add-Type'ın kullandığı derleyici: .NET Framework 4 csc.exe (C# 5) -->
+    <SyHostCsc>$(WINDIR)\Microsoft.NET\Framework64\v4.0.30319\csc.exe</SyHostCsc>
+    <SyHostSma>$(WINDIR)\Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll</SyHostSma>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SyHostCoreSource Include="$(SyHostLegacyDir)src\SyHost.*.cs" />
+    <SyHostPayload Include="$(SyHostLegacyDir)src\*.ps1;$(SyHostLegacyDir)src\*.cs" Dest="src\%(Filename)%(Extension)" />
+    <SyHostPayload Include="$(SyHostLegacyDir)config\default-settings.json" Dest="config\%(Filename)%(Extension)" />
+    <SyHostPayload Include="$(SyHostLegacyDir)fonts\*" Dest="fonts\%(Filename)%(Extension)" />
+    <SyHostPayload Include="$(SyHostAssetsDir)icons\*.ico;$(SyHostAssetsDir)SyHost.ico;$(SyHostAssetsDir)server-icon.png" Dest="icons\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!--
+    SyHost.Core.dll: Add-Type ile aynı derleme (SyHost.ps1). Add-Type kendiliğinden System, System.Core ve
+    System.Management.Automation'ı ekler ve csc.rsp'yi kullanmaz (/noconfig); diğerleri -ReferencedAssemblies'ten.
+    Yalnızca kaynak değişince yeniden derlenir.
+  -->
+  <Target Name="SyHostCoreDll" Inputs="@(SyHostCoreSource);$(MSBuildThisFileFullPath)" Outputs="$(SyHostCoreDll)">
+    <Error Condition="!Exists('$(SyHostCsc)')" Text="SyHost.Core.dll için .NET Framework derleyicisi bulunamadı: $(SyHostCsc)" />
+    <Error Condition="'@(SyHostCoreSource)' == ''" Text="SyHost.Core.dll kaynağı bulunamadı: $(SyHostLegacyDir)src\SyHost.*.cs" />
+    <PropertyGroup>
+      <_SyHostCscRefs>/r:System.dll /r:System.Core.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll</_SyHostCscRefs>
+      <_SyHostCscRefs Condition="Exists('$(SyHostSma)')">$(_SyHostCscRefs) /r:&quot;$(SyHostSma)&quot;</_SyHostCscRefs>
+    </PropertyGroup>
+    <MakeDir Directories="$(SyHostPayloadDir)bin" />
+    <Exec Command="&quot;$(SyHostCsc)&quot; /nologo /noconfig /target:library /optimize+ /debug- /utf8output $(_SyHostCscRefs) /out:&quot;$(SyHostCoreDll)&quot; @(SyHostCoreSource->'&quot;%(FullPath)&quot;', ' ')" />
+    <Message Importance="high" Text="SyHost.Core.dll hazır: $(SyHostCoreDll)" />
+  </Target>
+
+  <!-- Gömülü dosyalar ve karmaları: karma değişince başlatıcı App klasörünü yeniler -->
+  <Target Name="SyHostPayload" BeforeTargets="BeforeBuild" DependsOnTargets="SyHostCoreDll">
+    <ItemGroup>
+      <_SyHostPayload Include="@(SyHostPayload)" />
+      <_SyHostPayload Include="$(SyHostCoreDll)" Dest="bin\SyHost.Core.dll" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(SyHostLegacyDir)src\SyHost.ps1')" Text="Terminal sürümünün betiği bulunamadı: $(SyHostLegacyDir)src\SyHost.ps1" />
+    <GetFileHash Files="@(_SyHostPayload)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_SyHostHashed" />
+    </GetFileHash>
+    <WriteLinesToFile File="$(SyHostPayloadDir)manifest.txt" Lines="@(_SyHostHashed->'%(FileHash) %(Dest)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <GetFileHash Files="$(SyHostPayloadDir)manifest.txt" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Hash" PropertyName="_SyHostManifestHash" />
+    </GetFileHash>
+    <PropertyGroup>
+      <SyHostPayloadHash>$(_SyHostManifestHash.ToLowerInvariant())</SyHostPayloadHash>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(SyHostPayloadDir)PayloadInfo.g.cs" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="// &lt;auto-generated/&gt; by SyHost.Terminal.csproj (target SyHostPayload);namespace SyHost%3B;static class PayloadInfo { public const string Version = &quot;$(Version)&quot;%3B public const string Hash = &quot;$(SyHostPayloadHash)&quot;%3B }" />
+    <ItemGroup>
+      <Compile Include="$(SyHostPayloadDir)PayloadInfo.g.cs" />
+      <EmbeddedResource Include="@(_SyHostPayload)" LogicalName="app\%(Dest)" WithCulture="false" />
+    </ItemGroup>
+    <Message Importance="high" Text="Gömülü uygulama: @(_SyHostPayload->Count()) dosya, karma $(SyHostPayloadHash)" />
+  </Target>
+
+</Project>
