@@ -22,8 +22,9 @@ friends join over the internet and keep backups, all on one animated terminal sc
 [Features](#features) · [Screenshots](#screenshots) · [Download](#download) · [First start](#first-start) ·
 [The SyHost folder](#the-syhost-folder) · [Your first server](#your-first-server) · [The server screen](#the-server-screen) ·
 [Friends over the internet](#friends-over-the-internet-playitgg) · [Java](#java) · [Backups](#backups) · [Settings](#settings) ·
-[Updating](#updating) · [Uninstalling](#uninstalling) · [Coming from 0.5.0](#coming-from-050) · [FAQ](#faq) ·
-[Building from source](#building-from-source) · [Project layout](#project-layout)
+[Updating](#updating) · [Uninstalling](#uninstalling) · [Coming from 0.5.0](#coming-from-050) ·
+[Security and antivirus](#security-and-antivirus) · [FAQ](#faq) · [Building from source](#building-from-source) ·
+[Project layout](#project-layout)
 
 ---
 
@@ -82,7 +83,8 @@ The SHA-256 checksums of both are at the end of the release notes.
 ### "Windows protected your PC"
 
 SyHost is not code-signed, so the first time you open it Windows SmartScreen may stop it. Click **More info → Run anyway**.
-Your browser may also ask whether you want to keep the file.
+Your browser may also ask whether you want to keep the file. See [Security and antivirus](#security-and-antivirus) for
+what SyHost does on your PC and what to do if a security program flags it.
 
 ---
 
@@ -125,8 +127,8 @@ If you close SyHost in the middle, the setup shows up again the next time you op
 C:\Users\<name>\SyHost\
 ├── SyHost.exe      the app: the only file you need to open
 ├── Servers\        your servers, one folder each
-├── Data\           (hidden) settings, server list, playit key, logs, downloaded Java and playit
-└── App\            (hidden, Terminal edition only) the PowerShell app
+├── Data\           settings, server list, playit key, logs, downloaded Java and playit
+└── App\            (Terminal edition only) the PowerShell app
 ```
 
 - **Everything stays in this folder.** Outside of it SyHost only adds the shortcuts, the font (only if it had to
@@ -134,7 +136,7 @@ C:\Users\<name>\SyHost\
 - **Portable.** You can move or rename the folder whenever you like (close SyHost first). Open `SyHost.exe` from its
   new place once and it repairs its Desktop and Start-menu shortcuts. Servers inside the folder move with it.
   Keep it somewhere you can write to: opened from a folder like `Program Files`, SyHost only shows a warning that
-  tells you to move the whole SyHost folder (with `Servers` and the hidden `Data`).
+  tells you to move the whole SyHost folder (with `Servers` and `Data`).
 - In Explorer the folders get SyHost icons, and the `Servers` and backup folders show their names in your language.
 - `Data\playit.toml` is the secret key of your playit connection. Don't share it.
 
@@ -322,7 +324,8 @@ line each, and you choose with **Space**:
   and Java while they are there: read [Coming from 0.5.0](#coming-from-050) before you remove them.
 - **the SyHost folder itself**, with your servers and worlds inside. Its line says how many servers go with it: every
   folder in `Servers` counts, also servers you removed from the list. It is not selected, and if you select it,
-  SyHost asks you to press Enter a second time. The folder is deleted right after SyHost closes.
+  SyHost asks you to press Enter a second time. When SyHost closes, it deletes everything inside the folder itself and
+  then shows the folder in Explorer: delete what is left (SyHost.exe, which can't delete itself while it runs) there.
 
 **Enter** removes what is selected. The last screen only offers **Close SyHost**, so SyHost closes at the end.
 If you keep the folder, SyHost shows it in Explorer at the end so you can delete it whenever you want (with nothing
@@ -357,6 +360,36 @@ selected, Enter goes straight to that screen). Servers outside the SyHost folder
 
 ---
 
+## Security and antivirus
+
+SyHost is an ordinary program and tries to behave like one:
+
+- It works only in its own folder. It asks for admin rights only when you choose to remove something the old 0.5.0
+  setup installed for the whole PC (Settings → Uninstall SyHost): for its font the Windows prompt names SyHost itself,
+  for playit and Java it is their own Windows Installer.
+- It never starts hidden or encoded commands, never builds code from text while it runs, never removes the
+  "downloaded from the internet" mark from files and never deletes itself through a helper program. Uninstalling
+  empties the folder while SyHost is still open; you delete the empty folder in Explorer.
+- It downloads only from Adoptium (Java), GitHub (playit), Modrinth and the mod loaders' own servers (NeoForge, Forge,
+  Fabric). Java and mods are checked against their checksums. playit only runs when the file matches GitHub's checksum
+  and carries a valid signature from its publisher.
+- Nothing starts with Windows. playit runs only while SyHost is open.
+
+SyHost is not code-signed yet, so SmartScreen may warn the first time and a security program may be extra careful with
+a file it has never seen. If yours flags SyHost:
+
+1. Check that the file is the real one: its SHA-256 must match the value at the end of the release notes
+   (in PowerShell: `Get-FileHash .\SyHost-1.0.0.exe`).
+2. Report it to the vendor as a false positive. For Microsoft Defender:
+   [microsoft.com/wdsi/filesubmission](https://www.microsoft.com/wdsi/filesubmission) ("incorrectly detected").
+3. Open an issue on GitHub so others know.
+
+Don't turn your antivirus off or add an exclusion for SyHost.
+
+For developers: `tests\av\Test-Lint.ps1` (runs in CI) fails when a pattern that security programs associate with
+malware comes back, and `tests\av\Test-Defender.ps1` checks the scripts and both exes with the local Microsoft Defender
+before a release.
+
 ## FAQ
 
 **Do I need playit?**
@@ -376,7 +409,7 @@ for the whole PC asks for permission.
 
 **Where are my files?**
 In the SyHost folder: the servers in `Servers` (or the server folder you chose in Settings), everything else in the
-hidden `Data` folder, backups in each server's `yedekler` folder. Settings → Open the folder takes you there.
+`Data` folder, backups in each server's `yedekler` folder. Settings → Open the folder takes you there.
 
 **Which modpacks work?**
 Modrinth `.mrpack` packs for NeoForge, Forge and Fabric. Java 8, 17, 21 or 25 is downloaded when a pack needs it

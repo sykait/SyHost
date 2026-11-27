@@ -22,8 +22,9 @@ arkadaşların internetten bağlansın, yedeklerin kendiliğinden alınsın. Hep
 [Neler yapar?](#neler-yapar) · [Ekran görüntüleri](#ekran-goruntuleri) · [İndir](#indir) · [İlk açılış](#ilk-acilis) ·
 [SyHost klasörü](#syhost-klasoru) · [İlk sunucun](#ilk-sunucun) · [Sunucu ekranı](#sunucu-ekrani) ·
 [Arkadaşların internetten](#arkadaslar) · [Java](#java) · [Yedekler](#yedekler) · [Ayarlar](#ayarlar) ·
-[Güncelleme](#guncelleme) · [Kaldırma](#kaldirma) · [0.5.0'dan geçiş](#gecis) · [Sık sorulanlar](#sss) ·
-[Kaynaktan derleme](#derleme) · [Proje düzeni](#proje-duzeni)
+[Güncelleme](#guncelleme) · [Kaldırma](#kaldirma) · [0.5.0'dan geçiş](#gecis) ·
+[Güvenlik ve virüs tarayıcıları](#guvenlik) · [Sık sorulanlar](#sss) · [Kaynaktan derleme](#derleme) ·
+[Proje düzeni](#proje-duzeni)
 
 ---
 
@@ -88,7 +89,9 @@ en az 8 GB RAM önerilir.
 ### "Windows bilgisayarınızı korudu"
 
 SyHost dijital olarak imzalı değil; bu yüzden ilk açılışta Windows SmartScreen onu durdurabilir.
-**Ek bilgi → Yine de çalıştır**'a tıkla. Tarayıcın da dosyayı saklamak isteyip istemediğini sorabilir.
+**Ek bilgi → Yine de çalıştır**'a tıkla. Tarayıcın da dosyayı saklamak isteyip istemediğini sorabilir. SyHost'un
+bilgisayarında ne yaptığını ve bir güvenlik programı onu işaretlerse ne yapman gerektiğini
+[Güvenlik ve virüs tarayıcıları](#guvenlik) bölümünde bulabilirsin.
 
 ---
 
@@ -133,8 +136,8 @@ Kurulumu yarıda bırakıp SyHost'u kapatırsan bir sonraki açılışta kurulum
 C:\Users\<ad>\SyHost\
 ├── SyHost.exe      uygulama: açman gereken tek dosya
 ├── Servers\        sunucuların, her biri kendi klasöründe
-├── Data\           (gizli) ayarlar, sunucu listesi, playit anahtarı, kayıtlar, indirilen Java ve playit
-└── App\            (gizli, yalnızca Terminal sürümü) PowerShell uygulaması
+├── Data\           ayarlar, sunucu listesi, playit anahtarı, kayıtlar, indirilen Java ve playit
+└── App\            (yalnızca Terminal sürümü) PowerShell uygulaması
 ```
 
 - **Her şey bu klasörde durur.** Klasörün dışına SyHost yalnızca kısayolları ve (kurmak zorunda kaldıysa) yazı tipini
@@ -142,7 +145,7 @@ C:\Users\<ad>\SyHost\
 - **Taşınabilir.** Klasörü istediğin zaman taşıyabilir ya da adını değiştirebilirsin (önce SyHost'u kapat). Yeni
   yerindeki `SyHost.exe`'yi bir kez açman yeter: Masaüstü ve Başlat menüsü kısayollarını kendisi düzeltir. Klasörün
   içindeki sunucular onunla birlikte taşınır. Klasörü yazabildiğin bir yerde tut: `Program Files` gibi bir yerden
-  açılırsa SyHost yalnızca bir uyarı gösterir ve SyHost klasörünü bütünüyle (`Servers` ve gizli `Data` ile birlikte)
+  açılırsa SyHost yalnızca bir uyarı gösterir ve SyHost klasörünü bütünüyle (`Servers` ve `Data` ile birlikte)
   taşımanı söyler.
 - Explorer'da klasörler SyHost simgeleriyle görünür; `Servers` ve yedek klasörleri seçtiğin dilde adlandırılır
   (Türkçede `Sunucular` ve `Yedekler`).
@@ -340,7 +343,8 @@ satırda listelenir; **Boşluk** tuşuyla sen seçersin:
   devam eder: silmeden önce [0.5.0'dan geçiş](#gecis) bölümünü oku.
 - **SyHost klasörünün kendisi**, içindeki sunucular ve dünyalarla birlikte. Satırında onunla birlikte kaç sunucunun
   gideceği yazar: `Servers` içindeki her klasör sayılır, listeden kaldırdığın sunucular da. Seçili gelmez; seçersen
-  SyHost bir kez daha Enter'a basmanı ister. Klasör, SyHost kapandıktan hemen sonra silinir.
+  SyHost bir kez daha Enter'a basmanı ister. SyHost kapanırken klasörün içindeki her şeyi kendisi siler, sonra klasörü
+  Explorer'da gösterir: kalanı (çalışırken kendini silemeyen SyHost.exe'yi) oradan silersin.
 
 **Enter** seçilenleri kaldırır. Son ekranda yalnızca **SyHost'u kapat** vardır, yani SyHost en sonunda kapanır.
 Klasörü tutarsan SyHost işi bitince onu Explorer'da gösterir; istediğin zaman kendin silebilirsin (hiçbir şey seçmeden
@@ -375,6 +379,37 @@ Enter'a basarsan doğrudan o ekrana geçilir). SyHost klasörünün dışındaki
 
 ---
 
+<a id="guvenlik"></a>
+## Güvenlik ve virüs tarayıcıları
+
+SyHost sıradan bir programdır ve öyle davranmaya çalışır:
+
+- Yalnızca kendi klasöründe çalışır. Yönetici iznini yalnızca eski 0.5.0 kurulumunun bütün bilgisayara kurduğu bir
+  şeyi kaldırmayı seçtiğinde ister (Ayarlar → SyHost'u kaldır): yazı tipi için Windows izin penceresinde SyHost'un
+  kendisi görünür, playit ve Java için onların kendi Windows Installer'ı.
+- Hiçbir zaman gizli ya da kodlanmış komut çalıştırmaz, çalışırken metinden kod üretmez, dosyalardaki "internetten
+  indirildi" işaretini silmez ve kendini yardımcı bir programla silmez. Kaldırırken klasörün içini SyHost açıkken
+  boşaltır; boş kalan klasörü Explorer'dan sen silersin.
+- Yalnızca şuralardan indirir: Adoptium (Java), GitHub (playit), Modrinth ve mod yükleyicilerinin kendi sunucuları
+  (NeoForge, Forge, Fabric). Java ve modlar sağlama toplamlarıyla denetlenir. playit yalnızca dosyası GitHub'ın verdiği
+  sağlama toplamıyla tutuyorsa ve yayıncısının geçerli imzasını taşıyorsa çalıştırılır.
+- Windows açılınca hiçbir şey başlamaz. playit yalnızca SyHost açıkken çalışır.
+
+SyHost henüz dijital olarak imzalı değil; bu yüzden SmartScreen ilk açılışta uyarabilir ve bir güvenlik programı hiç
+görmediği bir dosyaya karşı fazladan temkinli olabilir. Seninki SyHost'u işaretlerse:
+
+1. Dosyanın gerçek olduğunu denetle: SHA-256 değeri sürüm notlarının sonundakiyle aynı olmalı
+   (PowerShell'de: `Get-FileHash .\SyHost-1.0.0.exe`).
+2. Üreticisine yanlış tespit olarak bildir. Microsoft Defender için:
+   [microsoft.com/wdsi/filesubmission](https://www.microsoft.com/wdsi/filesubmission) ("yanlış algılandı").
+3. Başkaları da bilsin diye GitHub'da bir issue aç.
+
+Virüs tarayıcını kapatma ve SyHost için dışlama ekleme.
+
+Geliştiriciler için: `tests\av\Test-Lint.ps1` (CI'da çalışır), güvenlik programlarının kötü amaçlı yazılımla
+ilişkilendirdiği bir kalıp geri gelirse hata verir; `tests\av\Test-Defender.ps1` sürüm çıkmadan önce betikleri ve iki
+exe'yi bilgisayardaki Microsoft Defender ile denetler.
+
 <a id="sss"></a>
 ## Sık sorulanlar
 
@@ -394,7 +429,7 @@ Hayır. Java, playit ve yazı tipi senin kullanıcı alanına gider. Yalnızca e
 kurduklarını kaldırırken Windows izin ister.
 
 **Dosyalarım nerede?**
-SyHost klasöründe: sunucular `Servers` içinde (ya da Ayarlar'da seçtiğin sunucu klasöründe), geri kalan her şey gizli
+SyHost klasöründe: sunucular `Servers` içinde (ya da Ayarlar'da seçtiğin sunucu klasöründe), geri kalan her şey
 `Data` klasöründe, yedekler her sunucunun `yedekler` klasöründe. Ayarlar → Klasörü aç seni oraya götürür.
 
 **Hangi modpack'ler çalışır?**

@@ -15,6 +15,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -23,6 +25,10 @@ jobs:
       - name: Build SyHost.exe (C#) and SyHost-Terminal.exe (PowerShell app in one exe)
         shell: powershell
         run: .\build\Build.ps1 -Publish -Terminal
+
+      - name: No patterns that antivirus programs associate with malware (sources and both exes)
+        shell: powershell
+        run: .\tests\av\Test-Lint.ps1
 
       - name: Self-tests (shortcuts, folder look, migration)
         shell: powershell
