@@ -4,7 +4,10 @@
 #    build\Build.ps1 -Publish    tek dosya SyHost.exe üretir (NativeAOT) -> dist\SyHost.exe
 #    build\Build.ps1 -Run        derleyip test klasöründe açar (geliştirme için)
 #    build\Build.ps1 -Publish -Terminal   ayrıca Terminal sürümünü tek exe yapar -> dist\SyHost-Terminal.exe
+#                                         (PowerShell uygulaması + SyHost.Core.dll exe'nin içinde)
+#    build\Build.ps1 -Terminal            hızlı derleme denetimine Terminal başlatıcısını da ekler
 #  Gerekenler: .NET 10 SDK ve Visual Studio C++ derleme araçları (yalnızca -Publish için).
+#  Terminal sürümü ayrıca Windows'un .NET Framework 4 derleyicisini (csc.exe) kullanır.
 # =====================================================================
 [CmdletBinding()]
 param(
@@ -16,6 +19,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path -Parent $PSScriptRoot
 $Project = Join-Path $Repo 'src\SyHost\SyHost.csproj'
+$TerminalProject = Join-Path $Repo 'src\SyHost.Terminal\SyHost.Terminal.csproj'
 $Dist = Join-Path $Repo 'dist'
 
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -63,13 +67,16 @@ if ($Publish) {
 
     # Terminal (PowerShell) sürümü: PowerShell uygulamasını içinde taşıyan tek exe
     if ($Terminal) {
-        $tproj = Join-Path $Repo 'src\SyHost.Terminal\SyHost.Terminal.csproj'
-        if (Test-Path $tproj) {
+        if (Test-Path $TerminalProject) {
+            # Önce PowerShell sürümünün yardımcı kodu: legacy\src\SyHost.*.cs -> SyHost.Core.dll (.NET Framework csc.exe).
+            # Hata varsa burada, uzun NativeAOT derlemesinden önce görünür. Yayınlama aynı dosyayı exe'ye gömer.
+            Invoke-Dotnet @('msbuild', $TerminalProject, '-t:SyHostCoreDll', '-nologo', '-v:m')
             $tout = Join-Path $Repo 'src\SyHost.Terminal\bin\publish'
-            $ta = @('publish', $tproj, '-c', 'Release', '-r', 'win-x64', '-o', $tout, '-nologo')
+            $ta = @('publish', $TerminalProject, '-c', 'Release', '-r', 'win-x64', '-o', $tout, '-nologo')
             if ($envTools) { $ta += '-p:IlcUseEnvironmentalTools=true' }
             Invoke-Dotnet $ta
-            Copy-Item (Join-Path $tout 'SyHost-Terminal.exe') (Join-Path $Dist 'SyHost-Terminal.exe') -Force
+            # Derlemenin adı SyHost (exe'nin sürüm bilgisi ve kurulunca SyHost.exe adı); dağıtılan adı SyHost-Terminal.exe
+            Copy-Item (Join-Path $tout 'SyHost.exe') (Join-Path $Dist 'SyHost-Terminal.exe') -Force
             $tkb = [int]((Get-Item (Join-Path $Dist 'SyHost-Terminal.exe')).Length / 1KB)
             Write-Host "dist\SyHost-Terminal.exe hazır ($tkb KB)" -ForegroundColor Green
         } else {
@@ -78,6 +85,7 @@ if ($Publish) {
     }
 } else {
     Invoke-Dotnet @('build', $Project, '-c', 'Debug', '-nologo', '-v', 'q', '-clp:NoSummary')
+    if ($Terminal) { Invoke-Dotnet @('build', $TerminalProject, '-c', 'Debug', '-nologo', '-v', 'q', '-clp:NoSummary') }
     Write-Host 'Derleme başarılı' -ForegroundColor Green
 }
 
