@@ -559,9 +559,26 @@ static class Installer
     internal sealed class HttpError : Exception
     {
         public readonly int Code;
-        public HttpError(int code, string reason) : base($"The remote server returned an error: ({code}) {reason}.") { Code = code; }
+        public HttpError(int code, string reason) : base(Text(code, reason)) { Code = code; }
         /// <summary>Tekrar denemek boşuna (dosya yok, yasak...)</summary>
         public bool Permanent => Code >= 400 && Code < 500 && Code != 408 && Code != 429;
+
+        // .NET Framework bu kodları kendi sözcükleriyle yazar, sunucunun gönderdiğine bakmaz
+        // (Windows PowerShell 5.1'de denendi: 503 "Server Unavailable", 505 "Http Version Not Supported");
+        // diğerlerinde sunucunun açıklaması, o da yoksa yalnızca kod.
+        static string Text(int code, string reason)
+        {
+            string why = code switch
+            {
+                400 => "Bad Request", 401 => "Unauthorized", 402 => "Payment Required", 403 => "Forbidden", 404 => "Not Found",
+                405 => "Method Not Allowed", 406 => "Not Acceptable", 407 => "Proxy Authentication Required", 408 => "Request Timeout",
+                409 => "Conflict", 410 => "Gone", 411 => "Length Required",
+                500 => "Internal Server Error", 501 => "Not Implemented", 502 => "Bad Gateway", 503 => "Server Unavailable",
+                504 => "Gateway Timeout", 505 => "Http Version Not Supported",
+                _ => reason,
+            };
+            return $"The remote server returned an error: ({code})" + (string.IsNullOrEmpty(why) ? "" : " " + why) + ".";
+        }
     }
 
     static void Ensure(HttpResponseMessage resp)
