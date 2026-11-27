@@ -67,6 +67,7 @@ $TestFrame = $null; $SetupMode = $false
 $Servers = New-Object System.Collections.Generic.List[object]
 $HomeMsg = ''; $HomeMsgUntil = [DateTime]::MinValue; $Dirty = $false
 $NextAfterSplash = 'home'; $FrMigrated = $null; $FrMovedTo = $null
+$Win = [pscustomobject]@{ mod = 'buyuk'; buyukX = $null; buyukY = $null; kucukX = $null; kucukY = $null; ustte = $true }   # SyHost.ps1'deki gibi
 function Use-Root([string]$root) {
     $script:AppRoot = [IO.Path]::GetFullPath($root)
     $script:Data = Join-Path $script:AppRoot 'Data'
@@ -306,7 +307,7 @@ function New-FakeLegacy([string]$dir) {
     Clear-Dir $dir; New-Item -ItemType Directory -Force $dir | Out-Null
     [IO.File]::WriteAllText("$dir\ayarlar.json", '{ "dil": "tr", "sunucuKokKlasoru": "C:\\MinecraftServer", "arkadasAdresi": "ornek.joinmc.link", "sesAdresi": "", "playitKullan": true, "maksOyuncu": 7 }', $Utf8NoBom)
     [IO.File]::WriteAllText("$dir\sunucular.json", '[ { "id": "a", "ad": "A", "klasor": "C:\\MinecraftServer\\A" }, { "id": "b", "ad": "B", "klasor": "C:\\MinecraftServer\\B" } ]', $Utf8NoBom)
-    [IO.File]::WriteAllText("$dir\pencere.json", '{ "mod": "buyuk", "ustte": true }', $Utf8NoBom)
+    [IO.File]::WriteAllText("$dir\pencere.json", '{ "mod": "kucuk", "kucukX": 1234, "kucukY": 567, "ustte": false }', $Utf8NoBom)
     [IO.File]::WriteAllText("$dir\playit.toml", 'secret_key = "sahte-test-anahtari-gercek-degil"', $Utf8NoBom)
     [IO.File]::WriteAllText("$dir\playit.log", 'deneme', $Utf8NoBom)
 }
@@ -594,6 +595,7 @@ $Cfg.dil = 'ja'
 Invoke-PortableStartup
 Check ($null -ne $FrMigrated -and $FrMigrated.Servers -eq 2 -and $FrMigrated.Playit -and $NextAfterSplash -ceq 'firstrun') 'eski veri kopyalandı: FrMigrated (2 sunucu, playit), firstrun'
 Check ($Cfg.maksOyuncu -eq 7 -and $LangCode -ceq 'ja' -and $Servers.Count -eq 2) "taşınan ayarlar ve sunucular yüklendi, seçilen dil korundu (dil: $LangCode)"
+Check ($Win.kucukX -eq 1234 -and $Win.kucukY -eq 567 -and $Win.ustte -eq $false -and $Win.mod -ceq 'kucuk') "taşınan pencere.json bu oturumda kullanılır (C# LoadConfig gibi): küçük mod $($Win.kucukX),$($Win.kucukY)"
 Check ((Get-MovedTo) -eq $s5) 'eski klasöre bu klasörü gösteren not bırakıldı'
 # 6) Not bu klasörü gösteriyorsa (yeniden kurulmuş Data): yine kopyalanır
 New-InstalledRoot $s5 $null $true

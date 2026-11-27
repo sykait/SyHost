@@ -484,7 +484,14 @@ function Invoke-PortableStartup {
         $here = $false
         if ($null -ne $moved) { try { $here = [string]::Equals([IO.Path]::GetFullPath($moved).TrimEnd('\'), $AppRoot.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) } catch {} }
         if ($null -eq $moved -or $here) {
-            try { $script:FrMigrated = Copy-LegacyData $Data $AppRoot $Cfg.dil; Load-Config } catch {}
+            try {
+                $script:FrMigrated = Copy-LegacyData $Data $AppRoot $Cfg.dil
+                Load-Config
+                # C# LoadConfig pencere.json'u da okur: taşınan pencere konumları bu oturumda kullanılsın, kapanırken kaybolmasın
+                if ($null -ne $Win -and (Test-Path -LiteralPath $WinFile)) {
+                    try { $w0 = Get-Content -LiteralPath $WinFile -Raw | ConvertFrom-Json; foreach ($pn in $w0.PSObject.Properties.Name) { if ($null -ne $Win.PSObject.Properties[$pn]) { $Win.$pn = $w0.$pn } } } catch {}
+                }
+            } catch {}
         } else { $script:FrMovedTo = $moved }
     }
     Load-Servers
