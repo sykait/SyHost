@@ -1624,7 +1624,7 @@ function Render-Splash([int]$W, [int]$H) {
 # ---------- Kapanış: logo kıvılcımlara dağılır ----------
 $OutroStart = 0.0; $OutroLen = 2.0
 function Start-Outro {
-    if (-not [SyHost.Native]::Visible) { $script:Quit = $true; return }
+    if (-not $TestFrame -and -not [SyHost.Native]::Visible) { $script:Quit = $true; return }
     $script:Screen = 'outro'; $script:OutroStart = T
     Reset-Frame
 }
