@@ -174,7 +174,7 @@ sealed partial class App
         Fr.Note = null; Fr.Confirm = false;
         if (Fr.Sel == 0 && Fr.OtherInstall != null) { Fr.Note = FrUpdateNote(Fr.OtherInstall); return; }
         string t = Fr.Target;
-        if (Portable.IsInstalled(t)) { Fr.Note = Lang.L("Burada zaten SyHost var; güncellenip açılacak."); Fr.NoteCol = c.green; }
+        if (Portable.IsInstalled(t)) Fr.Note = FrUpdateNote(t);   // oradaki daha yeniyse yalnızca açılacağını söyler
         else if (Portable.IsInOneDrive(t)) { Fr.Note = Lang.L("Bu klasör OneDrive ile eşitleniyor. Sunucu dosyaları büyük ve sürekli değişir; OneDrive dışında bir yer önerilir."); Fr.NoteCol = c.yellow; }
     }
 
@@ -223,6 +223,9 @@ sealed partial class App
             else
             {
                 string root = Fr.Target;
+                // Orada daha yeni bir SyHost varsa eskisiyle ezilmez: yalnızca o açılır
+                string there = Path.Combine(root, Portable.ExeName);
+                if (Portable.IsInstalled(root) && FrNewerVersion(there) != null) { LaunchAfterExit = there; Quit = true; Dirty = true; return; }
                 if (!Portable.CanWrite(root)) { Fr.Note = Lang.L("Bu klasöre yazılamıyor. Başka bir yer seç."); Fr.NoteCol = c.red; return; }
                 Portable.InstallTo(root, exe, Lang.Code);
                 FolderLook.Apply(root, Lang.Code, Array.Empty<string>());
@@ -405,9 +408,13 @@ sealed partial class App
     }
 
     /// <summary>Kısayolları istenen hâle getir: açıksa yaz (başka bir SyHost'unkini de değiştirir), kapalıysa bizimkini sil.</summary>
+    /// <summary>Kısayollar yazılabilir mi: gerçek çalışmada evet; test modunda yalnızca SYHOST_SHORTCUT_DIR bir test klasörünü gösteriyorsa.</summary>
+    bool ShortcutsWritable => !TestMode || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SYHOST_SHORTCUT_DIR"));
+
     void ApplyShortcuts(bool desk, bool start)
     {
         Cfg.kisayolMasaustu = desk; Cfg.kisayolBaslat = start; SaveConfig();
+        if (!ShortcutsWritable) return;
         string desc = Lang.L("SyHost - modlu Minecraft sunucu merkezi");
         var locs = Shortcuts.Locations();
         bool[] want = { desk, start };

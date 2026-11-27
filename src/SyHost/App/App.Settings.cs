@@ -188,8 +188,9 @@ sealed partial class App
         InitTables();
         RefreshFolderLook();
         string desc = Lang.L("SyHost - modlu Minecraft sunucu merkezi");
-        foreach (string lnk in Shortcuts.Locations())
-            try { if (Shortcuts.StateOf(lnk, ExePath) == Shortcuts.State.Ours) Shortcuts.Write(lnk, ExePath, desc); } catch { }
+        if (ShortcutsWritable)
+            foreach (string lnk in Shortcuts.Locations())
+                try { if (Shortcuts.StateOf(lnk, ExePath) == Shortcuts.State.Ours) Shortcuts.Write(lnk, ExePath, desc); } catch { }
         ResetFrame();
     }
 }

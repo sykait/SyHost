@@ -104,7 +104,7 @@ function FrCheckTarget {
     $Fr.Note = $null; $Fr.Confirm = $false
     if ($Fr.Sel -eq 0 -and $null -ne $Fr.OtherInstall) { $Fr.Note = FrUpdateNote $Fr.OtherInstall; return }
     $t = $Fr.Target
-    if (Test-Installed $t) { $Fr.Note = L 'Burada zaten SyHost var; güncellenip açılacak.'; $Fr.NoteCol = $c.green }
+    if (Test-Installed $t) { $Fr.Note = FrUpdateNote $t }   # oradaki daha yeniyse yalnızca açılacağını söyler
     elseif (Test-InOneDrive $t) { $Fr.Note = L 'Bu klasör OneDrive ile eşitleniyor. Sunucu dosyaları büyük ve sürekli değişir; OneDrive dışında bir yer önerilir.'; $Fr.NoteCol = $c.yellow }
 }
 
@@ -147,6 +147,9 @@ function FrInstall([string]$kind) {
             $script:LaunchAfterExit = $target
         } else {
             $root = $Fr.Target
+            # Orada daha yeni bir SyHost varsa eskisiyle ezilmez: yalnızca o açılır
+            $there = [IO.Path]::Combine($root, 'SyHost.exe')
+            if ((Test-Installed $root) -and $null -ne (FrNewerVersion $there)) { $script:LaunchAfterExit = $there; $script:Quit = $true; $script:Dirty = $true; return }
             if (-not (Test-CanWrite $root)) { $Fr.Note = L 'Bu klasöre yazılamıyor. Başka bir yer seç.'; $Fr.NoteCol = $c.red; return }
             $null = Install-SyHostTo $root $exe $LangCode
             $null = Set-FolderLook $root $LangCode @()

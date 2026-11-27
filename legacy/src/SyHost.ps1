@@ -35,7 +35,7 @@ $SetupMode = (-not $TestFrame) -and -not ([IO.File]::Exists([IO.Path]::Combine($
 
 # ---------- Tek kopya (test modunda atlanır: açık bir SyHost'a dokunmasın) ----------
 # İki sürüm aynı kilidi kullanır: aynı anda yalnızca bir SyHost açık olabilir
-$MutexName = 'Local\SyHostSunucuMerkezi' + $(if ($Title -eq 'SyHost') { '' } else { "-$Title" })
+$MutexName = 'Local\SyHostSunucuMerkezi' + $(if ($Title -ceq 'SyHost') { '' } else { "-$Title" })
 if (-not $TestFrame) {
     $created = $false
     $mutex = New-Object System.Threading.Mutex($true, $MutexName, [ref]$created)
@@ -149,6 +149,12 @@ function Load-Config {
         if ($null -eq $cfg.PSObject.Properties[$k]) { $cfg | Add-Member -NotePropertyName $k -NotePropertyValue $CfgDefaults[$k] }
         elseif ($null -eq $cfg.$k -and $k -in 'arkadasAdresi', 'sesAdresi', 'dil', 'sunucuKokKlasoru') { $cfg.$k = $CfgDefaults[$k] }
     }
+    # Elle bozulmuş sayı ve açık/kapalı alanları varsayılana döner (çökmesin; C# böyle bir dosyayı baştan varsayılanla açar)
+    foreach ($k in 'maksOyuncu', 'otomatikYedekSaat', 'saklanacakYedek', 'yaziTipiBoyutu') {
+        $v = $cfg.$k; $d = 0.0
+        if ($v -is [bool] -or -not [double]::TryParse([string]$v, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$d)) { $cfg.$k = $CfgDefaults[$k] }
+    }
+    foreach ($k in 'playitKullan', 'cokerseYenidenBaslat') { if ($cfg.$k -isnot [bool]) { $cfg.$k = $CfgDefaults[$k] } }
     $cfg.sunucuKokKlasoru = Resolve-RootDir $cfg.sunucuKokKlasoru
     # Dil: en (varsayılan), tr, ja
     $script:LangCode = if (@($Languages.Keys) -ccontains [string]$cfg.dil) { [string]$cfg.dil } else { 'en' }   # C# Lang.Has gibi büyük-küçük harfe duyarlı ("TR" bilinmeyen dildir)
@@ -2622,9 +2628,12 @@ function VersionLine { $c.dim + 'v' + $VersionText + '  ·  ' + $Edition + '  ·
 # Arayüz dilinin kurallarıyla büyük harf (Türkçede i → İ; İngilizce ve Japoncada i → I)
 function Up([string]$s) { if ($null -eq $s) { return '' }; $s.ToUpper([Globalization.CultureInfo]::GetCultureInfo($(if ($LangCode -eq 'tr') { 'tr-TR' } else { 'en-US' }))) }
 # Kısayolları istenen hâle getir: açıksa yaz (başka bir SyHost'unkini de değiştirir), kapalıysa bizimkini sil
+# Kısayollar yazılabilir mi: gerçek çalışmada evet; test modunda yalnızca SYHOST_SHORTCUT_DIR bir test klasörünü gösteriyorsa
+function ShortcutsWritable { (-not $TestFrame) -or [bool]$env:SYHOST_SHORTCUT_DIR }
 function Apply-Shortcuts([bool]$desk, [bool]$start) {
     foreach ($p in @(@('kisayolMasaustu', $desk), @('kisayolBaslat', $start))) { $Cfg | Add-Member -NotePropertyName $p[0] -NotePropertyValue $p[1] -Force }
     Save-Config
+    if (-not (ShortcutsWritable)) { return }
     $desc = L 'SyHost - modlu Minecraft sunucu merkezi'
     $locs = @(Get-ShortcutLocations)
     $want = @($desk, $start)

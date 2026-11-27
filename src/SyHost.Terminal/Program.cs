@@ -208,9 +208,9 @@ static class Program
     // C# App.Title ve SyHost.ps1 $Title: testler pencere adını ve tek kopya kilidini değiştirebilir
     static string Title() => Environment.GetEnvironmentVariable("SYHOST_TEST_TITLE") is { Length: > 0 } t ? t : "SyHost";
 
-    // SyHost.ps1 $MutexName ('SyHost' ile -eq karşılaştırması büyük-küçük harf duyarsız)
+    // SyHost.ps1 $MutexName ve C# Program.cs ile aynı: 'SyHost' karşılaştırması büyük-küçük harfe duyarlı
     static string MutexName(string title) =>
-        @"Local\SyHostSunucuMerkezi" + (string.Equals(title, "SyHost", StringComparison.OrdinalIgnoreCase) ? "" : "-" + title);
+        @"Local\SyHostSunucuMerkezi" + (string.Equals(title, "SyHost", StringComparison.Ordinal) ? "" : "-" + title);
 
     // src\SyHost\Setup\Portable.cs: UiLanguage (Portable.cs başka sınıflara bağlı olduğu için tek başına derlenmez)
     static string UiLanguage()

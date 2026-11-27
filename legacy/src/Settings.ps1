@@ -206,7 +206,7 @@ function Set-Language([string]$code) {
     # test modunda gerçek klasörlere dokunulmaz
     if (-not $TestFrame) { try { $null = Start-FolderLook $AppRoot $code @(foreach ($sv in $Servers) { [string]$sv.klasor }) } catch {} }
     $desc = L 'SyHost - modlu Minecraft sunucu merkezi'
-    foreach ($lnk in @(Get-ShortcutLocations)) { try { if ((Get-LinkState $lnk $ExePath) -eq 'Ours') { $null = Write-Shortcut $lnk $ExePath $desc } } catch {} }
+    if (ShortcutsWritable) { foreach ($lnk in @(Get-ShortcutLocations)) { try { if ((Get-LinkState $lnk $ExePath) -eq 'Ours') { $null = Write-Shortcut $lnk $ExePath $desc } } catch {} } }
     Update-TrayLanguage
     Reset-SettingsCache
     Reset-Frame
