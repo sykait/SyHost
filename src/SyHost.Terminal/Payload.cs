@@ -157,7 +157,8 @@ static class Payload
 
     /// <summary>
     /// Önceki açılışlardan kalan geçici klasörleri sil (başlatıcı öldürüldüyse kendi klasörünü silemedi).
-    /// Kullanımdakiler atlanır: sahibi açıksa kilit dosyası, PowerShell açıksa yüklediği SyHost.Core.dll silinemez.
+    /// Kullanımdakilere hiç dokunulmaz: sahibi (başlatıcı) açıksa kilit dosyasını, PowerShell açıksa yüklediği
+    /// SyHost.Core.dll'i açık tutar; ikisi de özel olarak açılabiliyorsa klasör artıktır.
     /// </summary>
     public static void CleanStaleTemps()
     {
@@ -169,16 +170,34 @@ static class Payload
                 try
                 {
                     string lk = Path.Combine(dir, LockName);
-                    if (File.Exists(lk)) File.Delete(lk);
-                    string dll = Path.Combine(dir, "bin", "SyHost.Core.dll");
-                    if (File.Exists(dll)) File.Delete(dll);
+                    if (InUse(lk) || InUse(Path.Combine(dir, "bin", "SyHost.Core.dll")))
+                    {
+                        TestLog.Write("stale temp in use " + dir);
+                        continue;
+                    }
+                    // Kilidi henüz olmayan yeni bir klasörü başka bir başlatıcı şu an hazırlıyor olabilir
+                    if (!File.Exists(lk) && DateTime.UtcNow - Directory.GetCreationTimeUtc(dir) < TimeSpan.FromMinutes(1)) continue;
                     Directory.Delete(dir, true);
                     TestLog.Write("stale temp deleted " + dir);
                 }
-                catch (Exception e) { TestLog.Write("stale temp in use " + dir + " (" + e.GetType().Name + ")"); }
+                catch (Exception e) { TestLog.Write("stale temp kept " + dir + " (" + e.GetType().Name + ")"); }
             }
         }
         catch { }
+    }
+
+    /// <summary>Dosyayı başka bir süreç açık tutuyor mu? (yoksa false)</summary>
+    static bool InUse(string file)
+    {
+        try
+        {
+            using (new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
+            return false;
+        }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+        catch (IOException) { return true; }                   // paylaşım ihlali: açık
+        catch (UnauthorizedAccessException) { return true; }   // açılamıyor: dokunma
     }
 
     static void Hide(string dir)
