@@ -103,9 +103,9 @@ sealed partial class App
             case "onay":
                 switch (k.Key)
                 {
-                    case ConsoleKey.UpArrow: UnSel = (UnSel + UnItems.Count - 1) % UnItems.Count; UnPhase = "liste"; return;
-                    case ConsoleKey.DownArrow: UnSel = (UnSel + 1) % UnItems.Count; UnPhase = "liste"; return;
-                    case ConsoleKey.Spacebar: UnItems[UnSel].On = !UnItems[UnSel].On; UnPhase = "liste"; return;
+                    case ConsoleKey.UpArrow: if (UnItems.Count > 0) UnSel = (UnSel + UnItems.Count - 1) % UnItems.Count; UnPhase = "liste"; return;
+                    case ConsoleKey.DownArrow: if (UnItems.Count > 0) UnSel = (UnSel + 1) % UnItems.Count; UnPhase = "liste"; return;
+                    case ConsoleKey.Spacebar: if (UnItems.Count > 0) UnItems[UnSel].On = !UnItems[UnSel].On; UnPhase = "liste"; return;
                     case ConsoleKey.Escape: UnItems = null; Screen = "settings"; ResetFrame(); return;
                     case ConsoleKey.Enter:
                         if (UnItems.Any(x => x.Key == "klasor" && x.On) && UnPhase != "onay") { UnPhase = "onay"; return; }
@@ -113,7 +113,8 @@ sealed partial class App
                         UnPhase = "calisiyor";
                         if (UnItems.Any(x => x.Key == "klasor" && x.On)) StopPlayit();
                         var items = UnItems;
-                        UnJob = Task.Run(() => Uninstall.RunSelected(items));
+                        // Test modunda kaldırma başlamaz: kare her seferinde aynı çıkar ve hiçbir şeye dokunulmaz
+                        if (!TestMode) UnJob = Task.Run(() => Uninstall.RunSelected(items));
                         return;
                 }
                 return;
