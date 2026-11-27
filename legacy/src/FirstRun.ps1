@@ -170,7 +170,7 @@ function Test-FrEmptyDir([string]$dir) {
 # İş ayrı bir çalışma alanında koşar; ekranla yalnızca $sync (= $Fr.Sync) üzerinden konuşur:
 #   Done bitti mi, Text ekrandaki ilerleme yazısı, Error hata metni ($null: hata yok),
 #   Proc çalışan playit komutu (Esc onu kapatır), Cancel Esc'e basıldı, Code playit eşleştirme kodu.
-# $ctx: yollar ve önceden çevrilmiş metinler (bu çalışma alanında L ve ayarlar yok).
+# $ctx: yollar ve önceden çevrilmiş metinler (bu çalışma alanında ayarlar yok; L yalnızca Java işi için kurulur).
 $FrJobScript = {
     param($sync, [string]$kind, $ctx)
     $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'
@@ -278,7 +278,7 @@ $FrJobScript = {
     try {
         switch -CaseSensitive ($kind) {
             'java' {
-                # Java'nın indirilmesi Portable.ps1'deki Install-Java'dır ($JavaFuncs). L burada da çalışsın diye
+                # Java'yı $JavaFuncs'taki Install-Java indirir (Portable sözleşmesi). L burada da çalışsın diye
                 # ana betiğin metin tablosu ve L'si de getirilir; ilk satır ($ctx.Head) zaten başlıkta yazar.
                 $TextTable = $ctx.TextTable; $LangCode = $ctx.LangCode
                 ${function:L} = [scriptblock]::Create($ctx.LFunc)
