@@ -160,6 +160,9 @@ static class Installer
                 ("server-port", "25565"), ("enable-command-block", "true"),
             });
             File.WriteAllText(Path.Combine(target, "eula.txt"), "eula=true\r\n", Encoding.ASCII);   // Set-Content -Encoding ASCII
+            // Minecraft'ın sunucu listesinde görünen simge: paket kendi simgesini getirmediyse SyHost'unki (64x64)
+            string icon = Path.Combine(target, "server-icon.png");
+            if (!File.Exists(icon)) { try { byte[] png = App.Asset("server-icon.png"); if (png != null) File.WriteAllBytes(icon, png); } catch { } }
             string mods = Path.Combine(target, "mods");
             if (!string.IsNullOrEmpty(voiceHost) && Directory.Exists(mods) && Directory.EnumerateFileSystemEntries(mods, "*voicechat*", Visible).Any())
             {
