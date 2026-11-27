@@ -203,6 +203,7 @@ function Switch-SettingShortcut([string]$key) {
 function Set-Language([string]$code) {
     $script:LangCode = $code; $Cfg.dil = $code; $null = Save-Config
     $null = Init-Tables
+    $WorldSizeCache.Clear()   # "henüz oluşmadı" gibi yazılar yeni dilde yeniden hesaplansın
     # test modunda gerçek klasörlere dokunulmaz
     if (-not $TestFrame) { try { $null = Start-FolderLook $AppRoot $code @(foreach ($sv in $Servers) { [string]$sv.klasor }) } catch {} }
     $desc = L 'SyHost - modlu Minecraft sunucu merkezi'

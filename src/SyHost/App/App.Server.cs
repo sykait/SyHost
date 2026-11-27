@@ -51,6 +51,8 @@ sealed partial class App
         {
             if (sv == null) continue;
             if (string.IsNullOrEmpty(sv.paket)) sv.paket = "normal";
+            // Paket adı küçük harfle ("YUKSEK" yazılmış olsa da): paket ekranı etkin kartı her iki sürümde de bulsun
+            string pk = sv.paket.ToLowerInvariant(); if (Array.IndexOf(PackKeys, pk) >= 0) sv.paket = pk;
             // Bellekte her zaman mutlak yol
             sv.klasor = FromStoredPath(sv.klasor);
             Servers.Add(sv);
@@ -160,6 +162,7 @@ sealed partial class App
         string dir = Path.GetDirectoryName(PlayitSecret);
         Pl = new ServerProcess();
         try { Pl.Start(PlayitExe, $"--secret-path \"{PlayitSecret}\" --socket-path {SrvPlayitPipe} --log-path \"{Path.Combine(dir, "playit.log")}\"", dir); } catch { }
+        CloseGuard.Playit = Pl;
     }
 
     string SrvFindPlayit()
@@ -218,6 +221,7 @@ sealed partial class App
     private partial void StartServer()
     {
         if (S != null && S.Running) { AddLog("panel", Lang.L("Sunucu zaten açık.")); return; }
+        StopSentAt = null;   // önceki "stop"un 60 sn sayacı yeni sunucuyu öldürmesin
         if (Cur == null) return;
         string dir = Cur.klasor;
         if (!SrvExists(SrvJoin(dir, "mods")) && !SrvExists(dir)) { AddLog("error", Lang.L("Sunucu klasörü bulunamadı: {0}  (taşındı ya da silindi)", dir)); return; }
@@ -403,7 +407,8 @@ sealed partial class App
             kind = "ok";
         }
         else if (SrvRxSavedGame.IsMatch(msg) && Ps.Eq(BackupStage, "saving")) { AddLog("info", msg, t, false); BeginZip(); return; }
-        else if (SrvRxStopping.IsMatch(msg)) Status = "DURUYOR";
+        // Sunucu kendisi kapanıyor (oyun içinden /stop ya da konsola yazılan stop): çökme sayılmaz, yeniden başlatılmaz
+        else if (SrvRxStopping.IsMatch(msg)) { Status = "DURUYOR"; StopRequested = true; }
         bool vis = Ps.In(kind, "join", "leave", "chat", "ok") || (Ps.Eq(kind, "error") && Ps.Eq(Status, "ACIK")) || Now() < ReplyUntil;
         AddLog(kind, msg, t, vis);
     }

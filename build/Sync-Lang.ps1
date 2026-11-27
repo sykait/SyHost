@@ -79,7 +79,7 @@ $content = ($lines -join "`r`n") + "`r`n"
 $enc = New-Object Text.UTF8Encoding $true
 if ($Check) {
     $cur = if (Test-Path -LiteralPath $out) { [IO.File]::ReadAllText($out, [Text.Encoding]::UTF8) } else { '' }
-    if ($cur.TrimStart([char]0xFEFF) -ne $content) { Write-Host 'legacy\src\Lang.Screens.ps1 güncel değil: build\Sync-Lang.ps1 çalıştır.' -ForegroundColor Red; exit 1 }
+    if ($cur.TrimStart([char]0xFEFF) -cne $content) { Write-Host 'legacy\src\Lang.Screens.ps1 güncel değil: build\Sync-Lang.ps1 çalıştır.' -ForegroundColor Red; exit 1 }
     Write-Host "Lang.Screens.ps1 güncel ($n metin)."
     exit 0
 }

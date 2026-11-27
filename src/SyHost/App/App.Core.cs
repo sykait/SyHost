@@ -99,6 +99,14 @@ sealed partial class App
         return sb.Append(' ', w - n).ToString();
     }
 
+    /// <summary>Düz metnin sondan en çok w sütunluk kısmı (yazılan komutun görünen yeri).</summary>
+    static string TailByWidth(string s, int w)
+    {
+        s ??= ""; int n = 0, i = s.Length;
+        while (i > 0) { int cw = CharW(s[i - 1]); if (n + cw > w) break; n += cw; i--; }
+        return s.Substring(i);
+    }
+
     /// <summary>Düz metni en çok w sütunluk parçalara böl (geniş karakter 2 sütun).</summary>
     static List<string> SplitByWidth(string s, int w)
     {
@@ -441,8 +449,8 @@ sealed partial class App
         string tag = Lang.L("modlu Minecraft sunucu merkezi");
         string typed = tag.Substring(0, Ps.Int(Math.Min(tag.Length, Math.Max(0, (el - 1.0) * 34))));
         string caret = (el > 0.9 && (typed.Length < tag.Length || Ps.Int(T() * 3) % 2 == 0)) ? c.brass + "▌" : " ";
-        int tc = Ps.Int(Math.Max(0, (W - tag.Length) / 2.0));
-        items[top + 7] = (c.text + typed + caret + Ps.Rep(" ", tag.Length - typed.Length), tc);
+        int tc = Ps.Int(Math.Max(0, (W - VLen(tag)) / 2.0));   // ekran genişliğine göre (Japonca 2 sütun)
+        items[top + 7] = (c.text + typed + caret + Ps.Rep(" ", VLen(tag) - VLen(typed)), tc);
         // PowerShell 5.1: [Math]::Min(100, <ondalık>) Int32 sürümünü seçer, ondalık önce [int]e yuvarlanır
         double pct = Math.Min(100, Ps.Int(el / (SplashLen - 0.2) * 100));
         items[top + 9] = (BarP(pct, 30), Ps.Int(Math.Max(0, (W - 30) / 2.0)));
@@ -494,7 +502,7 @@ sealed partial class App
         string msg = Lang.L("görüşürüz");
         double fade = Math.Min(1.0, Math.Max(0.0, (el - 0.9) / 0.7));
         int bas = Ps.Int(240 - 200 * fade);
-        rows.Add(Ps.Rep(" ", Ps.Int(Math.Max(0, (W - msg.Length) / 2.0))) + Shimmer(msg, new[] { bas, bas, bas }, new[] { 255, Ps.Int(70 + 150 * fade), Ps.Int(80 + 140 * fade) }, 14, 3));
+        rows.Add(Ps.Rep(" ", Ps.Int(Math.Max(0, (W - VLen(msg)) / 2.0))) + Shimmer(msg, new[] { bas, bas, bas }, new[] { 255, Ps.Int(70 + 150 * fade), Ps.Int(80 + 140 * fade) }, 14, 3));
         rows.Add("");
         rows.Add(Ps.Rep(" ", Ps.Int(Math.Max(0, (W - 22) / 2.0))) + c.dark + Lang.L("sunucular kapalı · ") + c.copper + "■" + R);
         return rows;
@@ -513,7 +521,7 @@ sealed partial class App
 
     void SaveWinState()
     {
-        if (TestMode) return;
+        if (TestMode || SetupMode) return;   // kurulmadan önce diske bir şey yazılmaz (yandaki ilgisiz bir Data klasörüne de)
         try
         {
             int[] rc = Native.GetRect();
@@ -629,11 +637,11 @@ sealed partial class App
                 string promptCol = (S != null && S.Running) ? c.green : c.red;
                 string prompt = " " + promptCol + Bo + "❯" + R + " ";
                 int maxIn = W - 4;
-                string shown = InputText.Length > maxIn ? InputText.Substring(InputText.Length - maxIn) : InputText;
+                string shown = TailByWidth(InputText, maxIn);   // sığmayan baş kısım görünmez (geniş karakter 2 sütun)
                 if (Mode == "closing") rows.Add("");
                 else if (shown.Length == 0) rows.Add(prompt + c.dark + Lang.L("komut yaz... (F1 yardım)") + R);
                 else rows.Add(prompt + c.text + shown + R);
-                showCursor = Mode != "closing"; cursorCol = 4 + shown.Length;
+                showCursor = Mode != "closing"; cursorCol = 4 + VLen(shown);
                 break;
             }
         }

@@ -47,6 +47,8 @@ function Test-OwnEmptyFolder([string]$dir, [string]$exe) {
     try {
         $full = [IO.Path]::GetFullPath($dir).TrimEnd('\')
         if ([IO.Path]::GetPathRoot($full).TrimEnd('\').Equals($full, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+        # Arşivden (zip, rar, 7z) doğrudan açılan exe geçici klasöre çıkarılmıştır: oraya kurulmaz, yer sorulur
+        if (Test-Inside $full ([IO.Path]::GetTempPath())) { return $false }
         $special = @([Environment]::GetFolderPath('UserProfile'), [Environment]::GetFolderPath('DesktopDirectory'), [Environment]::GetFolderPath('MyDocuments'),
             [Environment]::GetFolderPath('ProgramFiles'), [Environment]::GetFolderPath('ProgramFilesX86'), [Environment]::GetFolderPath('Windows'), (Get-Downloads))
         foreach ($s in $special) { if (-not [string]::IsNullOrEmpty($s) -and $full.Equals($s.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) { return $false } }
@@ -96,7 +98,13 @@ function Install-SyHostTo([string]$root, [string]$sourceExe, [string]$lang) {
         [void][IO.Directory]::CreateDirectory($dataDir)
         [void][IO.Directory]::CreateDirectory([IO.Path]::Combine($root, 'Servers'))
         $target = [IO.Path]::Combine($root, 'SyHost.exe')
-        if (-not [string]::Equals([IO.Path]::GetFullPath($sourceExe), [IO.Path]::GetFullPath($target), [StringComparison]::OrdinalIgnoreCase)) { Copy-SyHostExe $sourceExe $target }
+        $src = [IO.Path]::GetFullPath($sourceExe)
+        if (-not [string]::Equals($src, [IO.Path]::GetFullPath($target), [StringComparison]::OrdinalIgnoreCase)) {
+            # İndirilen exe zaten bu klasörde: kopyalanmaz, adı SyHost.exe olur; klasörde iki exe kalmaz (C#: InstallTo)
+            $sameDir = [string]::Equals([IO.Path]::GetDirectoryName($src).TrimEnd('\'), [IO.Path]::GetFullPath($root).TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
+            if ($sameDir -and -not [IO.File]::Exists($target)) { try { [IO.File]::Move($src, $target) } catch { Copy-SyHostExe $src $target } }
+            else { Copy-SyHostExe $src $target }
+        }
         $cfg = [IO.Path]::Combine($dataDir, 'ayarlar.json')
         if (-not [IO.File]::Exists($cfg)) {
             $s = Read-DefaultSettings

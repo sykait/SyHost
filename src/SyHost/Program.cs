@@ -30,7 +30,7 @@ static class Program
         if (installed && !Portable.CanWrite(Path.Combine(root, Portable.DataName)))
         {
             Lang.Code = Portable.UiLanguage();
-            Portable.Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost.exe'yi yazılabilir bir klasöre taşı (ör. {1}) ve oradan aç.", root, Portable.DefaultRoot()));
+            Portable.Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve gizli Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç.", root, Portable.DefaultRoot()));
             return 1;
         }
 

@@ -22,7 +22,17 @@ function Start-Uninstall {
     Reset-Frame
 }
 
-function UnServersInside { $n = 0; foreach ($sv in $Servers) { if (UnInside ([string]$sv.klasor) $AppRoot) { $n++ } }; $n }
+# Klasörle birlikte silinecek sunucu sayısı: listedeki (klasörün içindeki) sunucular ve Servers'taki bütün klasörler.
+# Listeden kaldırılmış bir sunucunun dünyası da klasörle gider; sayıda görünmesi gerekir. (C#: UnServersInside)
+function UnServersInside {
+    $dirs = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($sv in $Servers) { if (UnInside ([string]$sv.klasor) $AppRoot) { try { [void]$dirs.Add([IO.Path]::GetFullPath([string]$sv.klasor).TrimEnd('\')) } catch {} } }
+    try {
+        $sd = [IO.Path]::Combine($AppRoot, 'Servers')
+        if ([IO.Directory]::Exists($sd)) { foreach ($d in [IO.Directory]::EnumerateDirectories($sd)) { [void]$dirs.Add([IO.Path]::GetFullPath($d).TrimEnd('\')) } }
+    } catch {}
+    $dirs.Count
+}
 function UnFolderOn { foreach ($x in $UnItems) { if ($x.Key -ceq 'klasor' -and $x.On) { return $true } }; $false }
 function UnAnyOn { foreach ($x in $UnItems) { if ($x.On) { return $true } }; $false }
 
@@ -93,7 +103,8 @@ function Handle-UninstallKey([ConsoleKeyInfo]$k, [bool]$ctrl) {
             'Enter' {
                 $folder = UnFolderOn
                 if ($folder -and $UnPhase -cne 'onay') { $script:UnPhase = 'onay'; return }
-                if (-not (UnAnyOn)) { return }
+                # Hiçbir şey seçilmedi: kaldırılacak iz yok, "bitti" ekranı klasörün silinebileceğini söyler
+                if (-not (UnAnyOn)) { UnFinish; return }
                 $script:UnPhase = 'calisiyor'
                 if ($folder) { Stop-Playit }
                 # Test modunda kaldırma başlamaz: kare her seferinde aynı çıkar ve hiçbir şeye dokunulmaz
@@ -159,6 +170,9 @@ function UnProtectedFolders {
 function Test-RootDeletable([string]$root) {
     try {
         $full = [IO.Path]::GetFullPath($root).TrimEnd('\')
+        # Silme işini cmd yapar: yoldaki % ve ! cmd'nin değişkenleri sayılır (ör. "100%iyi" başka bir klasörü
+        # silerdi). Böyle bir yol için klasör silme sunulmaz; kullanıcı klasörü kendisi siler. (C#: CanDeleteRoot)
+        if ($full.IndexOfAny([char[]]@('%', '!')) -ge 0) { return $false }
         $drive = [IO.Path]::GetPathRoot($full)
         if ([string]::IsNullOrEmpty($drive) -or [string]::Equals($drive.TrimEnd('\'), $full, [StringComparison]::OrdinalIgnoreCase)) { return $false }
         $git = [IO.Path]::Combine($full, '.git')

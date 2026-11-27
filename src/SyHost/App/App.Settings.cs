@@ -186,6 +186,7 @@ sealed partial class App
     {
         Lang.Code = code; Cfg.dil = code; SaveConfig();
         InitTables();
+        WorldSizeCache.Clear();   // "henüz oluşmadı" gibi yazılar yeni dilde yeniden hesaplansın
         RefreshFolderLook();
         string desc = Lang.L("SyHost - modlu Minecraft sunucu merkezi");
         if (ShortcutsWritable)

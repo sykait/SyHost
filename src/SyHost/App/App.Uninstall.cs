@@ -22,7 +22,26 @@ sealed partial class App
         ResetFrame();
     }
 
-    int UnServersInside => Servers.Count(s => Portable.IsInside(s.klasor ?? "", AppRoot));
+    /// <summary>
+    /// Klasörle birlikte silinecek sunucu sayısı: listedeki (klasörün içindeki) sunucular ve Servers'taki bütün
+    /// klasörler. Listeden kaldırılmış bir sunucunun dünyası da klasörle gider; sayıda görünmesi gerekir.
+    /// </summary>
+    int UnServersInside
+    {
+        get
+        {
+            var dirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var s in Servers)
+                if (Portable.IsInside(s.klasor ?? "", AppRoot)) { try { dirs.Add(Path.GetFullPath(s.klasor).TrimEnd('\\')); } catch { } }
+            try
+            {
+                string sd = Path.Combine(AppRoot, Portable.ServersName);
+                if (Directory.Exists(sd)) foreach (string d in Directory.EnumerateDirectories(sd)) dirs.Add(Path.GetFullPath(d).TrimEnd('\\'));
+            }
+            catch { }
+            return dirs.Count;
+        }
+    }
 
     private partial List<string> RenderUninstall(int W, int H)
     {
@@ -109,7 +128,8 @@ sealed partial class App
                     case ConsoleKey.Escape: UnItems = null; Screen = "settings"; ResetFrame(); return;
                     case ConsoleKey.Enter:
                         if (UnItems.Any(x => x.Key == "klasor" && x.On) && UnPhase != "onay") { UnPhase = "onay"; return; }
-                        if (!UnItems.Any(x => x.On)) return;
+                        // Hiçbir şey seçilmedi: kaldırılacak iz yok, "bitti" ekranı klasörün silinebileceğini söyler
+                        if (!UnItems.Any(x => x.On)) { UnFinish(); return; }
                         UnPhase = "calisiyor";
                         if (UnItems.Any(x => x.Key == "klasor" && x.On)) StopPlayit();
                         var items = UnItems;

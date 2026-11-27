@@ -110,8 +110,21 @@ sealed partial class App
         if (n.Length == 0) n = "Sunucu";
         string bas = Path.Combine(Cfg.sunucuKokKlasoru, n), p = bas;
         int i = 2;
-        while (File.Exists(p) || Directory.Exists(p)) { p = bas + "-" + i; i++; }
+        // SyHost klasörünün kendisi sunucu klasörü seçildiyse App (Terminal sürümünün uygulaması) adı kullanılmaz
+        while (File.Exists(p) || Directory.Exists(p) || IsReservedServerDir(p)) { p = bas + "-" + i; i++; }
         return p;
+    }
+
+    bool IsReservedServerDir(string p)
+    {
+        try
+        {
+            string parent = Path.GetDirectoryName(Path.GetFullPath(p))?.TrimEnd('\\');
+            if (!string.Equals(parent, AppRoot.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return false;
+            string name = Path.GetFileName(p);
+            return Ps.In(name, "App", "App.new", "App.old");
+        }
+        catch { return false; }
     }
 
     // ---------- Sihirbazı başlat (Start-Wizard) ----------

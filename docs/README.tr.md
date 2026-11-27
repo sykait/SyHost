@@ -76,11 +76,11 @@ arkadaşların internetten bağlansın, yedeklerin kendiliğinden alınsın. Hep
 | Dosya | Kimin için |
 | --- | --- |
 | **`SyHost-1.0.0.exe`** | **Herkes için (önerilen).** C# ile yazılmış ana sürüm. |
-| `SyHost-1.0.0-Terminal.exe` | Aynı uygulamanın PowerShell sürümü (Windows'la birlikte gelen PowerShell'de çalışır). Betikleri okuyabilmek isteyenler için. |
+| `SyHost-Terminal-1.0.0.exe` | Aynı uygulamanın PowerShell sürümü (Windows'la birlikte gelen PowerShell'de çalışır). Betikleri okuyabilmek isteyenler için. |
 
 İki sürüm de aynı görünür ve aynı çalışır; ekrandaki sürüm satırında yalnızca `C#` ya da `Terminal` yazar. İkisi de
 aynı klasörde aynı dosyaları kullanır, istersen sonra öbürüne geçebilirsin. Her biri tek bir dosyadır, başka hiçbir
-şey indirmen gerekmez. Aynı sayfadaki `SHA256SUMS.txt` iki dosyanın da sağlama toplamlarını içerir.
+şey indirmen gerekmez. İki dosyanın SHA-256 sağlama toplamları sürüm notlarının sonundadır.
 
 **Gerekenler:** Windows 10 ya da 11 ve indirmeler için internet. Modlu sunucular belleği sever: en az 8 GB RAM önerilir.
 

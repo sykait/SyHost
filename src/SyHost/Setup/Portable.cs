@@ -52,6 +52,8 @@ static unsafe partial class Portable
         {
             string full = Path.GetFullPath(dir).TrimEnd('\\');
             if (Path.GetPathRoot(full).TrimEnd('\\').Equals(full, StringComparison.OrdinalIgnoreCase)) return false;
+            // Arşivden (zip, rar, 7z) doğrudan açılan exe geçici klasöre çıkarılmıştır: oraya kurulmaz, yer sorulur
+            if (IsInside(full, Path.GetTempPath())) return false;
             foreach (string special in SpecialFolders())
                 if (!string.IsNullOrEmpty(special) && full.Equals(special.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return false;
             foreach (string e in Directory.EnumerateFileSystemEntries(full))
@@ -132,8 +134,15 @@ static unsafe partial class Portable
         Directory.CreateDirectory(data);
         Directory.CreateDirectory(Path.Combine(root, ServersName));
         string target = Path.Combine(root, ExeName);
-        if (!string.Equals(Path.GetFullPath(sourceExe), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
-            CopyExe(sourceExe, target);
+        string src = Path.GetFullPath(sourceExe);
+        if (!string.Equals(src, Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
+        {
+            // İndirilen exe zaten bu klasörde (ör. SyHost-1.0.0.exe kendi klasöründe açıldı): kopyalanmaz, adı
+            // SyHost.exe olur; klasörde iki exe kalmaz. Windows çalışan bir exe'nin adını değiştirmeye izin verir.
+            bool sameDir = string.Equals(Path.GetDirectoryName(src)?.TrimEnd('\\'), Path.GetFullPath(root).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+            if (sameDir && !File.Exists(target)) { try { File.Move(src, target); } catch { CopyExe(src, target); } }
+            else CopyExe(src, target);
+        }
         string cfg = Path.Combine(data, "ayarlar.json");
         if (!File.Exists(cfg))
         {

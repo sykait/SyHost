@@ -220,7 +220,7 @@ static partial class Lang
         Tx("İsim       ", "Name       ", "名前       ");
         Tx("Klasör     ", "Folder     ", "フォルダ   ");
         Tx("Dünya      ", "World      ", "ワールド   ");
-        Tx("İndirilecek", "Downloads  ", "ダウンロード");
+        Tx("İndirilecek", "Downloads  ", "取得       ");
         Tx(" {0} mod", " {0} mods", " MOD {0} 個");
         Tx("Kurarak Minecraft kullanım sözleşmesini (aka.ms/MinecraftEULA) kabul etmiş olursun.", "By installing you accept the Minecraft EULA (aka.ms/MinecraftEULA).", "インストールすると Minecraft EULA (aka.ms/MinecraftEULA) に同意したことになります。");
         Tx("Java {0} kurulurken Windows izin isteyebilir, Evet demen yeterli.", "Windows may ask for permission while installing Java {0}, just click Yes.", "Java {0} のインストール中に Windows が許可を求めたら「はい」を選んでください。");
@@ -288,7 +288,7 @@ static partial class Lang
         Tx("Öncelik   ", "Priority  ", "優先度    ");
         Tx("● ŞU AN AKTİF", "● ACTIVE NOW", "● 使用中");
         Tx("Enter ile seç", "Enter to choose", "Enter で選択");
-        Tx("KAYNAK PAKETİ SEÇ", "CHOOSE A RESOURCE PACK", "リソースパックを選択");
+        Tx("KAYNAK PAKETİ SEÇ", "CHOOSE A PERFORMANCE PACK", "パフォーマンスパックを選択");
         Tx("   Çekirdek ve öncelik anında değişir, RAM yeniden başlatınca.", "   Cores and priority change instantly, RAM after a restart.", "   コアと優先度はすぐ反映、RAM は再起動後に反映されます。");
         Tx("hızlı seçim", "quick pick", "クイック選択");
         Tx("uygula", "apply", "適用");

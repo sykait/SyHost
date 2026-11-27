@@ -102,6 +102,9 @@ static class Uninstall
         try
         {
             string full = Path.GetFullPath(root).TrimEnd('\\');
+            // Silme işini cmd yapar: yoldaki % ve ! cmd'nin değişkenleri sayılır (ör. "100%iyi" başka bir klasörü
+            // silerdi). Böyle bir yol için klasör silme sunulmaz; kullanıcı klasörü kendisi siler.
+            if (full.IndexOfAny(new[] { '%', '!' }) >= 0) return false;
             string drive = Path.GetPathRoot(full);
             if (string.IsNullOrEmpty(drive) || drive.TrimEnd('\\').Equals(full, StringComparison.OrdinalIgnoreCase)) return false;
             string git = Path.Combine(full, ".git");

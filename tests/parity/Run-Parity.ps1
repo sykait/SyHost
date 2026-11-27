@@ -22,7 +22,7 @@
 param(
     [string]$Filter = '*',
     [switch]$NoBuild,
-    [string]$WorkRoot = 'D:\SyHostTest\parity\run',
+    [string]$WorkRoot = (Join-Path ([IO.Path]::GetTempPath()) 'SyHostParity'),
     [ValidateRange(1, 16)][int]$Parallel = 4
 )
 $ErrorActionPreference = 'Stop'

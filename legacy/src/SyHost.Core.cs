@@ -202,6 +202,18 @@ namespace SyHost
             }
             AssignProcessToJobObject(job, p.Handle);
         }
+
+        // Pencere kapatilirken Windows SyHost'u birkac saniyede sonlandirir; "kapaninca oldur" kurali sunucuyu
+        // kaydederken oldururdu. "stop" gonderildikten sonra kural kaldirilir (C#: JobGuard.LetChildrenFinish).
+        public static void LetChildrenFinish()
+        {
+            if (job == IntPtr.Zero) return;
+            EXT e = new EXT();
+            int len = Marshal.SizeOf(typeof(EXT));
+            IntPtr ptr = Marshal.AllocHGlobal(len);
+            try { Marshal.StructureToPtr(e, ptr, false); SetInformationJobObject(job, 9, ptr, (uint)len); }
+            finally { Marshal.FreeHGlobal(ptr); }
+        }
     }
 
     public class Server
@@ -253,17 +265,32 @@ namespace SyHost
         [DllImport("kernel32.dll")] static extern bool SetConsoleCtrlHandler(Handler h, bool add);
         static Handler keep;
         public static Server Current;
+        // playit: SyHost kapanirken hemen kapatilir (yalnizca SyHost acikken calisir)
+        public static Server Playit;
 
         public static void Install()
         {
             keep = t =>
             {
                 if (t == 0 || t == 1) return true; // Ctrl+C / Ctrl+Break: yok say
-                Server s = Current;
-                if (s != null && s.Running) { s.Send("stop"); try { s.P.WaitForExit(25000); } catch { } }
+                SaveAndRelease();
                 return false;
             };
             SetConsoleCtrlHandler(keep, true);
+        }
+
+        // Windows SyHost'u kapatiyor (pencere kapatma, oturum kapanmasi): playit'i kapat, sunucuya "stop" gonder ve
+        // SyHost sonlandirilsa da sunucunun kaydi bitirebilmesi icin onu is nesnesinden serbest birak (C#: CloseGuard.SaveAndRelease)
+        public static void SaveAndRelease()
+        {
+            try { Server p = Playit; if (p != null && p.Running) p.P.Kill(); } catch { }
+            Server s = Current;
+            if (s != null && s.Running)
+            {
+                s.Send("stop");
+                JobGuard.LetChildrenFinish();
+                try { s.P.WaitForExit(25000); } catch { }
+            }
         }
     }
 
@@ -361,11 +388,7 @@ namespace SyHost
         internal static void Toggle() { if (Native.Visible) Native.Hide(); else Native.Show(); }
 
         // Windows kapanirken / oturum kapanirken (WM_ENDSESSION): CloseGuard gibi sunucuyu kaydedip durdur
-        internal static void SaveServer()
-        {
-            Server s = CloseGuard.Current;
-            if (s != null && s.Running) { s.Send("stop"); try { s.P.WaitForExit(25000); } catch { } }
-        }
+        internal static void SaveServer() { CloseGuard.SaveAndRelease(); }
 
         static string Trim(string s) { return s.Length > 63 ? s.Substring(0, 63) : s; }
 

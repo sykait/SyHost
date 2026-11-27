@@ -50,7 +50,7 @@ static class Program
             if (installed && !CanWrite(Path.Combine(root, DataName)))
             {
                 Lang.Code = UiLanguage();
-                Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost.exe'yi yazılabilir bir klasöre taşı (ör. {1}) ve oradan aç.", root, DefaultRoot()), Win.MB_ICONWARNING);
+                Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve gizli Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç.", root, DefaultRoot()), Win.MB_ICONWARNING);
                 return 1;
             }
 

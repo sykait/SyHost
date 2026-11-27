@@ -46,6 +46,13 @@ sealed partial class App
             Directory.CreateDirectory(Data);
             if (!File.Exists(CfgFile)) Json.WriteText(CfgFile, Encoding.UTF8.GetString(Asset("default-settings.json")));
             try { Cfg = Json.ReadSettings(CfgFile); }
+            catch (Exception ex) when (ex is not JsonException && ex is not NotSupportedException && ex is not InvalidOperationException)
+            {
+                // Okunamadı (kilitli, izin yok): bozuk sayılmaz, üzerine yazılmaz; bu oturum varsayılanla açılır
+                Cfg = Json.ParseSettings(Encoding.UTF8.GetString(Asset("default-settings.json")));
+                Cfg.paketlerAyarlandi = true;   // aşağıdaki ilk ayarlama dosyaya yazmaya kalkmasın
+                CfgUnreadable = true;
+            }
             catch
             {
                 // Bozuk ayar dosyası: kenara al, varsayılanla devam et (veri kaybolmasın)
@@ -138,9 +145,13 @@ sealed partial class App
         return v;
     }
 
+    /// <summary>Ayar dosyası açılışta okunamadıysa (kilitli) bu oturumda üzerine yazılmaz.</summary>
+    bool CfgUnreadable;
+
     /// <summary>Ayarları kaydet. Sunucu kök klasörü SyHost klasörünün içindeyse göreli yazılır.</summary>
     public void SaveConfig()
     {
+        if (CfgUnreadable) return;
         string abs = Cfg.sunucuKokKlasoru;
         Cfg.sunucuKokKlasoru = ToStoredPath(abs);
         try { Json.WriteText(CfgFile, Json.WriteSettings(Cfg)); }
@@ -238,7 +249,8 @@ sealed partial class App
                             else if (Screen != "outro") StartOutro();
                             break;
                         case "restart":
-                            if (Screen == "server") { AddLog("panel", Lang.L("Yeniden başlatılıyor...")); StopServer("restart"); }
+                            // Kapatılırken (F10) yeniden başlatma yok: kapanış yarıda kalır, ekran takılırdı
+                            if (Screen == "server" && Mode != "closing") { AddLog("panel", Lang.L("Yeniden başlatılıyor...")); StopServer("restart"); }
                             break;
                     }
                 }

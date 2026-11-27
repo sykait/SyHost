@@ -200,7 +200,7 @@ function Save-Config {
 # Diske ilk yazan Load-Config'ten önce; uyarı Windows'un dilinde.
 if (-not $SetupMode -and -not $TestFrame -and -not (Test-CanWrite $Data)) {
     $LangCode = Get-UiLanguage
-    Show-Alert (L "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost.exe'yi yazılabilir bir klasöre taşı (ör. {1}) ve oradan aç." $AppRoot (Get-DefaultRoot))
+    Show-Alert (L "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve gizli Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç." $AppRoot (Get-DefaultRoot))
     exit 1
 }
 
@@ -209,6 +209,8 @@ Load-Config
 $PackNameKey = @{ dusuk = 'DÜŞÜK'; normal = 'NORMAL'; yuksek = 'YÜKSEK' }
 $PackDescKey = @{ dusuk = 'Ağır bir oyun oynarken. Sistemini en az yoran ayar.'; normal = 'Günlük kullanım. 2-5 kişi için en dengeli ayar.'; yuksek = 'Dev fabrikalar ve hızlı keşif için tam güç.' }
 function PackName([string]$k) { L $PackNameKey[$k] }
+# Öncelik adı: tabloda yoksa boş (C#: SrvPrioText / ViewPrio); eksik "oncelik" çizimi bozmasın
+function PrioText($k) { if ($k -and $PrioTr.ContainsKey([string]$k)) { $PrioTr[[string]$k] } else { $null } }
 function PackDesc([string]$k) { L $PackDescKey[$k] }
 $FriendAddr = if ($HasFriendAddr) { $Cfg.arkadasAdresi } else { (L 'henüz yok') }
 
@@ -217,15 +219,23 @@ $FriendAddr = if ($HasFriendAddr) { $Cfg.arkadasAdresi } else { (L 'henüz yok')
 $Servers = New-Object System.Collections.Generic.List[object]
 function Load-Servers {
     $script:Servers.Clear()
-    if (Test-Path -LiteralPath $ServersFile) {
-        $data = Get-Content -LiteralPath $ServersFile -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($sv in $data) {
-            if ($null -eq $sv) { continue }
-            foreach ($f in 'paket', 'sonAcilis', 'sonBaslatmaSn', 'eklenme') { if ($null -eq $sv.PSObject.Properties[$f]) { $sv | Add-Member -NotePropertyName $f -NotePropertyValue $null -Force } }
-            if (-not $sv.paket) { $sv.paket = 'normal' }
-            if ($null -ne $sv.PSObject.Properties['klasor']) { $sv.klasor = ConvertFrom-StoredPath ([string]$sv.klasor) }
-            $script:Servers.Add($sv)
-        }
+    if (-not (Test-Path -LiteralPath $ServersFile)) { return }
+    try { $data = Get-Content -LiteralPath $ServersFile -Raw -Encoding UTF8 | ConvertFrom-Json }
+    catch {
+        # Bozuk liste: kenara al, boş listeyle devam et (veri kaybolmasın; C# LoadServers gibi)
+        try { Copy-Item -LiteralPath $ServersFile -Destination ($ServersFile + '.bozuk') -Force } catch {}
+        return
+    }
+    foreach ($sv in $data) {
+        if ($sv -isnot [System.Management.Automation.PSCustomObject]) { continue }
+        foreach ($f in 'paket', 'sonAcilis', 'sonBaslatmaSn', 'eklenme') { if ($null -eq $sv.PSObject.Properties[$f]) { $sv | Add-Member -NotePropertyName $f -NotePropertyValue $null -Force } }
+        # Eksik metin alanları boş olsun (C#'ta null): elle düzenlenmiş bir listede ekran çizimi hata vermesin
+        foreach ($f in 'id', 'ad', 'klasor', 'mc', 'loader', 'loaderSurum', 'baslat') { if ($null -eq $sv.PSObject.Properties[$f] -or $null -eq $sv.$f) { $sv | Add-Member -NotePropertyName $f -NotePropertyValue '' -Force } }
+        if (-not $sv.paket) { $sv.paket = 'normal' }
+        # Paket adı küçük harfle ("YUKSEK" yazılmış olsa da; C# da böyle)
+        $pk = ([string]$sv.paket).ToLowerInvariant(); if ($PackKeys -ccontains $pk) { $sv.paket = $pk }
+        $sv.klasor = ConvertFrom-StoredPath ([string]$sv.klasor)
+        $script:Servers.Add($sv)
     }
 }
 function Save-Servers {
@@ -563,6 +573,12 @@ function Fit-V([string]$s, [int]$w) {
     foreach ($ch in $s.ToCharArray()) { $cw = CharW $ch; if ($n + $cw -gt $w) { break }; [void]$sb.Append($ch); $n += $cw }
     [void]$sb.Append(' ', $w - $n); $sb.ToString()
 }
+# Düz metnin sondan en çok w sütunluk kısmı (yazılan komutun görünen yeri; C#: TailByWidth)
+function Tail-ByWidth([string]$s, [int]$w) {
+    $n = 0; $i = $s.Length
+    while ($i -gt 0) { $cw = CharW $s[$i - 1]; if ($n + $cw -gt $w) { break }; $n += $cw; $i-- }
+    $s.Substring($i)
+}
 # Düz metni en çok w sütunluk parçalara böl (geniş karakter 2 sütun; C#: SplitByWidth)
 function Split-ByWidth([string]$s, [int]$w) {
     $out = New-Object System.Collections.Generic.List[string]; $sb = New-Object Text.StringBuilder; $n = 0
@@ -731,7 +747,7 @@ function Save-WinState {
             if ($UiMode -eq 'kucuk') { $Win.kucukX = $rc[0]; $Win.kucukY = $rc[1] } else { $Win.buyukX = $rc[0]; $Win.buyukY = $rc[1] }
         }
         if ($Screen -eq 'server') { $Win.mod = $UiMode }
-        if ($TestFrame) { return }
+        if ($TestFrame -or $SetupMode) { return }   # kurulmadan önce diske bir şey yazılmaz (yandaki ilgisiz bir Data klasörüne de)
         Write-TextFile $WinFile ($Win | ConvertTo-Json)
     } catch {}
 }
@@ -824,7 +840,7 @@ function Set-Pack([string]$name) {
     if ($Cur) { $Cur.paket = $key; Save-Servers }
     $p = $Packs.$key
     Apply-PackLive
-    Add-Log ok ((L "Paket: {0}  ·  RAM {1}-{2} GB  ·  {3} çekirdek  ·  öncelik {4}") -f (PackName $key), $p.ramMin, $p.ramMax, [Math]::Min($p.cekirdek, $Threads), $PrioTr[$p.oncelik])
+    Add-Log ok ((L "Paket: {0}  ·  RAM {1}-{2} GB  ·  {3} çekirdek  ·  öncelik {4}") -f (PackName $key), $p.ramMin, $p.ramMax, [Math]::Min($p.cekirdek, $Threads), (PrioText $p.oncelik))
     if ($S -and $S.Running) {
         if ($p.ramMax -ne $LoadedRamMax) { $script:RamPending = $true; Add-Log panel (L "Çekirdek ve öncelik hemen uygulandı. RAM değişikliği için 'yeniden' yaz.") }
         else { $script:RamPending = $false }
@@ -846,6 +862,7 @@ function Start-Playit {
     if (-not $PlayitExe -or -not (Test-Path -LiteralPath $PlayitSecret)) { $script:HasFriendAddr = $false; return }
     $script:Pl = New-Object SyHost.Server
     try { $Pl.Start($PlayitExe, "--secret-path `"$PlayitSecret`" --socket-path \\.\pipe\syhost-playit --log-path `"$(Join-Path (Split-Path $PlayitSecret) 'playit.log')`"", (Split-Path $PlayitSecret)) } catch {}
+    [SyHost.CloseGuard]::Playit = $Pl
 }
 function Stop-Playit { if ($Pl -and $Pl.Running) { try { $Pl.P.Kill() } catch {} } }
 function PlayitOn { [bool]($Pl -and $Pl.Running) }
@@ -853,12 +870,13 @@ function PlayitOn { [bool]($Pl -and $Pl.Running) }
 # ---------- Sunucu kontrolü ----------
 $JvmBase = '-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1'
 
-function Get-ModCount([string]$dir) { @(Get-ChildItem (Join-Path $dir 'mods') -Filter *.jar -ErrorAction SilentlyContinue).Count }
+# [ ] joker sayılmasın diye -LiteralPath (ör. 'BetterMC[FORGE]' klasörü)
+function Get-ModCount([string]$dir) { @(Get-ChildItem -LiteralPath (Join-Path $dir 'mods') -Filter *.jar -ErrorAction SilentlyContinue).Count }
 
 function Ensure-VoiceHost {
     if (-not $Cfg.sesAdresi -or -not $Cfg.playitKullan) { return }
     $vp = Join-Path $Cur.klasor 'config\voicechat\voicechat-server.properties'
-    if (-not (Test-Path $vp)) { return }
+    if (-not (Test-Path -LiteralPath $vp)) { return }
     $txt = [IO.File]::ReadAllText($vp)
     if ($txt -match '(?m)^voice_host=(.*)$' -and $Matches[1].Trim() -ne $Cfg.sesAdresi) {
         $txt = [regex]::Replace($txt, '(?m)^voice_host=.*$', "voice_host=$($Cfg.sesAdresi)")
@@ -868,13 +886,14 @@ function Ensure-VoiceHost {
 
 function Start-Server {
     if ($S -and $S.Running) { Add-Log panel (L 'Sunucu zaten açık.'); return }
-    if (-not (Test-Path (Join-Path $Cur.klasor 'mods')) -and -not (Test-Path $Cur.klasor)) { Add-Log error (L 'Sunucu klasörü bulunamadı: {0}  (taşındı ya da silindi)' $Cur.klasor); return }
+    $script:StopSentAt = $null   # önceki "stop"un 60 sn sayacı yeni sunucuyu öldürmesin
+    if (-not (Test-Path -LiteralPath (Join-Path $Cur.klasor 'mods')) -and -not (Test-Path -LiteralPath $Cur.klasor)) { Add-Log error (L 'Sunucu klasörü bulunamadı: {0}  (taşındı ya da silindi)' $Cur.klasor); return }
     $other = @(Get-CimInstance Win32_Process -Filter "Name='java.exe'" | Where-Object { $_.CommandLine -match 'nogui' })
     if ($other.Count) { Add-Log error ((L "Başka bir sunucu zaten çalışıyor (PID {0}). Önce onu kapat ya da 'zorla' yaz.") -f $other[0].ProcessId); return }
     $java = Find-Java ([int]$Cur.java)
     if (-not $java) { Add-Log error (L 'Java {0} bulunamadı. Sunucuyu yeniden kurman gerekebilir.' $Cur.java); return }
     $eula = Join-Path $Cur.klasor 'eula.txt'
-    if (-not (Test-Path $eula) -or -not (Select-String -Path $eula -Pattern 'eula=true' -Quiet)) { Set-Content $eula 'eula=true' -Encoding ASCII }
+    if (-not (Test-Path -LiteralPath $eula) -or -not (Select-String -LiteralPath $eula -Pattern 'eula=true' -Quiet)) { Set-Content -LiteralPath $eula 'eula=true' -Encoding ASCII }
     Ensure-VoiceHost
     $p = $Packs.$ActivePack
     $gc = if ($p.ramMax -ge 12) { '-XX:G1NewSizePercent=40 -XX:G1MaxNewSizePercent=50 -XX:G1HeapRegionSize=16M' } else { '-XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M' }
@@ -912,7 +931,7 @@ function Start-Backup {
     } else { Begin-Zip }
 }
 function Begin-Zip {
-    if (-not (Test-Path (Join-Path $Cur.klasor 'world'))) { Add-Log warn (L 'Yedeklenecek dünya henüz yok (sunucu bir kez açılınca oluşur).'); if ($S -and $S.Running) { $S.Send('save-on') }; $script:BackupStage = $null; return }
+    if (-not (Test-Path -LiteralPath (Join-Path $Cur.klasor 'world'))) { Add-Log warn (L 'Yedeklenecek dünya henüz yok (sunucu bir kez açılınca oluşur).'); if ($S -and $S.Running) { $S.Send('save-on') }; $script:BackupStage = $null; return }
     $script:BackupTask = [SyHost.Backup]::ZipAsync((Join-Path $Cur.klasor 'world'), $BackupDst)
     $script:BackupStage = 'zipping'
     Add-Log panel (L 'Yedek: sıkıştırılıyor (oyun devam edebilir)...')
@@ -923,11 +942,11 @@ function Check-Backup {
         if ($S -and $S.Running) { $S.Send('save-on') }
         if ($BackupTask.IsFaulted) { Add-Log error ((L "Yedek alınamadı: ") + $BackupTask.Exception.InnerException.Message) }
         else {
-            $mb = [Math]::Round((Get-Item $BackupDst).Length / 1MB)
+            $mb = [Math]::Round((Get-Item -LiteralPath $BackupDst).Length / 1MB)
             Add-Log ok ((L "Yedek alındı: {0}  ({1} MB)") -f (Split-Path $BackupDst -Leaf), $mb)
             Refresh-FolderLook   # ilk yedekte açılan yedekler klasörü de simgesini ve adını alsın
             $keep = [int]$Cfg.saklanacakYedek
-            if ($keep -gt 0) { Get-ChildItem (Split-Path $BackupDst) -Filter 'world-*.zip' | Sort-Object Name -Descending | Select-Object -Skip $keep | Remove-Item -Force -ErrorAction SilentlyContinue }
+            if ($keep -gt 0) { Get-ChildItem -LiteralPath (Split-Path $BackupDst) -Filter 'world-*.zip' | Sort-Object Name -Descending | Select-Object -Skip $keep | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue } }
         }
         $script:BackupStage = $null; $script:BackupTask = $null
     }
@@ -972,7 +991,8 @@ function Add-ServerLine([string]$raw) {
         $msg = (L 'Çevrimiçi: {0}/{1}' $Matches[1] $Matches[2]) + $(if ($Players.Count) { "  ·  " + ($Players -join ', ') } else { '' }); $kind = 'ok'
     }
     elseif ($msg -match '^Saved the game' -and $BackupStage -eq 'saving') { Add-Log info $msg $t $false; Begin-Zip; return }
-    elseif ($msg -match '^Stopping the server') { $script:Status = 'DURUYOR' }
+    # Sunucu kendisi kapanıyor (oyun içinden /stop ya da konsola yazılan stop): çökme sayılmaz, yeniden başlatılmaz
+    elseif ($msg -match '^Stopping the server') { $script:Status = 'DURUYOR'; $script:StopRequested = $true }
     $vis = ($kind -in 'join', 'leave', 'chat', 'ok') -or ($kind -eq 'error' -and $Status -eq 'ACIK') -or ((Get-Date) -lt $ReplyUntil)
     Add-Log $kind $msg $t $vis
 }
@@ -1057,8 +1077,16 @@ function Safe-FolderName([string]$name) {
     $base = if (-not $root) { $n } elseif ($root.EndsWith('\') -or $root.EndsWith('/')) { $root + $n } else { $root + '\' + $n }
     $p = $base; $i = 2
     # Test-Path [ ] karakterlerini joker sayar: 'x[1]' klasörü varken boş sanılır, kurulum başka sunucunun klasörüne yazardı
-    while ([IO.File]::Exists($p) -or [IO.Directory]::Exists($p)) { $p = "$base-$i"; $i++ }
+    # SyHost klasörünün kendisi sunucu klasörü seçildiyse App (Terminal sürümünün uygulaması) adı kullanılmaz
+    while ([IO.File]::Exists($p) -or [IO.Directory]::Exists($p) -or (Test-ReservedServerDir $p)) { $p = "$base-$i"; $i++ }
     $p
+}
+function Test-ReservedServerDir([string]$p) {
+    try {
+        $parent = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($p)).TrimEnd('\')
+        if (-not [string]::Equals($parent, $AppRoot.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) { return $false }
+        [IO.Path]::GetFileName($p) -in 'App', 'App.new', 'App.old'
+    } catch { $false }
 }
 
 # ---------- Kurulum: indirme ve yükleyici yardımcıları ----------
@@ -2085,8 +2113,8 @@ function Render-Splash([int]$W, [int]$H) {
     $tag = (L 'modlu Minecraft sunucu merkezi')
     $typed = $tag.Substring(0, [int][Math]::Min($tag.Length, [Math]::Max(0, ($el - 1.0) * 34)))
     $caret = if ($el -gt 0.9 -and ($typed.Length -lt $tag.Length -or [int]((T) * 3) % 2 -eq 0)) { $c.brass + '▌' } else { ' ' }
-    $tc = [int][Math]::Max(0, ($W - $tag.Length) / 2)
-    $items[$top + 7] = @(($c.text + $typed + $caret + (' ' * ($tag.Length - $typed.Length))), $tc)
+    $tc = [int][Math]::Max(0, ($W - (VLen $tag)) / 2)   # ekran genişliğine göre (Japonca 2 sütun)
+    $items[$top + 7] = @(($c.text + $typed + $caret + (' ' * ((VLen $tag) - (VLen $typed)))), $tc)
     $pct = [Math]::Min(100, $el / ($SplashLen - 0.2) * 100)
     $items[$top + 9] = @((BarP $pct 30), [int][Math]::Max(0, ($W - 30) / 2))
     $word = if ($pct -lt 100) { (L 'hazırlanıyor') } else { (L 'hazır       ') }
@@ -2131,7 +2159,7 @@ function Render-Outro([int]$W, [int]$H) {
     $msg = (L 'görüşürüz')
     $fade = [Math]::Min(1.0, [Math]::Max(0.0, ($el - 0.9) / 0.7))
     $base = [int](240 - 200 * $fade)
-    $rows.Add((' ' * [int][Math]::Max(0, ($W - $msg.Length) / 2)) + (Shimmer $msg @($base, $base, $base) @(255, [int](70 + 150 * $fade), [int](80 + 140 * $fade)) 14 3))
+    $rows.Add((' ' * [int][Math]::Max(0, ($W - (VLen $msg)) / 2)) + (Shimmer $msg @($base, $base, $base) @(255, [int](70 + 150 * $fade), [int](80 + 140 * $fade)) 14 3))
     $rows.Add('')
     $rows.Add((' ' * [int][Math]::Max(0, ($W - 22) / 2)) + $c.dark + (L 'sunucular kapalı · ') + $c.copper + '■' + $R)
     , $rows
@@ -2188,7 +2216,7 @@ function Render-Home([int]$W, [int]$H) {
         $sv = $Servers[$sel]
         if (-not $WorldSizeCache.ContainsKey($sv.id)) {
             $wd = Join-Path $sv.klasor 'world'
-            $WorldSizeCache[$sv.id] = if (Test-Path $wd) { '{0:0} MB' -f ((Get-ChildItem $wd -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB) } else { (L 'henüz oluşmadı') }
+            $WorldSizeCache[$sv.id] = if (Test-Path -LiteralPath $wd) { '{0:0} MB' -f ((Get-ChildItem -LiteralPath $wd -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB) } else { (L 'henüz oluşmadı') }
         }
         $pk = if ($PackKeys -contains $sv.paket) { $sv.paket } else { 'normal' }
         foreach ($l in (Card (Up $sv.ad) @(
@@ -2372,7 +2400,7 @@ function Render-Header([int]$W) {
     $left = @(
         ($look[0] + $Bo + "$dot " + $look[1] + $R + '     ' + $c.dim + (L 'süre ') + $R + $c.text + $up + $R),
         ($c.soft + (L 'Oyuncular ') + $R + $Bo + $c.text + "$($Players.Count)/$MaxPlayers" + $R + '   ' + $plist + $R),
-        ($c.soft + (L 'Paket     ') + $R + $Bo + $PackColor[$ActivePack] + (PackName $ActivePack) + $R + '   ' + $c.dim + (L 'öncelik ') + $R + $c.text + $PrioTr[$p.oncelik] + $R + $(if ($RamPending) { '   ' + $c.yellow + (L "! RAM için 'yeniden'") + $R } else { '' }))
+        ($c.soft + (L 'Paket     ') + $R + $Bo + $PackColor[$ActivePack] + (PackName $ActivePack) + $R + '   ' + $c.dim + (L 'öncelik ') + $R + $c.text + (PrioText $p.oncelik) + $R + $(if ($RamPending) { '   ' + $c.yellow + (L "! RAM için 'yeniden'") + $R } else { '' }))
     )
     $barW = [Math]::Max(8, $rw - 40)
     $running = $S -and $S.Running
@@ -2412,7 +2440,7 @@ function Render-Log([int]$W, [int]$H) {
         }
         $idx--
     }
-    while ($rows.Count -gt $H) { $rows.RemoveAt(0) }
+    while ($rows.Count -gt $H -and $rows.Count -gt 0) { $rows.RemoveAt(0) }
     if ($rows.Count -eq 0) { $rows.Add($c.dim + (L '  Henüz önemli bir olay yok. Tüm teknik kayıtları görmek için F5.') + $R) }
     while ($rows.Count -lt $H) { $rows.Insert(0, '') }
     , $rows
@@ -2458,17 +2486,17 @@ function Render-Packs([int]$W, [int]$H) {
         $body = New-Object System.Collections.Generic.List[string]
         $body.Add('')
         $body.Add($Bo + $PackColor[$key] + "$($i + 1)  " + (PackName $key) + $R)
-        $body.Add($c.dark + ('─' * [Math]::Min(18, $inner)) + $R)
+        $body.Add($c.dark + ('─' * [Math]::Max(0, [Math]::Min(18, $inner))) + $R)
         $body.Add($c.soft + (L 'RAM       ') + $R + $c.text + "$($p.ramMin)-$($p.ramMax) GB" + $R)
         $body.Add($c.soft + (L 'Çekirdek  ') + $R + $c.text + "$([Math]::Min($p.cekirdek,$Threads)) / $Threads" + $R)
-        $body.Add($c.soft + (L 'Öncelik   ') + $R + $c.text + $PrioTr[$p.oncelik] + $R)
+        $body.Add($c.soft + (L 'Öncelik   ') + $R + $c.text + (PrioText $p.oncelik) + $R)
         $body.Add('')
         foreach ($l in (WordWrap (PackDesc $key) $inner)) { $body.Add($c.dim + $l + $R) }
         while ($body.Count -lt 11) { $body.Add('') }
         $body.Add($(if ($act) { $c.green + $Bo + (L '● ŞU AN AKTİF') + $R } elseif ($sel) { $c.brass + (L 'Enter ile seç') + $R } else { '' }))
-        $card = @($bc + $tl + ($hz * ($cw - 2)) + $tr + $R)
+        $card = @($bc + $tl + ($hz * [Math]::Max(0, $cw - 2)) + $tr + $R)
         foreach ($l in $body) { $card += $bc + $vt + $R + ' ' + (PadV $l $inner) + ' ' + $bc + $vt + $R }
-        $card += $bc + $bl + ($hz * ($cw - 2)) + $br + $R
+        $card += $bc + $bl + ($hz * [Math]::Max(0, $cw - 2)) + $br + $R
         $cards += , $card
     }
     $rows.Add('')
@@ -2477,7 +2505,7 @@ function Render-Packs([int]$W, [int]$H) {
     for ($ri = 0; $ri -lt $cards[0].Count; $ri++) { $rows.Add('  ' + $cards[0][$ri] + ' ' + $cards[1][$ri] + ' ' + $cards[2][$ri]) }
     $rows.Add('')
     $rows.Add('  ' + (Key '← →' (L 'seç')) + (Key '1 2 3' (L 'hızlı seçim')) + (Key 'Enter' (L 'uygula')) + (Key 'Esc' (L 'vazgeç')))
-    while ($rows.Count -gt $H) { $rows.RemoveAt($rows.Count - 1) }
+    while ($rows.Count -gt $H -and $rows.Count -gt 0) { $rows.RemoveAt($rows.Count - 1) }
     while ($rows.Count -lt $H) { $rows.Add('') }
     , $rows
 }
@@ -2494,7 +2522,7 @@ function Render-Confirm([int]$W, [int]$H) {
     $rows.Add('  ' + (Pill '190;28;42' '255;255;255' 'Enter') + $c.text + (L ' Kapat, ana menüye dön') + $R)
     $rows.Add('  ' + (Pill '200;30;45' '255;255;255' '  K  ') + $c.text + (L " Kapat ve SyHost'u tamamen kapat") + $R)
     $rows.Add('  ' + (Pill '50;50;56' '235;235;235' ' Esc ') + $c.text + (L ' Vazgeç') + $R)
-    while ($rows.Count -gt $H) { $rows.RemoveAt($rows.Count - 1) }
+    while ($rows.Count -gt $H -and $rows.Count -gt 0) { $rows.RemoveAt($rows.Count - 1) }
     while ($rows.Count -lt $H) { $rows.Add('') }
     , $rows
 }
@@ -2517,7 +2545,7 @@ function Render-Closing([int]$W, [int]$H) {
     $rows.Add('')
     if ($FinishAt) { $rows.Add('  ' + $c.green + $Bo + (L 'Her şey kaydedildi.') + $R) }
     else { $rows.Add('  ' + $c.dim + (L 'Bekle, kendisi bitecek. 60 sn içinde kapanmazsa zorla kapatılır.') + $R) }
-    while ($rows.Count -gt $H) { $rows.RemoveAt($rows.Count - 1) }
+    while ($rows.Count -gt $H -and $rows.Count -gt 0) { $rows.RemoveAt($rows.Count - 1) }
     while ($rows.Count -lt $H) { $rows.Add('') }
     , $rows
 }
@@ -2707,10 +2735,10 @@ function Build-Frame([int]$W, [int]$H) {
             $promptCol = if ($S -and $S.Running) { $c.green } else { $c.red }
             $prompt = ' ' + $promptCol + $Bo + '❯' + $R + ' '
             $maxIn = $W - 4
-            $shown = if ($InputText.Length -gt $maxIn) { $InputText.Substring($InputText.Length - $maxIn) } else { $InputText }
+            $shown = Tail-ByWidth $InputText $maxIn   # sığmayan baş kısım görünmez (geniş karakter 2 sütun)
             if ($Mode -eq 'closing') { $rows.Add('') }
             elseif ($shown.Length -eq 0) { $rows.Add($prompt + $c.dark + (L 'komut yaz... (F1 yardım)') + $R) } else { $rows.Add($prompt + $c.text + $shown + $R) }
-            $showCursor = ($Mode -ne 'closing'); $cursorCol = 4 + $shown.Length
+            $showCursor = ($Mode -ne 'closing'); $cursorCol = 4 + (VLen $shown)
         }
     }
     $newFrame = New-Object string[] $H
@@ -2730,7 +2758,8 @@ function Render {
     [void]$sb.Append("$E[?25l")
     for ($i = 0; $i -lt $H; $i++) {
         $line = $newFrame[$i]
-        if ($i -ge $PrevFrame.Count -or $PrevFrame[$i] -ne $line) { [void]$sb.Append("$E[$($i + 1);1H").Append($line) }
+        # -cne: yalnızca harf büyüklüğü değişen satır da yeniden çizilsin (-ne büyük/küçük harfe bakmaz)
+        if ($i -ge $PrevFrame.Count -or $PrevFrame[$i] -cne $line) { [void]$sb.Append("$E[$($i + 1);1H").Append($line) }
     }
     $script:PrevFrame = $newFrame
     if ($fr.ShowCursor) { [void]$sb.Append("$E[$H;$($fr.CursorCol)H$E[?25h") }
@@ -3009,7 +3038,8 @@ try {
                     elseif ($Screen -eq 'wizard' -and $Wiz -and $Wiz.Step -eq 'kurulum') { [SyHost.Tray]::Balloon((L 'Kurulum sürüyor'), (L 'Kurulum bitince kapatabilirsin.')) }
                     elseif ($Screen -ne 'outro') { Start-Outro }
                 }
-                'restart' { if ($Screen -eq 'server') { Add-Log panel (L 'Yeniden başlatılıyor...'); Stop-Server 'restart' } }
+                # Kapatılırken (F10) yeniden başlatma yok: kapanış yarıda kalır, ekran takılırdı
+                'restart' { if ($Screen -eq 'server' -and $Mode -ne 'closing') { Add-Log panel (L 'Yeniden başlatılıyor...'); Stop-Server 'restart' } }
             }
         }
 

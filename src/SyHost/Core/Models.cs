@@ -122,7 +122,23 @@ static class Json
     public static string WriteWin(WinState w) => JsonSerializer.Serialize(w, Ctx.WinState);
 
     /// <summary>Dosyayı oku (BOM'lu ya da BOM'suz UTF-8).</summary>
-    public static string ReadText(string path) => File.ReadAllText(path, Encoding.UTF8);
+    /// <summary>
+    /// Dosyayı oku. Başka bir program (düzenleyici, eşitleme, virüs tarayıcı) açık tutsa da okunur
+    /// (PowerShell'in Get-Content'i gibi paylaşımlı açar); bir anlık kilitte birkaç kez dener.
+    /// </summary>
+    public static string ReadText(string path)
+    {
+        for (int i = 0; ; i++)
+        {
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var sr = new StreamReader(fs, Encoding.UTF8, true);
+                return sr.ReadToEnd();
+            }
+            catch (IOException) when (i < 4) { Thread.Sleep(50); }
+        }
+    }
 
     /// <summary>Dosyayı güvenli yaz: önce geçici dosyaya, sonra yerine taşı (yarım kalan dosya olmaz).</summary>
     public static void WriteText(string path, string text)

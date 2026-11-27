@@ -90,6 +90,11 @@ static class Payload
         string app = Path.Combine(root, AppName), fresh = app + ".new", old = app + ".old";
         using (FolderLock.Take(root))
         {
+            // Yalnızca SyHost'un kendi uygulama klasörlerine dokunulur: aynı adda bir kullanıcı ya da sunucu klasörü
+            // (C# sürümünde sunucu klasörü SyHost klasörünün kendisi seçildiyse olabilir) asla taşınmaz, silinmez
+            foreach (string d in new[] { app, fresh, old })
+                if (Directory.Exists(d) && !IsOurs(d))
+                    throw new IOException("\"" + d + "\" is not SyHost's app folder. Rename or move it, then open SyHost again.");
             if (IsCurrent(app)) TestLog.Write("app current " + app);
             else
             {
@@ -125,6 +130,23 @@ static class Payload
             TryDeleteDir(fresh);
         }
         return app;
+    }
+
+    /// <summary>SyHost'un uygulama klasörü mü (sürüm işareti ve SyHost.ps1 var; yarım kalmış bir çıkarma da sayılır)?</summary>
+    static bool IsOurs(string dir)
+    {
+        try
+        {
+            if (File.Exists(Path.Combine(dir, MarkerName)) && File.Exists(Path.Combine(dir, "src", "SyHost.ps1"))) return true;
+            // yarıda kalmış App.new: yalnızca bizim çıkardığımız dosyalar (src, config, fonts, icons, bin) olabilir
+            foreach (string e in Directory.EnumerateFileSystemEntries(dir))
+            {
+                string n = Path.GetFileName(e);
+                if (!Ps.In(n, "src", "config", "fonts", "icons", "bin", "desktop.ini", MarkerName)) return false;
+            }
+            return true;
+        }
+        catch { return false; }
     }
 
     /// <summary>Kurulum ekranı için %TEMP%'te yeni bir klasöre çıkar. Dispose klasörü siler.</summary>

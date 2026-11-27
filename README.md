@@ -69,11 +69,11 @@ Get it from the **[Releases page](https://github.com/sykait/SyHost/releases/late
 | File | Who it's for |
 | --- | --- |
 | **`SyHost-1.0.0.exe`** | **Everyone (recommended).** The main edition, written in C#. |
-| `SyHost-1.0.0-Terminal.exe` | The same app as a PowerShell edition (it runs on the Windows PowerShell that comes with Windows), for people who like to read the scripts. |
+| `SyHost-Terminal-1.0.0.exe` | The same app as a PowerShell edition (it runs on the Windows PowerShell that comes with Windows), for people who like to read the scripts. |
 
 Both editions look and work the same; only the version line on screen says `C#` or `Terminal`. They keep the same
 files in the same folder, so you can switch later. Each one is a single file and there is nothing else to download.
-`SHA256SUMS.txt` on the same page lists the checksums of both.
+The SHA-256 checksums of both are at the end of the release notes.
 
 **You need:** Windows 10 or 11 and an internet connection for the downloads. Modded servers like memory:
 8 GB of RAM or more is recommended.

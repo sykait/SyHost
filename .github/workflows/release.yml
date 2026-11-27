@@ -1,4 +1,4 @@
-# SyHost - "v1.0.0" gibi bir etiket push edilince: derle, test et, Releases sayfasına koy
+# SyHost - "v1.0.0" gibi bir etiket push edilince: derle, test et, Releases sayfasina koy
 name: Release
 
 on:
@@ -17,7 +17,10 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
+      # Elle baslatilinca (workflow_dispatch) yazilan etiketin kendisi derlenir, baslatildigi dal degil
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -47,8 +50,14 @@ jobs:
           Copy-Item dist\SyHost.exe "out\SyHost-$ver.exe"
           # Terminal surumu de her surumde cikar: eksikse yayinlama durur
           if (-not (Test-Path dist\SyHost-Terminal.exe)) { throw 'dist\SyHost-Terminal.exe is missing' }
-          Copy-Item dist\SyHost-Terminal.exe "out\SyHost-$ver-Terminal.exe"
-          Get-ChildItem out\*.exe | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Set-Content out\SHA256SUMS.txt -Encoding ASCII
+          # GitHub dosyalari adina gore siralar: "SyHost-1.0.0.exe" (ana surum) "SyHost-Terminal-1.0.0.exe"den once gelir
+          Copy-Item dist\SyHost-Terminal.exe "out\SyHost-Terminal-$ver.exe"
+          # Saglama toplamlari ayri bir dosya degil, surum notlarinin sonunda (indirilecek yalnizca iki dosya olsun)
+          $sums = Get-ChildItem out\*.exe | Sort-Object Name | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+          $notes = "docs\releases\$ver.md"
+          $body = if (Test-Path $notes) { [IO.File]::ReadAllText((Resolve-Path $notes), [Text.Encoding]::UTF8) } else { '' }
+          $body = $body.TrimEnd() + "`n`n### SHA-256`n`n``````text`n" + ($sums -join "`n") + "`n```````n"
+          [IO.File]::WriteAllText((Join-Path (Get-Location) 'out\notes.md'), $body, (New-Object Text.UTF8Encoding $false))
           "tag=$tag" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
           "ver=$ver" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
 
@@ -58,9 +67,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ steps.files.outputs.tag }}'; $ver = '${{ steps.files.outputs.ver }}'
-          $notes = "docs\releases\$ver.md"
-          $assets = @("out\SyHost-$ver.exe", "out\SyHost-$ver-Terminal.exe", 'out\SHA256SUMS.txt')
-          $ghArgs = @('release', 'create', $tag) + $assets + @('--title', "SyHost $ver", '--verify-tag')
-          if (Test-Path $notes) { $ghArgs += @('--notes-file', $notes) } else { $ghArgs += '--generate-notes' }
+          $assets = @("out\SyHost-$ver.exe", "out\SyHost-Terminal-$ver.exe")
+          $ghArgs = @('release', 'create', $tag) + $assets + @('--title', "SyHost $ver", '--verify-tag', '--notes-file', 'out\notes.md')
           & gh @ghArgs
           if ($LASTEXITCODE) { exit 1 }

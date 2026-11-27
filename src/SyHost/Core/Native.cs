@@ -262,6 +262,21 @@ static unsafe partial class JobGuard
             AssignProcessToJobObject(job, p.Handle);
         }
     }
+
+    /// <summary>
+    /// Pencere görev çubuğundan kapatılırken ya da oturum kapanırken Windows SyHost'u birkaç saniyede sonlandırır;
+    /// o an "kapanınca öldür" kuralı sunucuyu dünyayı kaydederken öldürürdü. Sunucuya "stop" gönderildikten sonra
+    /// kural kaldırılır: sunucu kaydı kendisi bitirip kapanır.
+    /// </summary>
+    public static void LetChildrenFinish()
+    {
+        lock (gate)
+        {
+            if (job == 0) return;
+            var e = new EXT();   // LimitFlags = 0: iş kapanınca süreçler yaşamaya devam eder
+            SetInformationJobObject(job, 9, &e, (uint)sizeof(EXT));
+        }
+    }
 }
 
 /// <summary>Sunucu (ya da playit) süreci: çıktısını kuyruğa yazar, komut gönderir.</summary>
@@ -321,6 +336,8 @@ static unsafe partial class CloseGuard
 {
     [LibraryImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool SetConsoleCtrlHandler(delegate* unmanaged<uint, int> h, [MarshalAs(UnmanagedType.Bool)] bool add);
     public static volatile ServerProcess Current;
+    /// <summary>playit: SyHost kapanırken hemen kapatılır (yalnızca SyHost açıkken çalışır).</summary>
+    public static volatile ServerProcess Playit;
 
     public static void Install() => SetConsoleCtrlHandler(&Handler, true);
 
@@ -328,9 +345,24 @@ static unsafe partial class CloseGuard
     static int Handler(uint t)
     {
         if (t == 0 || t == 1) return 1; // Ctrl+C / Ctrl+Break: yok say
-        var s = Current;
-        if (s != null && s.Running) { s.Send("stop"); try { s.P.WaitForExit(25000); } catch { } }
+        SaveAndRelease();
         return 0;
+    }
+
+    /// <summary>
+    /// Windows SyHost'u kapatıyor (pencere kapatma, oturum kapanması): playit'i kapat, sunucuya "stop" gönder ve
+    /// SyHost sonlandırılsa da sunucunun kaydı bitirebilmesi için onu iş nesnesinden serbest bırak.
+    /// </summary>
+    public static void SaveAndRelease()
+    {
+        try { var p = Playit; if (p != null && p.Running) p.P.Kill(); } catch { }
+        var s = Current;
+        if (s != null && s.Running)
+        {
+            s.Send("stop");
+            JobGuard.LetChildrenFinish();
+            try { s.P.WaitForExit(25000); } catch { }
+        }
     }
 }
 

@@ -499,15 +499,7 @@ static unsafe partial class Tray
     // Windows kapanırken / oturum kapanırken: user32 kullanan konsol programına CTRL_SHUTDOWN_EVENT
     // gelmez (CloseGuard çalışmaz), onun yerine gizli pencereye WM_ENDSESSION gelir.
     // CloseGuard ile aynı işi yap: sunucuyu kaydedip durdur, kapanmasını bekle.
-    static void SaveServer()
-    {
-        var s = CloseGuard.Current;
-        if (s != null && s.Running)
-        {
-            s.Send("stop");
-            try { s.P.WaitForExit(25000); } catch { }
-        }
-    }
+    static void SaveServer() => CloseGuard.SaveAndRelease();
 }
 
 static partial class Lang
