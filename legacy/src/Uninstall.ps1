@@ -133,8 +133,10 @@ function UnInside([string]$path, [string]$root) {
     } catch { $false }
 }
 # Kayıtlı bir sunucu bu klasörün içinde mi? (öyleyse klasör kaldırılmaya önerilmez)
+# Not: listeler @(...) içine alınmaz: Windows PowerShell 5.1.26100'de @($x), $x bir List[object] ise
+# "Argument types do not match" hatası veriyor (List[string], ArrayList ve dizilerde sorun yok).
 function UnHoldsServer($servers, [string]$dir) {
-    foreach ($sv in @($servers)) { $k = [string]$sv.klasor; if ($k -and (UnInside $k $dir)) { return $true } }
+    foreach ($sv in $servers) { $k = [string]$sv.klasor; if ($k -and (UnInside $k $dir)) { return $true } }
     $false
 }
 
@@ -257,7 +259,7 @@ function UnFindMsi([string[]]$prefixes) {
 
 # Seçili adımları sırayla çalıştır (C#: Uninstall.RunSelected; arka planda Start-UninstallJob çağırır)
 function Invoke-UninstallItems($items) {
-    foreach ($it in @($items)) {
+    foreach ($it in $items) {   # @($items) değil: bkz. UnHoldsServer
         if (-not $it.On -or $it.Key -ceq 'klasor') { $it.State = $(if ($it.On) { 2 } else { 4 }); continue }
         $it.State = 1
         try {
