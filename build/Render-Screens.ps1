@@ -486,7 +486,7 @@ $CellH = [int][Math]::Round(16 * $Scale)
 $Painter = New-Object SyHostScreens.Painter($FontRegular, $FontBold, $monoChars, [double]$reg.Advance, $JpFamily, $CellH)
 $Icon = $null
 if (-not $NoFrame) {
-    $isz = [int][Math]::Round(16 * $CellH / 16.0)
+    $isz = $CellH   # %100 ölçekte 16 piksellik simge, hücre yüksekliğiyle aynı ölçekte büyür
     $ico = New-Object System.Drawing.Icon($IconFile, $isz, $isz)
     $Icon = $ico.ToBitmap(); $ico.Dispose()
 }
