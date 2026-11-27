@@ -187,6 +187,7 @@ sealed partial class App
             ["panel"] = ("SYHOST", c.brass, c.brass), ["ok"] = ("SYHOST", c.green, Rgb(187, 247, 208)), ["join"] = (Lang.L("GİRİŞ"), c.green, c.green),
             ["leave"] = (Lang.L("ÇIKIŞ"), c.orange, c.orange), ["chat"] = (Lang.L("SOHBET"), c.cyan, c.cyan), ["cmd"] = (Lang.L("KOMUT"), c.violet, c.violet),
         };
+        BadgeW = Math.Max(6, Badge.Values.Max(b => VLen(b.Label)));
         Builtins = Lang.Code == "tr" ? BuiltinsTr : BuiltinsEn;
     }
 

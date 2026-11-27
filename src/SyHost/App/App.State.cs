@@ -170,6 +170,8 @@ sealed partial class App
     // ---------- Sunucu ekranı ----------
     Dictionary<int, string> StageNames;
     Dictionary<string, (string Label, string C1, string C2)> Badge;
+    /// <summary>Konsoldaki rozet sütununun genişliği: dilin en geniş rozeti, en az 6 (Japonca 8).</summary>
+    int BadgeW = 6;
     static readonly string[] BuiltinsTr = { "yardim", "baslat", "durdur", "yeniden", "paket", "yedek", "oyuncular", "adres", "kopyala", "gizle", "kucuk", "buyuk", "ustte", "detay", "sade", "temizle", "klasor", "zorla", "menu", "cikis" };
     static readonly string[] BuiltinsEn = { "help", "start", "stop", "restart", "pack", "backup", "players", "address", "copy", "hide", "mini", "full", "pin", "detail", "simple", "clear", "folder", "force", "menu", "exit" };
     string[] Builtins;

@@ -27,7 +27,13 @@ static unsafe partial class Portable
     }
 
     /// <summary>Bu klasörde kurulu bir SyHost var mı (Data klasörü)?</summary>
-    public static bool IsInstalled(string root) => Directory.Exists(Path.Combine(root, DataName));
+    /// <remarks>Yalnızca "Data" klasörü yetmez: ilgisiz bir Data klasörü olan her yer kurulu sayılırdı
+    /// (ve o klasör gizlenirdi). SyHost'un kendi dosyalarından biri aranır.</remarks>
+    public static bool IsInstalled(string root)
+    {
+        try { string d = Path.Combine(root, DataName); return File.Exists(Path.Combine(d, "ayarlar.json")) || File.Exists(Path.Combine(d, "sunucular.json")); }
+        catch { return false; }
+    }
 
     /// <summary>Windows'un dili: Türkçe ve Japonca dışındakiler için İngilizce.</summary>
     public static string UiLanguage()
@@ -144,7 +150,8 @@ static unsafe partial class Portable
     {
         string tmp = target + ".yeni";
         File.Copy(source, tmp, true);
-        File.Move(tmp, target, true);
+        try { File.Move(tmp, target, true); }
+        catch { try { File.Delete(tmp); } catch { } throw; }   // hedef açıksa yanında yarım kopya kalmasın
     }
 
     public static void HideDir(string dir)

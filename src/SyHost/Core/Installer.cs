@@ -186,7 +186,7 @@ static class Installer
         }
         catch (Exception ex)
         {
-            sync.Error = ex.Message;
+            sync.Error = string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message;   // boş hata metni kurulumu başarılı gibi gösterirdi
             try { sync.Steps[cur].S = 3; } catch { }
         }
         finally

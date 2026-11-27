@@ -171,7 +171,7 @@ static unsafe partial class Shortcuts
                 if (p == null || !p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(p)) continue;
                 if (string.Equals(Path.GetFullPath(p), Path.GetFullPath(exe), StringComparison.OrdinalIgnoreCase)) continue;
                 string root = Path.GetDirectoryName(p);
-                if (Directory.Exists(Path.Combine(root, "Data"))) return root;
+                if (Portable.IsInstalled(root)) return root;
             }
             catch { }
         }

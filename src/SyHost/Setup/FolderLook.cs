@@ -73,7 +73,7 @@ static partial class FolderLook
             }
             File.WriteAllText(ini, text, Encoding.Unicode);   // UTF-16 + BOM: Japonca adlar için şart
             EnsureAttributes(dir, ini);
-            SHChangeNotify(0x00001000, 0x0005 | 0x1000, dir, 0);   // SHCNE_UPDATEDIR, SHCNF_PATHW | SHCNF_FLUSHNOWAIT
+            SHChangeNotify(0x00001000, 0x0005 | 0x1000, dir, 0);   // SHCNE_UPDATEDIR, SHCNF_PATHW | SHCNF_FLUSH
         }
         catch { }
     }

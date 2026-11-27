@@ -42,7 +42,7 @@ static class Migration
             string note = Path.Combine(LegacyDir(), NoteName);
             if (!File.Exists(note)) return null;
             foreach (string line in File.ReadAllLines(note, Encoding.UTF8))
-                if (line.StartsWith("path=", StringComparison.Ordinal)) return line.Substring(5).Trim();
+                if (line.StartsWith("path=", StringComparison.Ordinal)) { string p = line.Substring(5).Trim(); return p.Length > 0 ? p : "?"; }   // boş yol: bilinmiyor (yoksa GetFullPath("") açılışta çökerdi)
         }
         catch { }
         return "?";

@@ -30,7 +30,7 @@ function Get-DefaultRoot {
 }
 
 # Bu klasörde kurulu bir SyHost var mı (Data klasörü)?
-function Test-Installed([string]$root) { try { [IO.Directory]::Exists([IO.Path]::Combine($root, 'Data')) } catch { $false } }
+function Test-Installed([string]$root) { try { $d = [IO.Path]::Combine($root, 'Data'); [IO.File]::Exists([IO.Path]::Combine($d, 'ayarlar.json')) -or [IO.File]::Exists([IO.Path]::Combine($d, 'sunucular.json')) } catch { $false } }
 
 # Windows'un dili: Türkçe ve Japonca dışındakiler için İngilizce
 function Get-UiLanguage {
@@ -179,6 +179,14 @@ function Get-MovedTo {
 
 # Eski verileri Data klasörüne kopyala. $lang: ilk açılışta seçilen dil (ayarlara yazılır).
 # Eski klasöre taşındığını anlatan not bırakılır. Sonuç: Servers (sunucu sayısı), Playit (anahtar geldi mi), Copied (dosyalar).
+# 0.5.0'ın varsayılanı mı: boş ya da %USERPROFILE%\SyHost Sunuculari (açılmış hâli de). C#: Migration.IsOldDefaultRoot
+function Test-OldDefaultRoot([string]$v) {
+    if ([string]::IsNullOrWhiteSpace($v)) { return $true }
+    $a = [Environment]::ExpandEnvironmentVariables($v.Trim()).TrimEnd('\')
+    $b = [Environment]::ExpandEnvironmentVariables('%USERPROFILE%\SyHost Sunuculari')
+    [string]::Equals($a, $b, [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Copy-LegacyData([string]$data, [string]$root, [string]$lang) {
     $src = Get-LegacyDir
     $copied = New-Object System.Collections.Generic.List[string]
@@ -197,6 +205,10 @@ function Copy-LegacyData([string]$data, [string]$root, [string]$lang) {
             if ($s -isnot [System.Management.Automation.PSCustomObject]) { throw 'ayar dosyası bir nesne değil' }
             if ($lang) { $s | Add-Member -NotePropertyName dil -NotePropertyValue $lang -Force }
             if ($null -eq $s.PSObject.Properties['kurulumTamam'] -or $null -eq $s.kurulumTamam) { $s | Add-Member -NotePropertyName kurulumTamam -NotePropertyValue $false -Force }
+            # 0.5.0'ın varsayılan sunucu yeri taşınabilir klasöre çevrilir: yeni sunucular SyHost klasörünün
+            # içine kurulsun. Kullanıcının kendi seçtiği yer aynen kalır; var olan sunucular yerinden oynamaz.
+            $old = if ($null -ne $s.PSObject.Properties['sunucuKokKlasoru']) { [string]$s.sunucuKokKlasoru } else { '' }
+            if (Test-OldDefaultRoot $old) { $s | Add-Member -NotePropertyName sunucuKokKlasoru -NotePropertyValue 'Servers' -Force }
             Write-TextFile $cfg ($s | ConvertTo-Json -Depth 6)
         } catch {}
     }
@@ -423,7 +435,7 @@ function Find-OtherInstall([string]$exe) {
             if ($null -eq $p -or -not $p.EndsWith('.exe', [StringComparison]::OrdinalIgnoreCase) -or -not [IO.File]::Exists($p)) { continue }
             if ([string]::Equals([IO.Path]::GetFullPath($p), [IO.Path]::GetFullPath($exe), [StringComparison]::OrdinalIgnoreCase)) { continue }
             $r = [IO.Path]::GetDirectoryName($p)
-            if ([IO.Directory]::Exists([IO.Path]::Combine($r, 'Data'))) { return $r }
+            if (Test-Installed $r) { return $r }
         } catch {}
     }
     $null
@@ -497,7 +509,8 @@ function Invoke-PortableStartup {
     Load-Servers
     $desc = L 'SyHost - modlu Minecraft sunucu merkezi'
     # Klasör taşındıysa eski yeri gösteren kısayolları buraya çevir
-    try { if ((Repair-MovedShortcuts $ExePath $desc) -gt 0) { Home-Msg (L 'Kısayollar yeni yere güncellendi.') } } catch {}
+    # Mesaj açılış animasyonundan sonra, ana menü görününce gösterilir (yoksa animasyon sırasında kaybolurdu)
+    try { if ((Repair-MovedShortcuts $ExePath $desc) -gt 0) { $script:PendingHomeMsg = 'Kısayollar yeni yere güncellendi.' } } catch {}
     # Bu klasörü C# sürümü de kullandıysa onun biçimindeki kısayolumuz (conhost "<SyHost.exe>" --hosted)
     # Terminal biçimine çevrilir: buradaki SyHost.exe artık doğrudan açılan başlatıcı
     foreach ($lnk in Get-ShortcutLocations) {

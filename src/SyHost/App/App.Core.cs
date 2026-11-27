@@ -50,14 +50,66 @@ sealed partial class App
 
     static List<string> WordWrap(string text, int w)
     {
+        text ??= "";
+        if (WideRx.IsMatch(text)) return WordWrapWide(text, w);
         var outp = new List<string>(); string line = "";
-        foreach (string word in (text ?? "").Split(' '))
+        foreach (string word in text.Split(' '))
         {
             if (line.Length == 0) line = word;
             else if (line.Length + 1 + word.Length <= w) line += " " + word;
             else { outp.Add(line); line = word; }
         }
         if (line.Length > 0) outp.Add(line);
+        return outp;
+    }
+
+    // Kapanış noktalaması satır başına düşmez, önündeki karaktere yapışır
+    const string WideClosers = "、。，．）」』】〉》！？：；ー";
+
+    /// <summary>
+    /// Geniş (Japonca vb.) karakter içeren metni ekran genişliğine göre böl: kelimeler boşluktan,
+    /// geniş karakterler tek tek bölünebilir (Japoncada kelime arası boşluk yok). Genişlik sütun sayısıdır.
+    /// </summary>
+    static List<string> WordWrapWide(string text, int w)
+    {
+        var outp = new List<string>(); var line = new StringBuilder(); int lw = 0, i = 0; bool space = false;
+        while (i < text.Length)
+        {
+            char ch = text[i];
+            if (ch == ' ') { space = true; i++; continue; }
+            int s = i;
+            if (CharW(ch) == 2) { i++; while (i < text.Length && WideClosers.IndexOf(text[i]) >= 0) i++; }
+            else { while (i < text.Length && text[i] != ' ' && CharW(text[i]) == 1) i++; }
+            string seg = text.Substring(s, i - s);
+            int sw = VLen(seg);
+            if (lw > 0 && lw + (space ? 1 : 0) + sw > w) { outp.Add(line.ToString()); line.Clear(); lw = 0; }
+            else if (lw > 0 && space) { line.Append(' '); lw++; }
+            line.Append(seg); lw += sw; space = false;
+        }
+        if (lw > 0) outp.Add(line.ToString());
+        return outp;
+    }
+
+    /// <summary>Düz metni tam w sütuna sığdır: uzunsa kes (geniş karakter yarıda kalmaz), kısaysa boşlukla doldur.</summary>
+    static string FitV(string s, int w)
+    {
+        s ??= "";
+        var sb = new StringBuilder(); int n = 0;
+        foreach (char ch in s) { int cw = CharW(ch); if (n + cw > w) break; sb.Append(ch); n += cw; }
+        return sb.Append(' ', w - n).ToString();
+    }
+
+    /// <summary>Düz metni en çok w sütunluk parçalara böl (geniş karakter 2 sütun).</summary>
+    static List<string> SplitByWidth(string s, int w)
+    {
+        var outp = new List<string>(); var sb = new StringBuilder(); int n = 0;
+        foreach (char ch in s ?? "")
+        {
+            int cw = CharW(ch);
+            if (n + cw > w && n > 0) { outp.Add(sb.ToString()); sb.Clear(); n = 0; }
+            sb.Append(ch); n += cw;
+        }
+        if (sb.Length > 0) outp.Add(sb.ToString());
         return outp;
     }
 

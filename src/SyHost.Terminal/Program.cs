@@ -41,9 +41,10 @@ static class Program
                 return 0;
             }
 
-            // 2) SyHost klasörü exe'nin klasörüdür; içinde Data varsa SyHost orada kurulu
+            // 2) SyHost klasörü exe'nin klasörüdür; Data içinde SyHost'un ayar ya da sunucu listesi varsa orada kurulu
+            //    (C# Portable.IsInstalled ile aynı kural: ilgisiz bir Data klasörü kurulum sayılmaz)
             root = Path.GetDirectoryName(exe);
-            installed = Directory.Exists(Path.Combine(root, DataName));
+            installed = File.Exists(Path.Combine(root, DataName, "ayarlar.json")) || File.Exists(Path.Combine(root, DataName, "sunucular.json"));
 
             // 3) Kurulu klasöre yazılamıyorsa (ör. Program Files'a taşınmış) sessizce kapanma: C# sürümüyle aynı uyarı
             if (installed && !CanWrite(Path.Combine(root, DataName)))

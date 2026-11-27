@@ -91,9 +91,9 @@ sealed partial class App
                 string id = sv.id ?? "";
                 if (!ModCountCache.ContainsKey(id)) ModCountCache[id] = GetModCount(sv.klasor);
                 string icon = isSel ? c.brass + Spin(6) : c.dark + "⬡";
-                string name = (sv.ad ?? "").PadRight(22).Substring(0, 22);
+                string name = FitV(sv.ad, 22);   // ekran genişliğine göre: Japonca adlar da hizalı
                 string meta = Lang.L("{0} {1} · {2} mod", HomeLoaderName(sv.loader), sv.mc, ModCountCache[id]);
-                line = "  " + (isSel ? c.brass + Bo + "❯" : " ") + R + " " + icon + R + " " + (isSel ? Bo + c.text : c.soft) + name + R + "  " + c.dim + meta.PadRight(32) + R + "  " + c.dark + Lang.L("son açılış: ") + R + c.soft + FmtWhen(sv.sonAcilis) + R;
+                line = "  " + (isSel ? c.brass + Bo + "❯" : " ") + R + " " + icon + R + " " + (isSel ? Bo + c.text : c.soft) + name + R + "  " + c.dim + meta + Ps.Rep(" ", Math.Max(0, 32 - VLen(meta))) + R + "  " + c.dark + Lang.L("son açılış: ") + R + c.soft + FmtWhen(sv.sonAcilis) + R;
             }
             else
             {

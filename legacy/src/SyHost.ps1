@@ -30,7 +30,8 @@ $ExePath = if ($Exe) { [IO.Path]::GetFullPath($Exe) } else { Join-Path $AppRoot 
 # İki sürüm de aynı düzeni ve aynı dosyaları kullanır; biri bırakıp diğeri devam edebilir.
 $Data = Join-Path $AppRoot 'Data'
 # Data yoksa SyHost bu klasörde kurulu değil (ör. İndirilenler'den açıldı): ilk açılışın 1. aşaması, diske yazılmaz
-$SetupMode = (-not $TestFrame) -and -not (Test-Path -LiteralPath $Data -PathType Container)
+# (yalnızca bir Data klasörü yetmez: SyHost'un ayar ya da sunucu listesi aranır; C#: Portable.IsInstalled)
+$SetupMode = (-not $TestFrame) -and -not ([IO.File]::Exists([IO.Path]::Combine($Data, 'ayarlar.json')) -or [IO.File]::Exists([IO.Path]::Combine($Data, 'sunucular.json')))
 
 # ---------- Tek kopya (test modunda atlanır: açık bir SyHost'a dokunmasın) ----------
 # İki sürüm aynı kilidi kullanır: aynı anda yalnızca bir SyHost açık olabilir
@@ -522,11 +523,49 @@ function PadV([string]$str, [int]$w) {
     $str + $R
 }
 function WordWrap([string]$text, [int]$w) {
+    if ($WideRx.IsMatch($text)) { return , (WordWrap-Wide $text $w) }
     $out = New-Object System.Collections.Generic.List[string]; $line = ''
     foreach ($word in ($text -split ' ')) {
         if ($line.Length -eq 0) { $line = $word } elseif (($line.Length + 1 + $word.Length) -le $w) { $line += ' ' + $word } else { $out.Add($line); $line = $word }
     }
     if ($line) { $out.Add($line) }
+    , $out
+}
+# Geniş (Japonca vb.) karakter içeren metni ekran genişliğine göre böl: kelimeler boşluktan, geniş karakterler
+# tek tek bölünebilir (Japoncada kelime arası boşluk yok); kapanış noktalaması satır başına düşmez. (C#: WordWrapWide)
+$WideClosers = '、。，．）」』】〉》！？：；ー'
+function WordWrap-Wide([string]$text, [int]$w) {
+    $out = New-Object System.Collections.Generic.List[string]; $line = New-Object Text.StringBuilder; $lw = 0; $i = 0; $space = $false
+    while ($i -lt $text.Length) {
+        $ch = $text[$i]
+        if ($ch -eq ' ') { $space = $true; $i++; continue }
+        $s = $i
+        if ((CharW $ch) -eq 2) { $i++; while ($i -lt $text.Length -and $WideClosers.IndexOf($text[$i]) -ge 0) { $i++ } }
+        else { while ($i -lt $text.Length -and $text[$i] -ne ' ' -and (CharW $text[$i]) -eq 1) { $i++ } }
+        $seg = $text.Substring($s, $i - $s)
+        $sw = VLen $seg
+        if ($lw -gt 0 -and $lw + $(if ($space) { 1 } else { 0 }) + $sw -gt $w) { $out.Add($line.ToString()); [void]$line.Clear(); $lw = 0 }
+        elseif ($lw -gt 0 -and $space) { [void]$line.Append(' '); $lw++ }
+        [void]$line.Append($seg); $lw += $sw; $space = $false
+    }
+    if ($lw -gt 0) { $out.Add($line.ToString()) }
+    , $out
+}
+# Düz metni tam w sütuna sığdır: uzunsa kes (geniş karakter yarıda kalmaz), kısaysa boşlukla doldur (C#: FitV)
+function Fit-V([string]$s, [int]$w) {
+    $sb = New-Object Text.StringBuilder; $n = 0
+    foreach ($ch in $s.ToCharArray()) { $cw = CharW $ch; if ($n + $cw -gt $w) { break }; [void]$sb.Append($ch); $n += $cw }
+    [void]$sb.Append(' ', $w - $n); $sb.ToString()
+}
+# Düz metni en çok w sütunluk parçalara böl (geniş karakter 2 sütun; C#: SplitByWidth)
+function Split-ByWidth([string]$s, [int]$w) {
+    $out = New-Object System.Collections.Generic.List[string]; $sb = New-Object Text.StringBuilder; $n = 0
+    foreach ($ch in $s.ToCharArray()) {
+        $cw = CharW $ch
+        if ($n + $cw -gt $w -and $n -gt 0) { $out.Add($sb.ToString()); [void]$sb.Clear(); $n = 0 }
+        [void]$sb.Append($ch); $n += $cw
+    }
+    if ($sb.Length -gt 0) { $out.Add($sb.ToString()) }
     , $out
 }
 function Pill([string]$bg, [string]$fg, [string]$text) { "$E[48;2;${bg}m$E[38;2;${fg}m$E[1m $text $R" }
@@ -880,6 +919,7 @@ function Check-Backup {
         else {
             $mb = [Math]::Round((Get-Item $BackupDst).Length / 1MB)
             Add-Log ok ((L "Yedek alındı: {0}  ({1} MB)") -f (Split-Path $BackupDst -Leaf), $mb)
+            Refresh-FolderLook   # ilk yedekte açılan yedekler klasörü de simgesini ve adını alsın
             $keep = [int]$Cfg.saklanacakYedek
             if ($keep -gt 0) { Get-ChildItem (Split-Path $BackupDst) -Filter 'world-*.zip' | Sort-Object Name -Descending | Select-Object -Skip $keep | Remove-Item -Force -ErrorAction SilentlyContinue }
         }
@@ -1640,6 +1680,9 @@ function Check-Install {
     $base = $id; $k = 2; while ($Servers | Where-Object { $_.id -eq $id }) { $id = "$base$k"; $k++ }
     $entry = [pscustomobject]@{ id = $id; ad = $Wiz.Name; klasor = $Wiz.Target; mc = $res.mc; loader = $res.loader; loaderSurum = $res.loaderSurum; java = [int]$res.java; baslat = $res.baslat; paket = 'normal'; eklenme = (Get-Date).ToString('yyyy-MM-dd HH:mm'); sonAcilis = $null; sonBaslatmaSn = $null }
     $Servers.Add($entry); Save-Servers
+    # Minecraft'ın sunucu listesinde görünen simge: paket kendi simgesini getirmediyse SyHost'unki (64x64)
+    Copy-ServerIcon $Wiz.Target
+    Refresh-FolderLook   # yeni sunucunun klasörü hemen kendi simgesini alsın
     $script:HomeSel = $Servers.Count - 1
     $Wiz.Step = 'bitti'
 }
@@ -1852,6 +1895,9 @@ function New-Badges {
     }
 }
 $Badge = New-Badges
+# Konsoldaki rozet sütununun genişliği: dilin en geniş rozeti, en az 6 (Japonca 8)
+function Get-BadgeW { $m = 6; foreach ($b in $Badge.Values) { $v = VLen $b[0]; if ($v -gt $m) { $m = $v } }; $m }
+$BadgeW = Get-BadgeW
 function Card([string]$title, [string[]]$lines, [int]$w) {
     $bc = $c.dark
     $top = $bc + '╭─ ' + $R + $Bo + $c.brass + $title + $R + ' ' + $bc + ('─' * [Math]::Max(0, $w - (VLen $title) - 5)) + '╮' + $R
@@ -2111,9 +2157,9 @@ function Render-Home([int]$W, [int]$H) {
             $sv = $Servers[$i]
             if (-not $ModCountCache.ContainsKey($sv.id)) { $ModCountCache[$sv.id] = Get-ModCount $sv.klasor }
             $icon = if ($isSel) { $c.brass + (Spin 6) } else { $c.dark + '⬡' }
-            $name = ($sv.ad).PadRight(22).Substring(0, 22)
+            $name = Fit-V ([string]$sv.ad) 22   # ekran genişliğine göre: Japonca adlar da hizalı
             $meta = (L '{0} {1} · {2} mod' $LoaderName[$sv.loader] $sv.mc $ModCountCache[$sv.id])
-            $line = '  ' + $(if ($isSel) { $c.brass + $Bo + '❯' } else { ' ' }) + $R + ' ' + $icon + $R + ' ' + $(if ($isSel) { $Bo + $c.text } else { $c.soft }) + $name + $R + '  ' + $c.dim + $meta.PadRight(32) + $R + '  ' + $c.dark + (L 'son açılış: ') + $R + $c.soft + (Fmt-When $sv.sonAcilis) + $R
+            $line = '  ' + $(if ($isSel) { $c.brass + $Bo + '❯' } else { ' ' }) + $R + ' ' + $icon + $R + ' ' + $(if ($isSel) { $Bo + $c.text } else { $c.soft }) + $name + $R + '  ' + $c.dim + $meta + (' ' * [Math]::Max(0, 32 - (VLen $meta))) + $R + '  ' + $c.dark + (L 'son açılış: ') + $R + $c.soft + (Fmt-When $sv.sonAcilis) + $R
         } else {
             $line = '  ' + $(if ($isSel) { $c.green + $Bo + '❯' } else { ' ' }) + $R + ' ' + $c.green + '+' + $R + ' ' + $(if ($isSel) { $Bo + $c.green } else { $c.soft }) + (L 'Yeni sunucu ekle') + $R + $c.dim + (L '   bir .mrpack dosyası seçip kur') + $R
         }
@@ -2343,7 +2389,7 @@ function Render-Header([int]$W) {
 
 function Render-Log([int]$W, [int]$H) {
     $rows = New-Object System.Collections.Generic.List[string]
-    $pre = 18; $avail = [Math]::Max(10, $W - $pre - 1)
+    $bw = $BadgeW; $pre = 12 + $bw; $avail = [Math]::Max(10, $W - $pre - 1)   # rozet sütunu dilin en geniş rozeti kadar (Japonca 8)
     $idx = $Log.Count - 1; $skip = $Scroll
     while ($idx -ge 0 -and $skip -gt 0) { if ($Detail -or $Log[$idx].V) { $skip-- }; $idx-- }
     while ($idx -ge 0 -and $rows.Count -lt $H) {
@@ -2352,10 +2398,10 @@ function Render-Log([int]$W, [int]$H) {
         $bd = $Badge[$en.K]; if (-not $bd) { $bd = $Badge.info }
         $msg = $en.M; $chunks = New-Object System.Collections.Generic.List[string]
         if ($msg.Length -eq 0) { $chunks.Add('') }
-        for ($i = 0; $i -lt $msg.Length; $i += $avail) { $chunks.Add($msg.Substring($i, [Math]::Min($avail, $msg.Length - $i))) }
+        else { $chunks = Split-ByWidth $msg $avail }   # ekran genişliğine göre (geniş karakter 2 sütun)
         for ($j = $chunks.Count - 1; $j -ge 0; $j--) {
-            if ($j -eq 0) { $head = $c.dark + $en.T + ' ' + $R + $bd[1] + $Bo + $bd[0].PadRight(6) + $R + $c.dark + ' │ ' + $R }
-            else { $head = (' ' * 15) + $c.dark + ' │ ' + $R }
+            if ($j -eq 0) { $head = $c.dark + $en.T + ' ' + $R + $bd[1] + $Bo + $bd[0] + (' ' * [Math]::Max(0, $bw - (VLen $bd[0]))) + $R + $c.dark + ' │ ' + $R }
+            else { $head = (' ' * (9 + $bw)) + $c.dark + ' │ ' + $R }
             $rows.Insert(0, $head + $bd[2] + $chunks[$j] + $R)
         }
         $idx--
@@ -2599,10 +2645,29 @@ function Init-Tables {
     $script:StatusLook = @{ KAPALI = @($c.red, (L 'KAPALI')); BASLIYOR = @($c.yellow, (L 'AÇILIYOR')); ACIK = @($c.green, (L 'AÇIK')); DURUYOR = @($c.orange, (L 'KAPANIYOR')) }
     $script:StageNames = @{ 0 = (L 'Java açılıyor'); 1 = (L 'Java açılıyor'); 2 = (L 'Modlar yükleniyor'); 3 = (L 'Sunucu ayarları yükleniyor'); 4 = (L 'Dünya hazırlanıyor') }
     $script:Badge = New-Badges
+    $script:BadgeW = Get-BadgeW
     $script:Builtins = if ($LangCode -eq 'tr') { $BuiltinsTr } else { $BuiltinsEn }
     # Tepsi menüsü (dil değişince de güncellenir; menü bir sonraki açılışta yeni yazılarla görünür)
     try { [SyHost.Tray]::SetLabels((L 'Paneli Göster'), (L 'Paneli Gizle'), (L 'Küçük / Büyük Mod  (Ctrl+Alt+K)'), (L 'Sunucuyu Yeniden Başlat'), (L "SyHost'u Kapat")) } catch {}
 }
+# Klasör simgelerini ve dile göre adlarını arka planda yeniden uygula (yeni sunucu, ilk yedek). Test modunda yapılmaz.
+function Refresh-FolderLook {
+    if ($TestFrame) { return }
+    try { $null = Start-FolderLook $AppRoot $LangCode @(foreach ($sv in $Servers) { [string]$sv.klasor }) } catch {}
+}
+# Yeni sunucuya SyHost'un Minecraft sunucu listesi simgesi (server-icon.png); paketin kendi simgesi varsa dokunulmaz
+function Copy-ServerIcon([string]$dir) {
+    try {
+        $dst = [IO.Path]::Combine($dir, 'server-icon.png')
+        if (-not [IO.Directory]::Exists($dir) -or [IO.File]::Exists($dst)) { return }
+        foreach ($src in [IO.Path]::Combine($AppDir, 'icons\server-icon.png'), [IO.Path]::Combine([IO.Path]::GetDirectoryName($AppDir), 'src\SyHost\Assets\server-icon.png')) {
+            if ([IO.File]::Exists($src)) { [IO.File]::Copy($src, $dst, $false); return }
+        }
+    } catch {}
+}
+# Açılışta oluşan ana menü mesajı (Türkçe anahtar): ana menü ilk görününce gösterilir
+$PendingHomeMsg = $null
+function Show-PendingHomeMsg { if ($PendingHomeMsg) { Home-Msg (L $PendingHomeMsg); $script:PendingHomeMsg = $null } }
 # SyHost'u (yeniden) aç: başlatıcı varsa onu, yoksa (geliştirirken) betiği doğrudan
 function Start-SyHost([string]$exe, [switch]$NoSplash) {
     if ($exe -and (Test-Path -LiteralPath $exe -PathType Leaf)) {
@@ -3040,7 +3105,7 @@ finally {
     [SyHost.Tray]::Close()
     try { $mutex.ReleaseMutex(); $mutex.Dispose() } catch {}
     # Kurulumdan/güncellemeden sonra yeni yerden aç; dil değişince yeniden aç; kaldırdıysa klasörü sil
-    if ($LaunchAfterExit) { Start-SyHost $LaunchAfterExit -NoSplash } elseif ($RestartApp) { Start-SyHost $ExePath }
+    if ($LaunchAfterExit) { Start-SyHost $LaunchAfterExit -NoSplash } elseif ($RestartApp) { Start-SyHost $ExePath -NoSplash }
     if ($DeleteRootAfterExit) { Remove-RootAfterExit $AppRoot }
 }
 [Environment]::Exit(0)

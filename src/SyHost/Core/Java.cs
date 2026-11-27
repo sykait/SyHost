@@ -219,7 +219,10 @@ static class Java
             RedirectStandardError = true,
         };
         psi.ArgumentList.Add("-version");
-        using var p = Process.Start(psi);
+        Process started;
+        // Başlatılamayan java.exe (bozuk, antivirüs ya da AppLocker engeli) da başarısız denetimdir: klasör silinsin, "bulunmuş" sayılmasın
+        try { started = Process.Start(psi); } catch (Exception ex) { return "java.exe could not be started: " + ex.Message; }
+        using var p = started;
         var err = p.StandardError.ReadToEndAsync();
         var outp = p.StandardOutput.ReadToEndAsync();
         if (!p.WaitForExit(60_000))

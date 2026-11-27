@@ -112,7 +112,7 @@ sealed partial class App
     private partial List<string> RenderLog(int W, int H)
     {
         var rows = new List<string>();
-        int pre = 18; int avail = Math.Max(10, W - pre - 1);
+        int bw = BadgeW; int pre = 12 + bw; int avail = Math.Max(10, W - pre - 1);   // rozet sütunu dilin en geniş rozeti kadar (Japonca 8)
         int idx = Log.Count - 1; int skip = Scroll;
         while (idx >= 0 && skip > 0) { if (Detail || Log[idx].V) skip--; idx--; }
         while (idx >= 0 && rows.Count < H)
@@ -122,12 +122,12 @@ sealed partial class App
             if (!Badge.TryGetValue(en.K ?? "", out var bd)) bd = Badge["info"];
             string msg = en.M ?? ""; var chunks = new List<string>();
             if (msg.Length == 0) chunks.Add("");
-            for (int i = 0; i < msg.Length; i += avail) chunks.Add(msg.Substring(i, Math.Min(avail, msg.Length - i)));
+            else chunks = SplitByWidth(msg, avail);   // ekran genişliğine göre (geniş karakter 2 sütun)
             for (int j = chunks.Count - 1; j >= 0; j--)
             {
                 string head;
-                if (j == 0) head = c.dark + en.T + " " + R + bd.C1 + Bo + bd.Label.PadRight(6) + R + c.dark + " │ " + R;
-                else head = Ps.Rep(" ", 15) + c.dark + " │ " + R;
+                if (j == 0) head = c.dark + en.T + " " + R + bd.C1 + Bo + bd.Label + Ps.Rep(" ", Math.Max(0, bw - VLen(bd.Label))) + R + c.dark + " │ " + R;
+                else head = Ps.Rep(" ", 9 + bw) + c.dark + " │ " + R;
                 rows.Insert(0, head + bd.C2 + chunks[j] + R);
             }
             idx--;

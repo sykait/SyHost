@@ -37,6 +37,7 @@ function Get-FrErrorText($e) {
 # Açılış animasyonu bitince: kurulum gerekiyorsa ilk açılış, yoksa ana menü
 function After-Splash {
     $script:Screen = $NextAfterSplash
+    if ($Screen -eq 'home') { Show-PendingHomeMsg }
     if ($Screen -eq 'firstrun' -and $null -eq $Fr) { Start-FirstRun $null }
     Reset-Frame
 }
@@ -89,7 +90,7 @@ function FrNext {
     if ($SetupMode) { FrInstall 'target'; return }
     Set-FrCfg 'kurulumTamam' $true
     Save-Config
-    $script:Fr = $null; $script:Screen = 'home'; Reset-Frame
+    $script:Fr = $null; $script:Screen = 'home'; Show-PendingHomeMsg; Reset-Frame
 }
 
 function FrBack {
