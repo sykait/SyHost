@@ -2480,10 +2480,11 @@ Set-WindowIcon
 [SyHost.CloseGuard]::Install()
 [SyHost.Tray]::Start($Title)
 [SyHost.Native]::MakeOpaque()
-Set-UiMode 'buyuk' -NoSave
 # Eski verileri taşı, taşınmış klasörün kısayollarını düzelt, klasör görünümünü uygula (Portable.ps1)
 Invoke-PortableStartup
 Init-Tables
+# Pencere, taşınan pencere.json'daki konuma da yerleşebilsin (C#: SetUiMode, PortableStartup'tan sonra)
+Set-UiMode 'buyuk' -NoSave
 $SplashStart = if ($NoSplash) { (T) - $SplashLen - 1 } else { T }
 Start-Playit
 $SysFree = (New-Object Microsoft.VisualBasic.Devices.ComputerInfo).AvailablePhysicalMemory
