@@ -432,15 +432,19 @@ function Start-UninstallJob($items) {
     [pscustomobject]@{ PS = $ps; Handle = $ps.BeginInvoke() }
 }
 
-# SyHost kapandıktan sonra klasörü sil (kendini silemediği için ayrı bir cmd ile; C#: Uninstall.DeleteFolderAfterExit).
-# cmd 60 kez dener: SyHost'un açık tuttuğu dosyalar o kapanınca silinir. rmdir /s bağlantıların içine girmez.
+# Klasörü silen cmd komutu (C#: Uninstall.DeleteFolderCommand): 60 kez dener, SyHost'un açık tuttuğu dosyalar o
+# kapanınca silinir. Yalnızca klasörün kendi öznitelikleri kaldırılır ("attrib /s" klasörün dışına da dokunuyordu);
+# rmdir /s salt okunur, gizli ve sistem dosyalarını kendisi siler ve bağlantıların içine girmez.
+function UnDeleteCommand([string]$root) {
+    $q = '"' + $root.TrimEnd('\') + '"'
+    "/d /c for /l %i in (1,1,60) do (if exist $q (attrib -r -s -h $q /d >nul 2>&1 & rmdir /s /q $q >nul 2>&1 & ping -n 2 127.0.0.1 >nul))"
+}
+# SyHost kapandıktan sonra klasörü sil (kendini silemediği için ayrı bir cmd ile; C#: Uninstall.DeleteFolderAfterExit)
 function Remove-RootAfterExit([string]$root) {
     if (-not (Test-RootDeletable $root)) { return }
     if (Test-DryRun) { UnLog ('SyHost kapanınca klasör silinecekti: ' + $root); return }
-    $q = '"' + $root.TrimEnd('\') + '"'
-    $cmd = "/d /c for /l %i in (1,1,60) do (if exist $q (attrib -r -s -h $q /d >nul 2>&1 & rmdir /s /q $q >nul 2>&1 & ping -n 2 127.0.0.1 >nul))"
     try {
-        $psi = New-Object Diagnostics.ProcessStartInfo ([IO.Path]::Combine([Environment]::SystemDirectory, 'cmd.exe')), $cmd
+        $psi = New-Object Diagnostics.ProcessStartInfo ([IO.Path]::Combine([Environment]::SystemDirectory, 'cmd.exe')), (UnDeleteCommand $root)
         $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WorkingDirectory = [IO.Path]::GetTempPath()
         $p = [Diagnostics.Process]::Start($psi)
         if ($null -ne $p) { $p.Dispose() }
