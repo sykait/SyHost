@@ -69,6 +69,8 @@ Save-KeyScenario 'set-keys-yedek-max-ja' 'ja' 7.8 8 (Rep $Rt 3) @{ Cfg = @{ otom
 # Kesirli saat önce yuvarlanır (iki sürümde de banker's: 2.5 → 2, 3.5 → 4)
 Save-KeyScenario 'set-keys-yedek-round-tr' 'tr' 8.2 8 @($Rt) @{ Cfg = @{ otomatikYedekSaat = 2.5 }; After = @{ otomatikYedekSaat = 3 } }
 Save-KeyScenario 'set-keys-yedek-round2-en' 'en' 8.5 8 @($Lf) @{ Cfg = @{ otomatikYedekSaat = 3.5 }; After = @{ otomatikYedekSaat = 3 } }
+# Kesirli saat dokunulmadan gösterilir (iki sürümde de bilgisayarın sayı biçimiyle)
+Save-KeyScenario 'set-keys-yedek-frac-tr' 'tr' 8.6 8 @($D, $U) @{ Cfg = @{ otomatikYedekSaat = 1.5 }; After = @{ otomatikYedekSaat = 1.5 } }
 Save-KeyScenario 'set-keys-sakla-min-tr' 'tr' 8.9 9 (Rep $Lf 3) @{ Cfg = @{ saklanacakYedek = 2 }; After = @{ saklanacakYedek = 1 } }
 Save-KeyScenario 'set-keys-sakla-max-en' 'en' 9.2 9 @($Rt, $En, $Rt) @{ Cfg = @{ saklanacakYedek = 99 }; After = @{ saklanacakYedek = 100 } }
 Save-KeyScenario 'set-keys-cokme-enter-ja' 'ja' 9.6 10 @($En) @{ After = @{ cokerseYenidenBaslat = $false } }
@@ -82,6 +84,8 @@ Save-KeyScenario 'set-keys-dil-left-en' 'en' 11.5 0 @($Lf) @{ After = @{ dil = '
 Save-KeyScenario 'set-keys-dil-cycle-en' 'en' 11.8 0 @($Rt, $Rt, $Rt) @{ After = @{ dil = 'en' } }
 Save-KeyScenario 'set-keys-dil-combo-ja' 'ja' 12.2 0 ((Rep $D 8) + @($Rt) + (Rep $U 8) + @($Lf)) @{ After = @{ dil = 'tr'; otomatikYedekSaat = 4 } }
 Save-KeyScenario 'set-keys-dil-narrow-en' 'en' 12.4 0 @($Rt, $D, $D, $D, $D) @{ W = 96; H = 30; After = @{ dil = 'tr' } }
+# Elle yazılmış "TR" bilinmeyen bir dildir (C# Lang.Has büyük-küçük harfe duyarlı): İngilizce açılır, → ile tr'ye geçer
+Save-KeyScenario 'set-keys-dil-upper-tr' 'TR' 12.5 0 @($Rt) @{ After = @{ dil = 'tr' } }
 
 # ---------- Kısayollar: Enter ile yazılır, tekrar Enter ile silinir (SYHOST_SHORTCUT_DIR) ----------
 Save-KeyScenario 'set-keys-masaustu-on-tr' 'tr' 12.6 2 @($En) @{ Disk = $true; After = @{ kisayolMasaustu = $true; kisayolBaslat = $false }; Links = @{ desktop = $true; start = $false } }
