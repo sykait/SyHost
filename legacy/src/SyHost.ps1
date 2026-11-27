@@ -150,7 +150,7 @@ function Load-Config {
     }
     $cfg.sunucuKokKlasoru = Resolve-RootDir $cfg.sunucuKokKlasoru
     # Dil: en (varsayılan), tr, ja
-    $script:LangCode = if ($Languages.Contains([string]$cfg.dil)) { [string]$cfg.dil } else { 'en' }
+    $script:LangCode = if (@($Languages.Keys) -ccontains [string]$cfg.dil) { [string]$cfg.dil } else { 'en' }   # C# Lang.Has gibi büyük-küçük harfe duyarlı ("TR" bilinmeyen dildir)
     # Eksik paket varsa varsayılandan tamamla
     $def = $null
     if ($null -eq $cfg.PSObject.Properties['paketler'] -or $null -eq $cfg.paketler) { $def = Read-DefaultSettings; $cfg | Add-Member -NotePropertyName paketler -NotePropertyValue $def.paketler -Force }
