@@ -1008,7 +1008,7 @@ function Safe-FolderName([string]$name) {
     if (-not $n) { $n = 'Sunucu' }
     # C# Path.Combine gibi: Join-Path takılı olmayan sürücüde hata verir, ekran çizilemezdi
     $root = [string]$Cfg.sunucuKokKlasoru
-    $base = if (-not $root) { $n } elseif ($root.EndsWith('\') -or $root.EndsWith('/') -or $root.EndsWith(':')) { $root + $n } else { $root + '\' + $n }
+    $base = if (-not $root) { $n } elseif ($root.EndsWith('\') -or $root.EndsWith('/')) { $root + $n } else { $root + '\' + $n }
     $p = $base; $i = 2
     # Test-Path [ ] karakterlerini joker sayar: 'x[1]' klasörü varken boş sanılır, kurulum başka sunucunun klasörüne yazardı
     while ([IO.File]::Exists($p) -or [IO.Directory]::Exists($p)) { $p = "$base-$i"; $i++ }
