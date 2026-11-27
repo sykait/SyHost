@@ -21,7 +21,9 @@ static class Program
 
     static int Main(string[] args)
     {
-        if (args.Length >= 3 && args[0] == "--selftest" && args[1] == "extract") return SelfTestExtract(args[2]);
+        // Öz denetim hiçbir zaman uygulamayı açmaz (C# sürümünün denetimleri bu exe'de yok: 2 döner)
+        if (args.Length >= 1 && args[0] == "--selftest")
+            return args.Length >= 3 && args[1] == "extract" ? SelfTestExtract(args[2]) : 2;
 
         string root = null;
         bool installed = false;
