@@ -2600,6 +2600,8 @@ function Init-Tables {
     $script:StageNames = @{ 0 = (L 'Java açılıyor'); 1 = (L 'Java açılıyor'); 2 = (L 'Modlar yükleniyor'); 3 = (L 'Sunucu ayarları yükleniyor'); 4 = (L 'Dünya hazırlanıyor') }
     $script:Badge = New-Badges
     $script:Builtins = if ($LangCode -eq 'tr') { $BuiltinsTr } else { $BuiltinsEn }
+    # Tepsi menüsü (dil değişince de güncellenir; menü bir sonraki açılışta yeni yazılarla görünür)
+    try { [SyHost.Tray]::SetLabels((L 'Paneli Göster'), (L 'Paneli Gizle'), (L 'Küçük / Büyük Mod  (Ctrl+Alt+K)'), (L 'Sunucuyu Yeniden Başlat'), (L "SyHost'u Kapat")) } catch {}
 }
 # SyHost'u (yeniden) aç: başlatıcı varsa onu, yoksa (geliştirirken) betiği doğrudan
 function Start-SyHost([string]$exe, [switch]$NoSplash) {
