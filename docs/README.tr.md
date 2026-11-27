@@ -153,7 +153,8 @@ C:\Users\<ad>\SyHost\
    - sunucuda çalışan modları indirir (yalnızca oyuncuda çalışanları atlar) ve her dosyayı paketteki sağlama
      toplamlarıyla doğrular,
    - paketin ayar dosyalarını ve seçtiysen dünyasını kopyalar,
-   - `server.properties` dosyasını yazar (port 25565, Ayarlar'daki maksimum oyuncu sayısı).
+   - `server.properties` dosyasını yazar (port 25565, Ayarlar'daki maksimum oyuncu sayısı) ve paket kendi simgesini
+     getirmediyse Minecraft'ın sunucu listesinde görünecek SyHost simgesini ekler.
 6. **Enter**'a basınca sunucu açılır. Üstteki şeritte **SUNUCU AÇIK** yazınca hazırdır.
 
 NeoForge, Forge ve Fabric paketleri desteklenir. Quilt paketleri henüz desteklenmiyor.
@@ -336,7 +337,8 @@ SyHost klasörünün dışındaki sunuculara asla dokunulmaz.
 - **Eski klasör silinmez.** SyHost içine kısa bir not bırakır. Sonra istersen Ayarlar → SyHost'u kaldır →
   *Eski sürümün veri klasörü* ile silebilirsin.
 - **Sunucuların olduğu yerde kalır** (ör. `%USERPROFILE%\SyHost Sunuculari`) ve oradan çalışmaya devam eder. Yeni
-  sunucular eski ayarlarındaki sunucu klasörüne kurulur; bunu Ayarlar → Sunucu klasörü'nden değiştirebilirsin.
+  sunucular SyHost klasöründeki `Servers` içine kurulur; 0.5.0'da kendin başka bir sunucu klasörü seçtiysen o korunur
+  (Ayarlar → Sunucu klasörü).
 - Kısayollar adımı eski kısayolları yeni SyHost'u açanlarla değiştirir.
 - Sonra başka, ayrı bir SyHost kopyası açarsan eski verileri yeniden kopyalamadan önce sorar (aynı playit bağlantısını
   kullanan iki kopya birbirini bozar).

@@ -142,7 +142,8 @@ C:\Users\<name>\SyHost\
    - downloads the mods that run on the server (mods marked client-only are skipped) and checks every file
      against the checksums in the pack,
    - copies the pack's config files and, if you chose it, its world,
-   - writes `server.properties` (port 25565, the max players from Settings).
+   - writes `server.properties` (port 25565, the max players from Settings) and, unless the pack brings its own,
+     adds SyHost's icon for Minecraft's server list.
 6. Press **Enter** to open the server. It is ready when the bar at the top says **SERVER ONLINE**.
 
 NeoForge, Forge and Fabric packs are supported. Quilt packs are not supported yet.
@@ -319,7 +320,8 @@ Servers outside the SyHost folder are never touched.
 - **The old folder is not deleted.** SyHost leaves a short note in it. You can remove it later with
   Settings → Uninstall SyHost → *Data folder of the old version*.
 - **Your servers stay where they are** (for example in `%USERPROFILE%\SyHost Sunuculari`) and keep working from there.
-  New servers go to the server folder from your old settings; you can change it in Settings → Server folder.
+  New servers go into `Servers` in the SyHost folder; if you had picked your own server folder in 0.5.0, that one is
+  kept (Settings → Server folder).
 - The Shortcuts step replaces the old shortcuts with ones that open the new SyHost.
 - If you later open another, separate copy of SyHost, it asks before copying the old data again (two copies sharing
   one playit connection would get in each other's way).
