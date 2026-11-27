@@ -189,6 +189,14 @@ function Save-Config {
 # Taşınabilir klasör: kurulum, eski verinin taşınması, kısayollar, klasör görünümü, yazı tipi (Portable.ps1)
 . (Join-Path $SrcDir 'Portable.ps1')
 
+# Kurulu klasöre yazılamıyorsa (ör. Program Files'a taşınmış) sessizce çökme, anlaşılır uyarı göster (C#: Program.cs).
+# Diske ilk yazan Load-Config'ten önce; uyarı Windows'un dilinde.
+if (-not $SetupMode -and -not $TestFrame -and -not (Test-CanWrite $Data)) {
+    $LangCode = Get-UiLanguage
+    Show-Alert (L "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost.exe'yi yazılabilir bir klasöre taşı (ör. {1}) ve oradan aç." $AppRoot (Get-DefaultRoot))
+    exit 1
+}
+
 Load-Config
 [void][SyHost.Native]::SetFont('Cascadia Mono', [int16]$(if ($Cfg.yaziTipiBoyutu) { $Cfg.yaziTipiBoyutu } else { 16 }))
 $PackNameKey = @{ dusuk = 'DÜŞÜK'; normal = 'NORMAL'; yuksek = 'YÜKSEK' }
