@@ -21,6 +21,9 @@ static class Payload
     public const string TempPrefix = "SyHost-Terminal-";
     // Geçici klasörün sahibi (başlatıcı) açıkken tuttuğu dosya: temizleyici bunu silemezse klasör kullanımdadır
     const string LockName = ".kilit";
+    // App bir an kilitliyse (ör. yeni kapanan PowerShell, virüs tarayıcı) en çok bu kadar yeniden denenir;
+    // daha uzun kilitte kullanıcı beklemesin, sebebiyle birlikte hata görsün
+    const int BusyMs = 4000;
 
     /// <summary>App\version.txt: sürüm ve gömülü dosyaların karması. Biri değişirse App yenilenir.</summary>
     public static readonly string Marker = PayloadInfo.Version + "\r\n" + PayloadInfo.Hash + "\r\n";
@@ -94,17 +97,25 @@ static class Payload
                 DeleteDir(fresh);   // yarıda kalmış bir önceki deneme
                 Directory.CreateDirectory(fresh);
                 Hide(fresh);
-                ExtractTo(fresh);
-                if (Directory.Exists(app))
+                try
                 {
-                    DeleteDir(old);
-                    Retry(() => Directory.Move(app, old));
+                    ExtractTo(fresh);
+                    if (Directory.Exists(app))
+                    {
+                        DeleteDir(old);
+                        Retry(() => Directory.Move(app, old));   // App içinde açık bir dosya varsa olmaz: App olduğu gibi kalır
+                    }
+                    try { Retry(() => Directory.Move(fresh, app)); }
+                    catch
+                    {
+                        // Yeni uygulama yerine konamadı: eskisini geri koy, SyHost klasörü uygulamasız kalmasın
+                        if (!Directory.Exists(app) && Directory.Exists(old)) { try { Directory.Move(old, app); } catch { } }
+                        throw;
+                    }
                 }
-                try { Retry(() => Directory.Move(fresh, app)); }
                 catch
                 {
-                    // Yeni uygulama yerine konamadı: eskisini geri koy, SyHost klasörü uygulamasız kalmasın
-                    if (!Directory.Exists(app) && Directory.Exists(old)) { try { Directory.Move(old, app); } catch { } }
+                    TryDeleteDir(fresh, 2000);
                     throw;
                 }
                 TestLog.Write("swapped " + app);
@@ -213,7 +224,7 @@ static class Payload
     /// <summary>Klasörü sil (yoksa bir şey yapma); kilitliyse bir süre yeniden dener, olmazsa hata.</summary>
     static void DeleteDir(string dir)
     {
-        if (!TryDeleteDir(dir, 8000) && Directory.Exists(dir)) Directory.Delete(dir, true);   // son deneme: hatanın sebebi görünsün
+        if (!TryDeleteDir(dir, BusyMs) && Directory.Exists(dir)) Directory.Delete(dir, true);   // son deneme: hatanın sebebi görünsün
     }
 
     static bool TryDeleteDir(string dir) => TryDeleteDir(dir, 0);
@@ -255,7 +266,7 @@ static class Payload
         while (true)
         {
             try { a(); return; }
-            catch (Exception e) when ((e is IOException || e is UnauthorizedAccessException) && sw.ElapsedMilliseconds < 8000) { }
+            catch (Exception e) when ((e is IOException || e is UnauthorizedAccessException) && sw.ElapsedMilliseconds < BusyMs) { }
             Thread.Sleep(wait);
             wait = Math.Min(wait * 2, 500);
         }
