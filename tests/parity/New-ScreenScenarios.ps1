@@ -50,7 +50,7 @@ Save 'fr-java-have-tr' (Base 'tr' 5.0 @{ screen = 'firstrun'; javaFound = @{ '21
 Save 'fr-java-own-en' (Base 'en' 5.5 @{ screen = 'firstrun'; javaFound = @{ '21' = $true }; javaOwn = $true; firstRun = (Fr $phase2NoMig 1) })
 Save 'fr-java-ask-ja' (Base 'ja' 6.1 @{ screen = 'firstrun'; javaFound = @{ '21' = $false }; firstRun = (Fr $phase2NoMig 1) })
 Save 'fr-java-later-tr' (Base 'tr' 6.6 @{ screen = 'firstrun'; javaFound = @{ '21' = $false }; firstRun = (Fr $phase2NoMig 1 @{ sel = 1 }) })
-Save 'fr-java-busy-tr' (Base 'tr' 7.2 @{ screen = 'firstrun'; javaFound = @{ '21' = $false }; firstRun = (Fr $phase2NoMig 1 @{ busy = $true; jobText = 'OpenJDK21U-jre_x64_windows_hotspot_21.0.13_1.zip  ·  %62' }) })
+Save 'fr-java-busy-tr' (Base 'tr' 7.2 @{ screen = 'firstrun'; javaFound = @{ '21' = $false }; firstRun = (Fr $phase2NoMig 1 @{ busy = $true; jobText = 'OpenJDK21U-jre_x64_windows_hotspot_21.0.5_11.zip  ·  23 / 48 MB' }) })
 Save 'fr-java-error-en' (Base 'en' 7.9 @{ screen = 'firstrun'; javaFound = @{ '21' = $false }; firstRun = (Fr $phase2NoMig 1 @{ note = "Couldn't download Java 21: The remote name could not be resolved: 'api.adoptium.net'"; noteCol = 'red' }) })
 $i = 0
 foreach ($lang in 'tr', 'en', 'ja') {

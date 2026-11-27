@@ -352,7 +352,9 @@ sealed partial class App
                 {
                     if (Fr.Sel == 1) { FrNext(); return; }
                     Fr.Note = null;
-                    FrRun(() => Java.Download(21, Data, t => { Fr.JobText = t; Dirty = true; }));
+                    // Başlık zaten "Java 21 indiriliyor..." der; altta yalnızca ilerleme (dosya adı ve MB) görünsün
+                    string head = Lang.L("Java {0} indiriliyor...", 21);
+                    FrRun(() => Java.Download(21, Data, t => { if (t != head) { Fr.JobText = t; Dirty = true; } }));
                 }
                 return;
             }

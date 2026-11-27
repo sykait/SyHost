@@ -631,9 +631,10 @@ static class Installer
     }
 
     /// <summary>Tek deneme, eşzamanlı. Dönen adres yönlendirmelerden sonraki son adrestir.</summary>
-    internal static Uri Fetch(string url, string path, IncrementalHash[] hashes, long maxBytes)
+    /// <param name="progress">isteğe bağlı: (dosya adı, inen bayt, toplam bayt ya da -1); en çok saniyede 5 kez</param>
+    internal static Uri Fetch(string url, string path, IncrementalHash[] hashes, long maxBytes, Action<string, long, long> progress = null)
     {
-        try { return FetchAsync(url, path, hashes, maxBytes, CancellationToken.None).GetAwaiter().GetResult(); }
+        try { return FetchAsync(url, path, hashes, maxBytes, CancellationToken.None, progress).GetAwaiter().GetResult(); }
         catch (Exception ex) { throw NetError(ex, url); }
     }
 
@@ -641,13 +642,17 @@ static class Installer
     /// Adresi dosyaya indirir, inerken karmaları hesaplar. Başlıklar 100 sn içinde gelmeli,
     /// sonra 60 sn hiç veri gelmezse bağlantı kopmuş sayılır (yavaş ama ilerleyen indirme kesilmez).
     /// </summary>
-    static async Task<Uri> FetchAsync(string url, string path, IncrementalHash[] hashes, long maxBytes, CancellationToken ct)
+    static async Task<Uri> FetchAsync(string url, string path, IncrementalHash[] hashes, long maxBytes, CancellationToken ct, Action<string, long, long> progress = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(HeaderTimeout);
         using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
         Ensure(resp);
         Uri final = resp.RequestMessage?.RequestUri ?? new Uri(url);
+        long length = resp.Content.Headers.ContentLength ?? -1;
+        string name = Uri.UnescapeDataString(Path.GetFileName(final.AbsolutePath));
+        var tick = System.Diagnostics.Stopwatch.StartNew();
+        progress?.Invoke(name, 0, length);
         byte[] buf = ArrayPool<byte>.Shared.Rent(1 << 16);
         try
         {
@@ -663,7 +668,9 @@ static class Installer
                 if (maxBytes > 0 && total > maxBytes) throw new InvalidDataException("The download is larger than expected.");
                 if (hashes != null) foreach (var h in hashes) h.AppendData(buf, 0, n);
                 await fs.WriteAsync(buf.AsMemory(0, n), cts.Token).ConfigureAwait(false);
+                if (progress != null && tick.ElapsedMilliseconds >= 200) { tick.Restart(); progress(name, total, length); }
             }
+            progress?.Invoke(name, total, length);
         }
         finally { ArrayPool<byte>.Shared.Return(buf); }
         return final;

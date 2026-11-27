@@ -134,7 +134,9 @@ static class Java
                 // Adoptium'un bildirdiği SHA-256 (ulaşılamazsa null: o zaman zip'in açılması ve java -version yeter)
                 string sum = Checksum(major);
                 using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                Installer.Fetch($"{Api}/binary/latest/{major}/ga/windows/x64/jre/hotspot/normal/eclipse", zip, new[] { sha }, MaxZip);
+                // İlerleme: "OpenJDK21U-jre_x64_windows_hotspot_21.0.5_11.zip  ·  23 / 48 MB" (dile bağlı değil)
+                Installer.Fetch($"{Api}/binary/latest/{major}/ga/windows/x64/jre/hotspot/normal/eclipse", zip, new[] { sha }, MaxZip,
+                    (name, got, total) => detail?.Invoke(name + "  ·  " + (got >> 20) + (total > 0 ? " / " + (total >> 20) : "") + " MB"));
                 string hash = Convert.ToHexStringLower(sha.GetHashAndReset());
                 // Tutmazsa bir kez daha sor: iki istek arasında yeni sürüm çıkmış olabilir
                 if (sum != null && !Ps.Eq(sum, hash) && !Ps.Eq(Checksum(major), hash))
