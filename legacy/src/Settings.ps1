@@ -163,11 +163,12 @@ function SettingEnter([string]$key) {
     switch -CaseSensitive ($key) {
         'dil' { SettingAdjust 'dil' 1; return }
         'klasor' {
-            # test modunda pencere açılmaz
-            $picked = if ($TestFrame) { $null } else { Pick-Folder (L 'Yeni sunucuların kurulacağı klasörü seç') $(if ([IO.Directory]::Exists([string]$Cfg.sunucuKokKlasoru)) { $Cfg.sunucuKokKlasoru } else { $AppRoot }) }
+            # test modunda pencere açılmaz; pencere açılamazsa seçilmemiş sayılır (C# Native.PickFolder gibi)
+            $picked = if ($TestFrame) { $null } else { try { Pick-Folder (L 'Yeni sunucuların kurulacağı klasörü seç') $(if ([IO.Directory]::Exists([string]$Cfg.sunucuKokKlasoru)) { $Cfg.sunucuKokKlasoru } else { $AppRoot }) } catch { $null } }
             Reset-Frame
             if ([string]::IsNullOrEmpty($picked)) { return }
-            if (Test-InOneDrive $picked) { $script:SetNote = L 'Bu klasör OneDrive ile eşitleniyor. Sunucu dosyaları büyük ve sürekli değişir; OneDrive dışında bir yer önerilir.'; $script:SetNoteCol = $c.yellow }
+            $oneDrive = $false; try { $oneDrive = [bool](Test-InOneDrive $picked) } catch {}
+            if ($oneDrive) { $script:SetNote = L 'Bu klasör OneDrive ile eşitleniyor. Sunucu dosyaları büyük ve sürekli değişir; OneDrive dışında bir yer önerilir.'; $script:SetNoteCol = $c.yellow }
             $Cfg.sunucuKokKlasoru = [string]$picked; $null = Save-Config
             return
         }
