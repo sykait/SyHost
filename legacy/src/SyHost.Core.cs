@@ -130,10 +130,12 @@ namespace SyHost
         }
     }
 
-    // Her yerden calisan kisayol tuslari (oyundayken bile)
+    // Her yerden calisan kisayol tuslari (oyundayken bile). Gizli ust duzey pencere oldugu icin
+    // Windows kapanirken / oturum kapanirken gelen WM_ENDSESSION da buraya duser.
     public class HotkeyWindow : NativeWindow
     {
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint mod, uint vk);
+        [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
         public string Status = "";
         public HotkeyWindow()
         {
@@ -143,14 +145,28 @@ namespace SyHost
             bool b = RegisterHotKey(Handle, 2, 0x0002 | 0x0001 | 0x4000, 0x47);
             Status = (a ? "K:ok" : "K:fail") + " " + (b ? "G:ok" : "G:fail");
         }
+        public void Release()
+        {
+            if (Handle == IntPtr.Zero) return;
+            UnregisterHotKey(Handle, 1);
+            UnregisterHotKey(Handle, 2);
+            DestroyHandle();
+        }
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == 0x0312)
+            try
             {
-                int id = m.WParam.ToInt32();
-                if (id == 1) Tray.Actions.Enqueue("mini");
-                else if (id == 2) { if (Native.Visible) Native.Hide(); else Native.Show(); }
+                if (m.Msg == 0x0312)
+                {
+                    int id = m.WParam.ToInt32();
+                    if (id == 1) Tray.Actions.Enqueue("mini");
+                    else if (id == 2) Tray.Toggle();
+                }
+                // WM_ENDSESSION: user32 kullanan konsol programina CTRL_LOGOFF_EVENT / CTRL_SHUTDOWN_EVENT
+                // gelmez (CloseGuard calismaz); Windows bunun yerine gizli pencereye bunu gonderir
+                else if (m.Msg == 0x0016 && m.WParam != IntPtr.Zero) Tray.SaveServer();
             }
+            catch { }   // pencere yordamindan hata kacarsa Windows Forms hata penceresi acar
             base.WndProc(ref m);
         }
     }
@@ -251,66 +267,208 @@ namespace SyHost
         }
     }
 
+    // Saat yanindaki simge, menusu, balon bildirimleri ve kisayol tuslari (C# surumu: src\SyHost\Core\Tray.cs)
     public static class Tray
     {
         public static readonly ConcurrentQueue<string> Actions = new ConcurrentQueue<string>();
         static NotifyIcon icon;
         static Control invoker;
         static HotkeyWindow hotkeys;
-        public static string HotkeyStatus { get { return hotkeys == null ? "" : hotkeys.Status; } }
+        static Thread thread;
+        static IntPtr iconHandle;
+        static volatile bool up, stopped;
+        static readonly ManualResetEvent ready = new ManualResetEvent(false);
+        static readonly ConcurrentQueue<Action> early = new ConcurrentQueue<Action>();
+        // Menu yazilari: PowerShell L ile verir (SetLabels), dil degisince yeniden verir; menu her acilista bunlari yazar.
+        // Varsayilanlar Turkce anahtarlar (Lang.Screens.ps1, AddTray).
+        static volatile string[] labels = { "Paneli G\u00f6ster", "Paneli Gizle", "K\u00fc\u00e7\u00fck / B\u00fcy\u00fck Mod  (Ctrl+Alt+K)", "Sunucuyu Yeniden Ba\u015flat", "SyHost'u Kapat" };
 
-        public static void Start(string text)
+        public static string HotkeyStatus { get { HotkeyWindow h = hotkeys; return h == null ? "" : h.Status; } }
+        // Kisayol / oturum penceresi (testler icin)
+        public static IntPtr Hwnd { get { HotkeyWindow h = hotkeys; return h == null ? IntPtr.Zero : h.Handle; } }
+        public static bool Running { get { return up && !stopped; } }
+        public static string[] Labels { get { return (string[])labels.Clone(); } }
+
+        // Menu yazilari (sirayla: goster, gizle, kucuk/buyuk, yeniden baslat, kapat). Bos ya da null olan degismez.
+        // Her is parcacigindan, Start'tan once ya da sonra cagrilabilir.
+        public static void SetLabels(string show, string hide, string mini, string restart, string quit)
         {
+            string[] cur = labels;
+            labels = new string[] { Pick(show, cur[0]), Pick(hide, cur[1]), Pick(mini, cur[2]), Pick(restart, cur[3]), Pick(quit, cur[4]) };
+        }
+        static string Pick(string s, string old) { return string.IsNullOrEmpty(s) ? old : s; }
+
+        public static void Start(string text) { Start(text, null); }
+
+        // iconFile: simgesi kullanilacak dosya (SyHost.exe); yoksa ya da okunamazsa kirmizi "S" cizilir
+        public static void Start(string text, string iconFile)
+        {
+            if (thread != null) return;
+            string tip = Trim(text ?? "");
             Thread th = new Thread(() =>
             {
-                Application.EnableVisualStyles();
-                invoker = new Control();
-                IntPtr force = invoker.Handle;
-                hotkeys = new HotkeyWindow();
-                icon = new NotifyIcon();
-                icon.Icon = MakeIcon();
-                icon.Text = Trim(text);
-                ContextMenuStrip menu = new ContextMenuStrip();
-                menu.Items.Add("Paneli Goster", null, (s, e) => Native.Show());
-                menu.Items.Add("Paneli Gizle", null, (s, e) => Native.Hide());
-                menu.Items.Add("Kucuk / Buyuk Mod  (Ctrl+Alt+K)", null, (s, e) => Actions.Enqueue("mini"));
-                menu.Items.Add(new ToolStripSeparator());
-                menu.Items.Add("Sunucuyu Yeniden Baslat", null, (s, e) => Actions.Enqueue("restart"));
-                menu.Items.Add("SyHost'u Kapat", null, (s, e) => { Native.Show(); Actions.Enqueue("quit"); });
-                icon.ContextMenuStrip = menu;
-                icon.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) { if (Native.Visible) Native.Hide(); else Native.Show(); } };
-                icon.Visible = true;
-                Application.Run();
+                try
+                {
+                    Application.ThreadException += (s, e) => { };   // bu is parcacigindaki hata pencere acmasin
+                    Application.EnableVisualStyles();
+                    invoker = new Control();
+                    IntPtr force = invoker.Handle;
+                    hotkeys = new HotkeyWindow();
+                    icon = new NotifyIcon();
+                    Icon ic = IconFromFile(iconFile);
+                    if (ic != null) iconHandle = ic.Handle; else ic = MakeIcon();
+                    icon.Icon = ic;
+                    icon.Text = tip;
+                    icon.ContextMenu = BuildMenu();
+                    icon.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) Toggle(); };
+                    icon.Visible = true;
+                    up = true;
+                }
+                catch { }
+                ready.Set();
+                Flush();
+                if (!up) return;
+                try { Application.Run(); } catch { }
             });
             th.SetApartmentState(ApartmentState.STA);
             th.IsBackground = true;
+            thread = th;
             th.Start();
+        }
+
+        // Windows'un kendi acilir menusu (C# surumundeki gibi); yazilar her acilista guncel dilden
+        public static ContextMenu BuildMenu()
+        {
+            string[] l = labels;
+            ContextMenu menu = new ContextMenu();
+            menu.MenuItems.Add(new MenuItem(l[0], (s, e) => Native.Show()));
+            menu.MenuItems.Add(new MenuItem(l[1], (s, e) => Native.Hide()));
+            menu.MenuItems.Add(new MenuItem(l[2], (s, e) => Actions.Enqueue("mini")));
+            menu.MenuItems.Add(new MenuItem("-"));
+            menu.MenuItems.Add(new MenuItem(l[3], (s, e) => Actions.Enqueue("restart")));
+            menu.MenuItems.Add(new MenuItem(l[4], (s, e) => { Native.Show(); Actions.Enqueue("quit"); }));
+            menu.Popup += (s, e) => ApplyLabels(menu);
+            return menu;
+        }
+
+        public static void ApplyLabels(ContextMenu menu)
+        {
+            string[] l = labels;
+            int[] at = { 0, 1, 2, 4, 5 };
+            for (int i = 0; i < at.Length; i++) if (menu.MenuItems[at[i]].Text != l[i]) menu.MenuItems[at[i]].Text = l[i];
+        }
+
+        internal static void Toggle() { if (Native.Visible) Native.Hide(); else Native.Show(); }
+
+        // Windows kapanirken / oturum kapanirken (WM_ENDSESSION): CloseGuard gibi sunucuyu kaydedip durdur
+        internal static void SaveServer()
+        {
+            Server s = CloseGuard.Current;
+            if (s != null && s.Running) { s.Send("stop"); try { s.P.WaitForExit(25000); } catch { } }
         }
 
         static string Trim(string s) { return s.Length > 63 ? s.Substring(0, 63) : s; }
 
+        // Tepsi is parcaciginda calistir. Tepsi henuz acilmadiysa sirada bekler, acilinca yapilir.
         static void OnUi(Action a)
         {
-            Control c = invoker;
-            if (c == null || icon == null) return;
-            try { c.BeginInvoke(a); } catch { }
+            if (thread == null || stopped) return;
+            Action safe = () => { try { a(); } catch { } };
+            if (!up)
+            {
+                if (ready.WaitOne(0)) return;   // tepsi acilamadi
+                early.Enqueue(safe);
+                if (up || ready.WaitOne(0)) Flush();   // bu arada acildi
+                return;
+            }
+            try { invoker.BeginInvoke(safe); } catch { }
+        }
+
+        static void Flush()
+        {
+            Action a;
+            while (early.TryDequeue(out a))
+            {
+                if (!up) continue;
+                if (Thread.CurrentThread == thread) a();
+                else { try { invoker.BeginInvoke(a); } catch { } }
+            }
         }
 
         public static void Balloon(string title, string msg)
         {
-            OnUi(() => icon.ShowBalloonTip(3000, title, msg, ToolTipIcon.Info));
+            if (string.IsNullOrEmpty(msg)) return;   // bos metinle Windows Forms hata verir
+            string t = title ?? "";
+            OnUi(() => { if (icon != null && icon.Visible) icon.ShowBalloonTip(3000, t, msg, ToolTipIcon.Info); });
         }
 
-        public static void SetText(string s) { OnUi(() => icon.Text = Trim(s)); }
+        public static void SetText(string s)
+        {
+            string t = Trim(s ?? "");
+            OnUi(() => { if (icon != null && icon.Text != t) icon.Text = t; });
+        }
 
+        // Simgeyi kaldir, kisayollari birak, is parcacigini bitir. Cikisi bekletmez (en fazla birkac saniye).
         public static void Close()
         {
-            Control c = invoker;
-            if (c == null) return;
-            try { c.Invoke((Action)(() => { icon.Visible = false; icon.Dispose(); Application.ExitThread(); })); } catch { }
+            Thread th = thread;
+            if (th == null || stopped) return;
+            stopped = true;
+            if (Thread.CurrentThread == th) { Stop(); return; }
+            ready.WaitOne(2000);
+            if (up) { try { invoker.BeginInvoke((Action)Stop); } catch { } }
+            // Simge kalkmadan cikilirsa fare ustune gelene kadar saatin yaninda hayalet simge kalir
+            th.Join(3000);
         }
 
-        // Kirmizi, "S" yazili kucuk tepsi simgesi
+        static void Stop()
+        {
+            try { if (icon != null) { icon.Visible = false; icon.Dispose(); } } catch { }
+            try { if (iconHandle != IntPtr.Zero) { DestroyIcon(iconHandle); iconHandle = IntPtr.Zero; } } catch { }
+            try { if (hotkeys != null) hotkeys.Release(); } catch { }
+            up = false;
+            try { Application.ExitThread(); } catch { }
+        }
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern int SHDefExtractIcon(string file, int index, uint flags, out IntPtr large, out IntPtr small, uint sizes);
+        [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+        [DllImport("user32.dll")] static extern int GetSystemMetrics(int i);
+        [DllImport("user32.dll")] static extern int GetSystemMetricsForDpi(int i, uint dpi);
+        [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr h);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);
+
+        // Gorev cubugunun olcegine uygun kucuk simge boyutu (125%/150% olcekte bulanik olmasin)
+        static int SmallIconSize()
+        {
+            int n = 0;
+            try
+            {
+                IntPtr bar = FindWindow("Shell_TrayWnd", null);
+                uint dpi = bar != IntPtr.Zero ? GetDpiForWindow(bar) : 0;
+                if (dpi != 0) n = GetSystemMetricsForDpi(49, dpi);   // SM_CXSMICON
+            }
+            catch { }   // Windows 10 1607 oncesinde bu islevler yok
+            if (n <= 0) n = GetSystemMetrics(49);
+            return n > 0 ? n : 16;
+        }
+
+        // Dosyanin (SyHost.exe) ilk simgesi, gorev cubugu boyutunda; olmazsa null
+        public static Icon IconFromFile(string file)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(file) || !File.Exists(file)) return null;
+                int cs = SmallIconSize();
+                IntPtr large, small;
+                // sizes: alt 16 bit buyuk, ust 16 bit kucuk simgenin boyutu
+                if (SHDefExtractIcon(file, 0, 0, out large, out small, (uint)((cs << 16) | (cs * 2))) != 0) return null;
+                if (large != IntPtr.Zero) DestroyIcon(large);
+                return small == IntPtr.Zero ? null : Icon.FromHandle(small);
+            }
+            catch { return null; }
+        }
+
+        // Kirmizi, "S" yazili kucuk tepsi simgesi (SyHost.exe yoksa, ornegin gelistirirken)
         static Icon MakeIcon()
         {
             Bitmap b = new Bitmap(32, 32);

@@ -2903,7 +2903,8 @@ if ($TestFrame) {
 [SyHost.Native]::DisableCloseButton()
 Set-WindowIcon
 [SyHost.CloseGuard]::Install()
-[SyHost.Tray]::Start($Title)
+# Tepsi simgesi SyHost.exe'nin kendi simgesi (yoksa kırmızı "S"); menü yazıları Init-Tables'ta seçili dilden verilir
+[SyHost.Tray]::Start($Title, $ExePath)
 [SyHost.Native]::MakeOpaque()
 # Eski verileri taşı, taşınmış klasörün kısayollarını düzelt, klasör görünümünü uygula (Portable.ps1)
 Invoke-PortableStartup
