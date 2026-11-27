@@ -142,13 +142,13 @@ function FrInstall([string]$kind) {
     try {
         if ($kind -ceq 'update') {
             $target = [IO.Path]::Combine($Fr.OtherInstall, 'SyHost.exe')
-            if ($null -eq (FrNewerVersion $target)) { Copy-SyHostExe $exe $target }
+            if ($null -eq (FrNewerVersion $target)) { $null = Copy-SyHostExe $exe $target }
             $script:LaunchAfterExit = $target
         } else {
             $root = $Fr.Target
             if (-not (Test-CanWrite $root)) { $Fr.Note = L 'Bu klasöre yazılamıyor. Başka bir yer seç.'; $Fr.NoteCol = $c.red; return }
-            Install-SyHostTo $root $exe $LangCode
-            Set-FolderLook $root $LangCode @()
+            $null = Install-SyHostTo $root $exe $LangCode
+            $null = Set-FolderLook $root $LangCode @()
             $script:LaunchAfterExit = [IO.Path]::Combine($root, 'SyHost.exe')
         }
         $script:Quit = $true
@@ -339,6 +339,7 @@ function Fr-Poll {
 }
 
 # ---------- Tuşlar ----------
+# Not: bu işleyicinin çıktısı ana döngüde ekrana yazılır; arka uç işlevlerinin dönüşleri $null = ile yutulur.
 function Handle-FirstRunKey([ConsoleKeyInfo]$k, [bool]$ctrl) {
     if ($null -eq $Fr) { $script:Screen = 'home'; Reset-Frame; return }
     if (FrBusy) { if ($k.Key -eq 'Escape' -and (FrStep) -ceq 'arkadas') { PlayitCancel }; return }
@@ -442,7 +443,7 @@ function Handle-FirstRunKey([ConsoleKeyInfo]$k, [bool]$ctrl) {
             elseif ($k.Key -eq 'Spacebar') { if ($Fr.Sel -eq 0) { $Fr.Desk = -not $Fr.Desk } else { $Fr.Start = -not $Fr.Start } }
             elseif ($k.Key -eq 'Escape') { FrBack }
             elseif ($k.Key -eq 'Enter') {
-                Apply-Shortcuts $Fr.Desk $Fr.Start
+                $null = Apply-Shortcuts $Fr.Desk $Fr.Start   # tuş işleyicisinin çıktısı ekrana yazılırdı
                 FrNext
             }
             return
