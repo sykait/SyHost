@@ -120,4 +120,30 @@ Save 'un-bitti-error-tr' (Base 'tr' 7.4 @{ screen = 'uninstall'; uninstall = @{ 
 Save 'un-bitti-folder-en' (Base 'en' 7.9 @{ screen = 'uninstall'; uninstall = @{ items = (Items $true @(2, 2, 4, 4, 4, 4, 2)); sel = 0; phase = 'bitti' } })
 Save 'un-bitti-dry-ja' (Base 'ja' 8.5 @{ screen = 'uninstall'; dryRun = $true; uninstall = @{ items = (Items $false @(2, 2, 4, 4, 4, 4, 4)); sel = 0; phase = 'bitti' } })
 
+# Kaldır: tuşlar (durum kurulur, tuşlar sırayla basılır, sonra kare çizilir). Test modunda kaldırma işi hiç başlamaz.
+function UnKeys([string]$name, [string]$lang, [double]$t, $items, [int]$sel, [string]$phase, [string[]]$keys, $extra = @{}) {
+    $st = @{ screen = 'uninstall'; uninstall = @{ items = $items; sel = $sel; phase = $phase } }
+    foreach ($e in $extra.GetEnumerator()) { $st[$e.Key] = $e.Value }
+    $sc = Base $lang $t $st
+    $sc.state['keys'] = $keys   # sonradan: "keys" anahtarı olan bir tabloda $state.Keys anahtar adlarını değil tuşları döndürür
+    Save $name $sc
+}
+$none = Items $false; foreach ($x in $none) { $x.on = $false }
+UnKeys 'un-keys-down-wrap-tr' 'tr' 4.3 (Items $false) 6 'liste' @('DownArrow')                       # sondan başa
+UnKeys 'un-keys-up-wrap-en' 'en' 4.8 (Items $false) 0 'liste' @('UpArrow')                          # baştan sona
+UnKeys 'un-keys-space-ja' 'ja' 5.1 (Items $false) 0 'liste' @('Spacebar', 'DownArrow', 'DownArrow', 'Spacebar')
+UnKeys 'un-keys-enter-onay-tr' 'tr' 5.6 (Items $true) 6 'liste' @('Enter')                          # klasör seçili: önce onay
+UnKeys 'un-keys-enter-twice-en' 'en' 6.1 (Items $true) 6 'liste' @('Enter', 'Enter')                # ikinci Enter: kaldırılıyor
+UnKeys 'un-keys-onay-move-ja' 'ja' 6.4 (Items $true) 6 'onay' @('UpArrow')                          # onaydan listeye dönülür
+UnKeys 'un-keys-onay-space-tr' 'tr' 6.7 (Items $true) 6 'onay' @('Spacebar')                        # klasör bırakılır, onay kalkar
+UnKeys 'un-keys-enter-run-ja' 'ja' 7.0 (Items $false) 0 'liste' @('Enter')                          # klasör yok: onaysız başlar
+UnKeys 'un-keys-enter-none-en' 'en' 7.3 $none 2 'liste' @('Enter')                                  # hiçbir şey seçili değil: bir şey olmaz
+UnKeys 'un-keys-calisiyor-keys-tr' 'tr' 7.6 (Items $true @(2, 1, 4, 4, 4, 4, 0)) 0 'calisiyor' @('Enter', 'Escape', 'Spacebar')
+UnKeys 'un-keys-bitti-enter-en' 'en' 8.1 (Items $true @(2, 2, 4, 4, 4, 4, 2)) 0 'bitti' @('Enter')  # SyHost'u kapat: kapanış animasyonu
+# Esc ayarlara döner; ayarlarda Aşağı imleci oynatır, Esc ana menüye gider (Esc doğrudan ana menüye gitseydi ikinci sunucu seçili olurdu)
+UnKeys 'un-keys-esc-settings-tr' 'tr' 8.6 (Items $false) 3 'liste' @('Escape', 'DownArrow', 'Escape') @{
+    settings = @{ sel = 12 }; homeSel = 0
+    modCounts = @{ icerde = 214; icerde2 = 87; disarda = 0 }; worldSizes = @{ icerde = '1450 MB'; icerde2 = '312 MB'; disarda = 'henüz oluşmadı' }
+}
+
 "senaryo yazıldı: $n"
