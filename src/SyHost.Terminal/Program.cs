@@ -123,7 +123,7 @@ static class Program
         if (missing != null)
             return "\n\n" + Lang.L("Bir SyHost dosyası yazıldıktan hemen sonra kayboldu:\n{0}\n\nBir virüs tarayıcısı kaldırmış olabilir. README'deki \"Güvenlik ve virüs tarayıcıları\" bölümüne bak.", missing);
         if (IsNetworkPath(root))
-            return "\n\n" + Lang.L("SyHost klasörü bir ağ konumunda. Windows PowerShell oradaki betikleri çalıştırmayabilir: SyHost klasörünü bu bilgisayardaki bir sürücüye taşı ya da SyHost'un ana sürümünü kullan.");
+            return "\n\n" + Lang.L("SyHost klasörü bir ağ konumunda. Windows PowerShell oradaki betikleri çalıştırmayabilir: SyHost klasörünü bu bilgisayardaki bir sürücüye taşı ya da SyHost Modern'i kullan.");
         return "";
     }
 

@@ -30,9 +30,9 @@
     <Company>sykait</Company>
     <Authors>sykait</Authors>
     <Copyright>© 2026 sykait</Copyright>
-    <Description>SyHost - modded Minecraft server hub (Terminal edition)</Description>
+    <Description>SyHost Legacy (Terminal) - modded Minecraft server hub</Description>
     <!-- Windows'taki "Dosya açıklaması": hangi sürüm olduğu görünsün (ürün adı yine SyHost) -->
-    <AssemblyTitle>SyHost (Terminal edition)</AssemblyTitle>
+    <AssemblyTitle>SyHost Legacy (Terminal)</AssemblyTitle>
     <NeutralLanguage>en</NeutralLanguage>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>

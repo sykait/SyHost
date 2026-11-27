@@ -51,10 +51,10 @@ jobs:
           $ver = $tag.TrimStart('v')
           New-Item -ItemType Directory -Force out | Out-Null
           Copy-Item dist\SyHost.exe "out\SyHost-$ver.exe"
-          # Terminal surumu de her surumde cikar: eksikse yayinlama durur
+          # SyHost Legacy (Terminal) de her surumde cikar: eksikse yayinlama durur
           if (-not (Test-Path dist\SyHost-Terminal.exe)) { throw 'dist\SyHost-Terminal.exe is missing' }
-          # GitHub dosyalari adina gore siralar: "SyHost-1.0.0.exe" (ana surum) "SyHost-Terminal-1.0.0.exe"den once gelir
-          Copy-Item dist\SyHost-Terminal.exe "out\SyHost-Terminal-$ver.exe"
+          # GitHub dosyalari adina gore siralar: "SyHost-1.0.0.exe" (SyHost Modern, onerilen) "SyHost-Legacy-1.0.0.exe"den once gelir
+          Copy-Item dist\SyHost-Terminal.exe "out\SyHost-Legacy-$ver.exe"
           # Saglama toplamlari ayri bir dosya degil, surum notlarinin sonunda (indirilecek yalnizca iki dosya olsun)
           $sums = Get-ChildItem out\*.exe | Sort-Object Name | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
           $notes = "docs\releases\$ver.md"
@@ -69,8 +69,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # gh bilgi satirlarini stderr'e yazabilir: hata degil, cikis kodu denetlenir
+          $ErrorActionPreference = 'Continue'
           $tag = '${{ steps.files.outputs.tag }}'; $ver = '${{ steps.files.outputs.ver }}'
-          $assets = @("out\SyHost-$ver.exe", "out\SyHost-Terminal-$ver.exe")
+          # Releases sayfasinda gorunen adlar (dosya adlari ayni kalir): "dosya#ad"
+          $assets = @("out\SyHost-$ver.exe#SyHost Modern (C#) - recommended", "out\SyHost-Legacy-$ver.exe#SyHost Legacy (Terminal)")
+          # Ayni etiket yeniden gonderildiyse (or. yeni bir commit'e tasindi) eski yayin yenisiyle degistirilir; etiket kalir
+          $existing = @(& gh release list --limit 100 --json tagName --jq '.[].tagName')
+          if ($LASTEXITCODE) { exit 1 }
+          if ($existing -contains $tag) {
+            & gh release delete $tag --yes
+            if ($LASTEXITCODE) { exit 1 }
+          }
           $ghArgs = @('release', 'create', $tag) + $assets + @('--title', "SyHost $ver", '--verify-tag', '--notes-file', 'out\notes.md')
           & gh @ghArgs
           if ($LASTEXITCODE) { exit 1 }

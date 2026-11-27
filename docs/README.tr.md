@@ -74,12 +74,12 @@ arkadaşların internetten bağlansın, yedeklerin kendiliğinden alınsın. Hep
 
 **[Releases sayfasından](https://github.com/sykait/SyHost/releases/latest)** indir:
 
-| Dosya | Kimin için |
-| --- | --- |
-| **`SyHost-1.0.0.exe`** | **Herkes için (önerilen).** C# ile yazılmış ana sürüm. |
-| `SyHost-Terminal-1.0.0.exe` | Aynı uygulamanın PowerShell sürümü (Windows'la birlikte gelen PowerShell'de çalışır). Betikleri okuyabilmek isteyenler için. |
+| Sürüm | Dosya | Kimin için |
+| --- | --- | --- |
+| **SyHost Modern (C#)** | **`SyHost-1.0.0.exe`** | **Herkes için (önerilen).** C# ile yazılmış yeni sürüm. |
+| SyHost Legacy (Terminal) | `SyHost-Legacy-1.0.0.exe` | Aynı uygulamanın eski PowerShell sürümü (Windows'la birlikte gelen PowerShell'de çalışır). Betikleri okuyabilmek isteyenler için. |
 
-İki sürüm de aynı görünür ve aynı çalışır; ekrandaki sürüm satırında yalnızca `C#` ya da `Terminal` yazar. İkisi de
+SyHost Modern ve SyHost Legacy aynı görünür ve aynı çalışır; ekrandaki sürüm satırında yalnızca `C#` ya da `Terminal` yazar. İkisi de
 aynı klasörde aynı dosyaları kullanır, istersen sonra öbürüne geçebilirsin. Her biri tek bir dosyadır, başka hiçbir
 şey indirmen gerekmez. İki dosyanın SHA-256 sağlama toplamları sürüm notlarının sonundadır.
 
@@ -137,7 +137,7 @@ C:\Users\<ad>\SyHost\
 ├── SyHost.exe      uygulama: açman gereken tek dosya
 ├── Servers\        sunucuların, her biri kendi klasöründe
 ├── Data\           ayarlar, sunucu listesi, playit anahtarı, kayıtlar, indirilen Java ve playit
-└── App\            (yalnızca Terminal sürümü) PowerShell uygulaması
+└── App\            (yalnızca SyHost Legacy) PowerShell uygulaması
 ```
 
 - **Her şey bu klasörde durur.** Klasörün dışına SyHost yalnızca kısayolları ve (kurmak zorunda kaldıysa) yazı tipini
@@ -148,8 +148,8 @@ C:\Users\<ad>\SyHost\
   içindeki sunucular onunla birlikte taşınır. Klasörü yazabildiğin bir yerde tut: `Program Files` gibi bir yerden
   açılırsa SyHost yalnızca bir uyarı gösterir ve SyHost klasörünü bütünüyle (`Servers` ve `Data` ile birlikte)
   taşımanı söyler.
-- **Terminal sürümü yerel bir sürücü ister.** Windows PowerShell ağ paylaşımındaki betikleri çalıştırmayı
-  reddedebilir; bu sürümün klasörünü bu bilgisayardaki bir sürücüde tut (ana sürüm için fark etmez).
+- **SyHost Legacy yerel bir sürücü ister.** Windows PowerShell ağ paylaşımındaki betikleri çalıştırmayı
+  reddedebilir; SyHost klasörünü bu bilgisayardaki bir sürücüde tut (SyHost Modern için fark etmez).
 - Explorer'da klasörler SyHost simgeleriyle görünür; `Servers` ve yedek klasörleri seçtiğin dilde adlandırılır
   (Türkçede `Sunucular` ve `Yedekler`).
 - `Data\playit.toml` playit bağlantının gizli anahtarıdır. Kimseyle paylaşma.
@@ -347,7 +347,7 @@ satırda listelenir; **Boşluk** tuşuyla sen seçersin:
 - **SyHost klasörünün kendisi**, içindeki sunucular ve dünyalarla birlikte. Satırında onunla birlikte kaç sunucunun
   gideceği yazar: `Servers` içindeki her klasör sayılır, listeden kaldırdığın sunucular da. Seçili gelmez; seçersen
   SyHost bir kez daha Enter'a basmanı ister. SyHost kapanırken klasörün içindeki her şeyi siler, sonra klasörü
-  Explorer'da gösterir: kalanı oradan silersin (`SyHost.exe`, Terminal sürümünde `App` klasörü de, bir de başka bir
+  Explorer'da gösterir: kalanı oradan silersin (`SyHost.exe`, SyHost Legacy'de `App` klasörü de, bir de başka bir
   programın hâlâ açık tuttuğu dosyalar). SyHost klasörü başka bir yeri gösteren bir bağlantıysa (junction ya da bir
   klasöre bağlanmış bir sürücü) bu satır hiç çıkmaz.
 
@@ -390,13 +390,13 @@ Enter'a basarsan doğrudan o ekrana geçilir). SyHost klasörünün dışındaki
 SyHost sıradan bir programdır ve öyle davranmaya çalışır:
 
 - İhtiyaç duyduğu her şey kendi klasöründe durur (yukarıdaki "SyHost klasörü" bölümüne bak). Bir SyHost klasörünün
-  dışından açılınca (ilk açılış ya da İndirilenler'den güncelleme) Terminal sürümü `%TEMP%\SyHost-Terminal-…` içindeki
+  dışından açılınca (ilk açılış ya da İndirilenler'den güncelleme) SyHost Legacy `%TEMP%\SyHost-Terminal-…` içindeki
   geçici bir kopyadan çalışır; bu kopya SyHost kapanınca silinir. Yönetici iznini yalnızca eski 0.5.0 kurulumunun
   bütün bilgisayara kurduğu bir şeyi kaldırmayı seçtiğinde ister (Ayarlar → SyHost'u kaldır): yazı tipi için Windows
   izin penceresinde SyHost'un kendisi görünür, playit ve Java için onların kendi Windows Installer'ı.
 - Hiçbir zaman gizli bir PowerShell ya da cmd penceresi açmaz ve kodlanmış komut vermez. Çalışırken metinden kod
   üretmez, dosyalardaki "internetten indirildi" işaretini silmez ve kendini yardımcı bir programla silmez. Senin için
-  çalıştırdığı programlar (sunucunun Java'sı, mod yükleyicisinin kurucusu, playit, Terminal sürümünde de takılan bir
+  çalıştırdığı programlar (sunucunun Java'sı, mod yükleyicisinin kurucusu, playit, SyHost Legacy'de de takılan bir
   kurucuyu durdurmak için Windows'un `taskkill`'i) kendi pencereleri olmadan çalışır; sunucunun konsolu SyHost'un
   ekranında görünür. Kaldırırken klasörün içini SyHost açıkken boşaltır; kalanı Explorer'dan sen silersin.
 - Java'yı Adoptium'dan, playit'i playit'in GitHub sürümlerinden, mod yükleyicisini NeoForge, Forge ya da Fabric'ten
@@ -451,7 +451,7 @@ NeoForge, Forge ve Fabric için Modrinth `.mrpack` paketleri. Paketin istediği 
 yoksa indirilir.
 
 **Hangi sürümü indirmeliyim?**
-`SyHost-1.0.0.exe`'yi. Terminal sürümü, PowerShell betiklerini okumayı sevenler için aynı uygulamadır.
+SyHost Modern'i, yani `SyHost-1.0.0.exe`'yi. SyHost Legacy (Terminal), PowerShell betiklerini okumayı sevenler için aynı uygulamadır.
 
 **Mac ya da Linux?**
 Yalnızca Windows 10 ve 11.
@@ -466,14 +466,14 @@ NativeAOT derlemesi için) gerekir; bir de Windows'la gelen Windows PowerShell 5
 
 ```powershell
 build\Build.ps1                       # hızlı derleme denetimi (Debug)
-build\Build.ps1 -Publish              # dist\SyHost.exe: ana sürüm, tek dosya
-build\Build.ps1 -Publish -Terminal    # ayrıca dist\SyHost-Terminal.exe: Terminal sürümü
+build\Build.ps1 -Publish              # dist\SyHost.exe: SyHost Modern (C#), tek dosya
+build\Build.ps1 -Publish -Terminal    # ayrıca dist\SyHost-Terminal.exe: SyHost Legacy (Terminal)
 tests\parity\Run-Parity.ps1           # derler, sonra iki sürümü ekran ekran karşılaştırır
 build\Render-Screens.ps1              # docs\images\screens içindeki ekran görüntülerini yeniden çizer
 ```
 
-**İki sürüm, tek ekran.** SyHost bir PowerShell betiği olarak başladı. **Ana sürüm** (`src/SyHost`) onun C#'a
-aktarılmış hâlidir; .NET 10 NativeAOT ile tek bir `SyHost.exe` olarak derlenir ve ölçü odur. **Terminal sürümü**
+**İki sürüm, tek ekran.** SyHost bir PowerShell betiği olarak başladı. **SyHost Modern** (`src/SyHost`) onun C#'a
+aktarılmış hâlidir; .NET 10 NativeAOT ile tek bir `SyHost.exe` olarak derlenir ve ölçü odur. **SyHost Legacy**
 (`legacy/src`) aynı özelliklere kavuşturulmuş PowerShell uygulamasıdır; başlatıcı exe'si betikleri içinde taşır.
 
 **Eşlik (parity) testi** ikisini aynı tutar. `tests/parity/scenarios` içindeki her senaryo uygulamanın bir anını
@@ -494,13 +494,13 @@ kopyanın güncel olup olmadığına bakar).
 ```
 SyHost/
 ├── src/
-│   ├── SyHost/             ana sürüm (C#, .NET 10, NativeAOT)
+│   ├── SyHost/             SyHost Modern (C#, .NET 10, NativeAOT)
 │   │   ├── App/            ekranlar: ana menü, sunucu, yeni sunucu, ilk açılış, ayarlar, kaldır; metinler
 │   │   ├── Core/           Windows katmanı, sunucu kurulumu, Java, tepsi simgesi, ayar dosyaları
 │   │   ├── Setup/          SyHost klasörü, kısayollar, yazı tipi, eski verinin taşınması, kaldırma, klasör simgeleri
 │   │   └── Assets/         uygulama ve klasör simgeleri
-│   └── SyHost.Terminal/    Terminal sürümünün başlatıcısı (PowerShell uygulamasını içinde taşıyan tek exe)
-├── legacy/                 Terminal sürümü (Windows PowerShell 5.1)
+│   └── SyHost.Terminal/    SyHost Legacy'nin başlatıcısı (PowerShell uygulamasını içinde taşıyan tek exe)
+├── legacy/                 SyHost Legacy (Windows PowerShell 5.1)
 │   ├── src/                SyHost.ps1 ve parçaları, C# yardımcıları, metinler
 │   ├── config/             varsayılan ayarlar (iki sürüm de kullanır)
 │   └── fonts/              Cascadia Mono (SIL Open Font License 1.1)

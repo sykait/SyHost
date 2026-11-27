@@ -68,12 +68,12 @@ friends join over the internet and keep backups, all on one animated terminal sc
 
 Get it from the **[Releases page](https://github.com/sykait/SyHost/releases/latest)**:
 
-| File | Who it's for |
-| --- | --- |
-| **`SyHost-1.0.0.exe`** | **Everyone (recommended).** The main edition, written in C#. |
-| `SyHost-Terminal-1.0.0.exe` | The same app as a PowerShell edition (it runs on the Windows PowerShell that comes with Windows), for people who like to read the scripts. |
+| Edition | File | Who it's for |
+| --- | --- | --- |
+| **SyHost Modern (C#)** | **`SyHost-1.0.0.exe`** | **Everyone (recommended).** The new edition, written in C#. |
+| SyHost Legacy (Terminal) | `SyHost-Legacy-1.0.0.exe` | The same app as the older PowerShell edition (it runs on the Windows PowerShell that comes with Windows), for people who like to read the scripts. |
 
-Both editions look and work the same; only the version line on screen says `C#` or `Terminal`. They keep the same
+SyHost Modern and SyHost Legacy look and work the same; only the version line on screen says `C#` or `Terminal`. They keep the same
 files in the same folder, so you can switch later. Each one is a single file and there is nothing else to download.
 The SHA-256 checksums of both are at the end of the release notes.
 
@@ -128,7 +128,7 @@ C:\Users\<name>\SyHost\
 ├── SyHost.exe      the app: the only file you need to open
 ├── Servers\        your servers, one folder each
 ├── Data\           settings, server list, playit key, logs, downloaded Java and playit
-└── App\            (Terminal edition only) the PowerShell app
+└── App\            (SyHost Legacy only) the PowerShell app
 ```
 
 - **Everything stays in this folder.** Outside of it SyHost only adds the shortcuts and the font (only if it had to
@@ -138,8 +138,8 @@ C:\Users\<name>\SyHost\
   new place once and it repairs its Desktop and Start-menu shortcuts. Servers inside the folder move with it.
   Keep it somewhere you can write to: opened from a folder like `Program Files`, SyHost only shows a warning that
   tells you to move the whole SyHost folder (with `Servers` and `Data`).
-- **The Terminal edition needs a local drive.** Windows PowerShell may refuse to run scripts from a network share,
-  so keep that edition's folder on a drive of this PC (the main edition doesn't mind).
+- **SyHost Legacy needs a local drive.** Windows PowerShell may refuse to run scripts from a network share, so
+  keep the SyHost folder on a drive of this PC (SyHost Modern doesn't mind).
 - In Explorer the folders get SyHost icons, and the `Servers` and backup folders show their names in your language.
 - `Data\playit.toml` is the secret key of your playit connection. Don't share it.
 
@@ -328,7 +328,7 @@ line each, and you choose with **Space**:
 - **the SyHost folder itself**, with your servers and worlds inside. Its line says how many servers go with it: every
   folder in `Servers` counts, also servers you removed from the list. It is not selected, and if you select it,
   SyHost asks you to press Enter a second time. When SyHost closes, it deletes everything inside the folder and then
-  shows the folder in Explorer: delete what is left there (`SyHost.exe`, in the Terminal edition also its `App`
+  shows the folder in Explorer: delete what is left there (`SyHost.exe`, in SyHost Legacy also its `App`
   folder, and any file another program still had open). If the SyHost folder is a link to another place (a junction,
   or a drive mounted into a folder), this line is not offered.
 
@@ -370,14 +370,14 @@ selected, Enter goes straight to that screen). Servers outside the SyHost folder
 SyHost is an ordinary program and tries to behave like one:
 
 - Everything it needs stays in its own folder (see [The SyHost folder](#the-syhost-folder)). Opened outside a SyHost
-  folder (the first start, or an update from Downloads), the Terminal edition runs from a temporary copy in
+  folder (the first start, or an update from Downloads), SyHost Legacy runs from a temporary copy in
   `%TEMP%\SyHost-Terminal-…`, which is deleted when SyHost closes. SyHost asks for admin rights only when you choose
   to remove something the old 0.5.0 setup installed for the whole PC (Settings → Uninstall SyHost): for its font the
   Windows prompt names SyHost itself, for playit and Java it is their own Windows Installer.
 - It never opens a hidden PowerShell or cmd window and never passes encoded commands. It never builds code from text
   while it runs, never removes the "downloaded from the internet" mark from files and never deletes itself through a
-  helper program. The programs it runs for you (your server's Java, the mod loader's installer, playit, and in the
-  Terminal edition Windows' `taskkill` to stop a stuck installer) run without a window of their own; your server's
+  helper program. The programs it runs for you (your server's Java, the mod loader's installer, playit and, in
+  SyHost Legacy, Windows' `taskkill` to stop a stuck installer) run without a window of their own; your server's
   console is shown on SyHost's screen. Uninstalling empties the folder while SyHost is still open; you delete the
   rest in Explorer.
 - It downloads Java from Adoptium, playit from playit's GitHub releases and the mod loader from NeoForge, Forge or
@@ -431,7 +431,7 @@ Modrinth `.mrpack` packs for NeoForge, Forge and Fabric. Java 8, 17, 21 or 25 is
 and your PC doesn't have it.
 
 **Which edition should I take?**
-`SyHost-1.0.0.exe`. The Terminal edition is the same app for people who like to read the PowerShell scripts.
+SyHost Modern, `SyHost-1.0.0.exe`. SyHost Legacy (Terminal) is the same app for people who like to read the PowerShell scripts.
 
 **Mac or Linux?**
 Windows 10 and 11 only.
@@ -445,14 +445,14 @@ You need Windows, the [.NET 10 SDK](https://dotnet.microsoft.com/download) and t
 
 ```powershell
 build\Build.ps1                       # quick compile check (Debug)
-build\Build.ps1 -Publish              # dist\SyHost.exe, the main edition as one file
-build\Build.ps1 -Publish -Terminal    # also dist\SyHost-Terminal.exe, the Terminal edition
+build\Build.ps1 -Publish              # dist\SyHost.exe: SyHost Modern (C#) as one file
+build\Build.ps1 -Publish -Terminal    # also dist\SyHost-Terminal.exe: SyHost Legacy (Terminal)
 tests\parity\Run-Parity.ps1           # builds, then compares the two editions screen by screen
 build\Render-Screens.ps1              # draws the screenshots in docs\images\screens again
 ```
 
-**Two editions, one screen.** SyHost began as a PowerShell script. The **main edition** (`src/SyHost`) is its C#
-port, built with .NET 10 NativeAOT into a single `SyHost.exe`, and it is the reference. The **Terminal edition**
+**Two editions, one screen.** SyHost began as a PowerShell script. **SyHost Modern** (`src/SyHost`) is its C#
+port, built with .NET 10 NativeAOT into a single `SyHost.exe`, and it is the reference. **SyHost Legacy**
 (`legacy/src`) is the PowerShell app, brought up to the same features; its launcher exe carries the scripts inside.
 
 **The parity test** keeps them identical. Each scenario in `tests/parity/scenarios` describes one moment of the app:
@@ -472,13 +472,13 @@ the copy is up to date).
 ```
 SyHost/
 ├── src/
-│   ├── SyHost/             the main edition (C#, .NET 10, NativeAOT)
+│   ├── SyHost/             SyHost Modern (C#, .NET 10, NativeAOT)
 │   │   ├── App/            the screens: main menu, server, new server, first start, settings, uninstall; texts
 │   │   ├── Core/           Windows layer, server installer, Java, tray icon, settings files
 │   │   ├── Setup/          the SyHost folder, shortcuts, font, moving old data, uninstall, folder icons
 │   │   └── Assets/         app and folder icons
-│   └── SyHost.Terminal/    the Terminal edition's launcher (one exe that carries the PowerShell app)
-├── legacy/                 the Terminal edition (Windows PowerShell 5.1)
+│   └── SyHost.Terminal/    SyHost Legacy's launcher (one exe that carries the PowerShell app)
+├── legacy/                 SyHost Legacy (Windows PowerShell 5.1)
 │   ├── src/                SyHost.ps1 and its parts, C# helpers, texts
 │   ├── config/             default settings (both editions)
 │   └── fonts/              Cascadia Mono (SIL Open Font License 1.1)

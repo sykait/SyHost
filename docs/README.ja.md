@@ -74,12 +74,12 @@ Modrinth の Modpack（`.mrpack`）を選ぶだけで、必要な Java、MOD ロ
 
 **[Releases ページ](https://github.com/sykait/SyHost/releases/latest)** から入手できます。
 
-| ファイル | 対象 |
-| --- | --- |
-| **`SyHost-1.0.0.exe`** | **すべての方へ（おすすめ）。** C# で書かれたメイン版です。 |
-| `SyHost-Terminal-1.0.0.exe` | 同じアプリの PowerShell 版（Windows に標準で入っている PowerShell で動きます）。スクリプトを読んでみたい方向けです。 |
+| 版 | ファイル | 対象 |
+| --- | --- | --- |
+| **SyHost Modern (C#)** | **`SyHost-1.0.0.exe`** | **すべての方へ（おすすめ）。** C# で書かれた新しい版です。 |
+| SyHost Legacy (Terminal) | `SyHost-Legacy-1.0.0.exe` | 同じアプリの以前からある PowerShell 版（Windows に標準で入っている PowerShell で動きます）。スクリプトを読んでみたい方向けです。 |
 
-どちらも見た目も動きも同じで、違うのは画面のバージョン行に `C#` か `Terminal` と出ることだけです。
+SyHost Modern と SyHost Legacy は見た目も動きも同じで、違うのは画面のバージョン行に `C#` か `Terminal` と出ることだけです。
 同じフォルダーで同じファイルを使うので、あとから乗り換えることもできます。どちらもファイルはひとつだけで、
 ほかにダウンロードするものはありません。両方の SHA-256 チェックサムはリリースノートの最後に載っています。
 
@@ -139,7 +139,7 @@ C:\Users\<ユーザー名>\SyHost\
 ├── SyHost.exe      アプリ本体。開くのはこのファイルだけ
 ├── Servers\        サーバー（1 台ずつフォルダー）
 ├── Data\           設定、サーバー一覧、playit のキー、ログ、ダウンロードした Java と playit
-└── App\            （Terminal 版のみ）PowerShell 版のアプリ
+└── App\            （SyHost Legacy のみ）PowerShell 版のアプリ
 ```
 
 - **すべてこのフォルダーの中にあります。** SyHost がフォルダーの外に置くのは、ショートカットと（インストールが
@@ -150,8 +150,8 @@ C:\Users\<ユーザー名>\SyHost\
   フォルダー内のサーバーも一緒に移動します。置き場所は書き込めるフォルダーにしてください。`Program Files` などから
   開くと、SyHost は警告を出すだけで、SyHost フォルダーを丸ごと（`Servers` と `Data` ごと）移動するよう
   案内します。
-- **Terminal 版はこの PC のドライブに置いてください。** Windows PowerShell はネットワーク共有上のスクリプトの
-  実行を拒否することがあります（メイン版は問題ありません）。
+- **SyHost Legacy はこの PC のドライブに置いてください。** Windows PowerShell はネットワーク共有上のスクリプトの
+  実行を拒否することがあります（SyHost Modern は問題ありません）。
 - エクスプローラーではフォルダーに SyHost のアイコンが付き、`Servers` やバックアップのフォルダーは選んだ言語の名前で
   表示されます（日本語なら「サーバー」「バックアップ」）。
 - `Data\playit.toml` は playit 接続の秘密のキーです。他人に渡さないでください。
@@ -352,7 +352,7 @@ playit がなくても、自分の PC からは `localhost` で参加でき、�
 - **SyHost フォルダー自体**（中のサーバーとワールドを含む）。この行には、一緒に削除されるサーバーの数が表示されます。
   `Servers` 内のフォルダーはすべて数えられ、一覧から削除したサーバーも含まれます。最初は選択されておらず、選ぶと
   もう一度 Enter を押すよう求められます。SyHost は閉じるときにフォルダーの中身を削除し、そのあとエクスプローラーで
-  フォルダーを表示します。残ったもの（`SyHost.exe`、Terminal 版ではその `App` フォルダー、ほかのプログラムが
+  フォルダーを表示します。残ったもの（`SyHost.exe`、SyHost Legacy ではその `App` フォルダー、ほかのプログラムが
   開いたままだったファイル）は、そこで削除してください。SyHost フォルダーがほかの場所へのリンク（ジャンクションや、
   フォルダーにマウントしたドライブ）の場合、この行は表示されません。
 
@@ -397,13 +397,13 @@ playit がなくても、自分の PC からは `localhost` で参加でき、�
 SyHost はごく普通のプログラムで、そのとおりに振る舞うように作られています。
 
 - 必要なものはすべて自分のフォルダーの中に置きます（上の「SyHost フォルダー」を参照）。SyHost フォルダーの外から
-  開いたとき（初回の起動や、ダウンロードフォルダーからの更新）は、Terminal 版は `%TEMP%\SyHost-Terminal-…` の
+  開いたとき（初回の起動や、ダウンロードフォルダーからの更新）は、SyHost Legacy は `%TEMP%\SyHost-Terminal-…` の
   一時コピーから動き、このコピーは SyHost を閉じると削除されます。管理者権限を求めるのは、以前の 0.5.0 が PC 全体に
   インストールしたものを削除すると選んだとき（設定 → SyHost をアンインストール）だけです。フォントのときは Windows の
   確認画面に SyHost 自身の名前が出ます。playit と Java のときは、それぞれの Windows インストーラーです。
 - 隠した PowerShell や cmd のウィンドウを開くことも、エンコードしたコマンドを渡すことも一切ありません。実行中にテキスト
   からコードを作らず、ファイルの「インターネットからダウンロードした」印を消さず、補助プログラムで自分を削除することも
-  しません。SyHost が代わりに動かすプログラム（サーバーの Java、MOD ローダーのインストーラー、playit、Terminal 版では
+  しません。SyHost が代わりに動かすプログラム（サーバーの Java、MOD ローダーのインストーラー、playit、SyHost Legacy では
   止まったインストーラーを終わらせる Windows の `taskkill`）は自分のウィンドウを持たずに動き、サーバーのコンソールは
   SyHost の画面に表示されます。アンインストールでは、SyHost が開いているあいだにフォルダーの中身を空にします。残りは
   エクスプローラーであなたが削除します。
@@ -459,7 +459,7 @@ NeoForge・Forge・Fabric 用の Modrinth `.mrpack` パックです。パック�
 ダウンロードします。
 
 **どちらの版をダウンロードすればいい？**
-`SyHost-1.0.0.exe` です。Terminal 版は PowerShell スクリプトを読んでみたい方のための、同じアプリです。
+SyHost Modern の `SyHost-1.0.0.exe` です。SyHost Legacy (Terminal) は PowerShell スクリプトを読んでみたい方のための、同じアプリです。
 
 **Mac / Linux は？**
 Windows 10 / 11 専用です。
@@ -474,14 +474,14 @@ NativeAOT ビルドに必要）、そして Windows に標準で入っている 
 
 ```powershell
 build\Build.ps1                       # 簡単なビルド確認（Debug）
-build\Build.ps1 -Publish              # dist\SyHost.exe: メイン版を 1 ファイルで
-build\Build.ps1 -Publish -Terminal    # さらに dist\SyHost-Terminal.exe: Terminal 版
+build\Build.ps1 -Publish              # dist\SyHost.exe: SyHost Modern (C#) を 1 ファイルで
+build\Build.ps1 -Publish -Terminal    # さらに dist\SyHost-Terminal.exe: SyHost Legacy (Terminal)
 tests\parity\Run-Parity.ps1           # ビルドしてから、2 つの版を画面ごとに比較
 build\Render-Screens.ps1              # docs\images\screens のスクリーンショットを描き直す
 ```
 
-**2 つの版、ひとつの画面。** SyHost は PowerShell スクリプトとして始まりました。**メイン版**（`src/SyHost`）はその
-C# 移植で、.NET 10 NativeAOT により単一の `SyHost.exe` にビルドされ、基準となる実装です。**Terminal 版**
+**2 つの版、ひとつの画面。** SyHost は PowerShell スクリプトとして始まりました。**SyHost Modern**（`src/SyHost`）はその
+C# 移植で、.NET 10 NativeAOT により単一の `SyHost.exe` にビルドされ、基準となる実装です。**SyHost Legacy**
 （`legacy/src`）は同じ機能まで引き上げた PowerShell アプリで、起動用の exe がスクリプトを中に持っています。
 
 **パリティテスト**が両者を同一に保ちます。`tests/parity/scenarios` の各シナリオはアプリのある瞬間を記述します:
@@ -501,13 +501,13 @@ C# 移植で、.NET 10 NativeAOT により単一の `SyHost.exe` にビルドさ
 ```
 SyHost/
 ├── src/
-│   ├── SyHost/             メイン版（C#、.NET 10、NativeAOT）
+│   ├── SyHost/             SyHost Modern（C#、.NET 10、NativeAOT）
 │   │   ├── App/            画面: メインメニュー、サーバー、新しいサーバー、初回起動、設定、アンインストール。テキスト
 │   │   ├── Core/           Windows 層、サーバーのインストール、Java、トレイアイコン、設定ファイル
 │   │   ├── Setup/          SyHost フォルダー、ショートカット、フォント、以前のデータの移行、アンインストール、フォルダーアイコン
 │   │   └── Assets/         アプリとフォルダーのアイコン
-│   └── SyHost.Terminal/    Terminal 版の起動用 exe（PowerShell アプリを中に持つ単一 exe）
-├── legacy/                 Terminal 版（Windows PowerShell 5.1）
+│   └── SyHost.Terminal/    SyHost Legacy の起動用 exe（PowerShell アプリを中に持つ単一 exe）
+├── legacy/                 SyHost Legacy（Windows PowerShell 5.1）
 │   ├── src/                SyHost.ps1 とその部品、C# ヘルパー、テキスト
 │   ├── config/             既定の設定（両方の版で使用）
 │   └── fonts/              Cascadia Mono（SIL Open Font License 1.1）
