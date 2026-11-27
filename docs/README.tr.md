@@ -40,8 +40,8 @@ arkadaşların internetten bağlansın, yedeklerin kendiliğinden alınsın. Hep
 - **Performans paketleri** (Düşük / Normal / Yüksek): SyHost ilk açılışta bunları bilgisayarının belleğine ve
   çekirdek sayısına göre ayarlar.
 - **Otomatik yedek:** sunucu açıkken 3 saatte bir; en yeni 10 yedek saklanır.
-- **Güvenli kapatma:** F10 → Enter oyunculara haber verir, dünyayı kaydeder, sunucuyu kapatır. SyHost kapanınca
-  arkada hiçbir şey çalışmaya devam etmez.
+- **Güvenli kapatma:** F10 → Enter oyunculara haber verir, dünyayı kaydeder, sunucuyu kapatır. Sunucu açıkken pencere
+  kapansa bile sunucu kaydı bitirip öyle kapanır. Ondan sonra arkada hiçbir şey çalışmaz.
 - **Küçük mod** ekranın köşesinde (F4 ya da Ctrl+Alt+K), **gizle / göster** her yerden (Ctrl+Alt+G), saatin yanında simge.
 - **Ayarlar ekranı** (F9) ve uygulamanın içinden **kaldırma**.
 - **Üç dil:** English, Türkçe, 日本語.
@@ -82,7 +82,8 @@ arkadaşların internetten bağlansın, yedeklerin kendiliğinden alınsın. Hep
 aynı klasörde aynı dosyaları kullanır, istersen sonra öbürüne geçebilirsin. Her biri tek bir dosyadır, başka hiçbir
 şey indirmen gerekmez. İki dosyanın SHA-256 sağlama toplamları sürüm notlarının sonundadır.
 
-**Gerekenler:** Windows 10 ya da 11 ve indirmeler için internet. Modlu sunucular belleği sever: en az 8 GB RAM önerilir.
+**Gerekenler:** 64 bit (x64) Windows 10 ya da 11 ve indirmeler için internet. Modlu sunucular belleği sever:
+en az 8 GB RAM önerilir.
 
 ### "Windows bilgisayarınızı korudu"
 
@@ -102,10 +103,17 @@ SyHost dijital olarak imzalı değil; bu yüzden ilk açılışta Windows SmartS
    Sonra istediğin zaman değiştirebilirsin.
 2. **SyHost'un duracağı yer.** SyHost `C:\Users\<ad>\SyHost` klasörünü önerir. **Başka bir klasör seç...** ile
    yazabildiğin herhangi bir klasörü seçebilirsin; içinde başka dosyalar varsa SyHost oraya bir `SyHost` klasörü açar.
+   Klasörün adı zaten `SyHost` ise ya da içinde kurulu bir SyHost varsa doğrudan o klasör kullanılır (oradaki SyHost
+   güncellenir; daha yeniyse yalnızca açılır).
    - **OneDrive** ile eşitlenen bir klasör seçersen uyarı çıkar: sunucu dosyaları büyüktür ve sürekli değişir, bu yüzden
      OneDrive dışında bir yer önerilir. Yine de orada istiyorsan bir kez daha Enter'a bas.
    - Yazılamayan klasörler (ör. `Program Files`) kabul edilmez.
-3. SyHost kendini o klasöre kopyalar ve oradan yeniden açılır. İndirdiğin dosyaya artık gerek kalmaz.
+   - **Kendi klasöründe:** indirdiğin dosya boş bir klasörde tek başınaysa (İndirilenler, Masaüstü, Belgeler ya da geçici
+     bir klasör değilse) SyHost yer sormaz, doğrudan oraya kurulur. Bu bilgisayardaki bir kısayol başka bir SyHost'u
+     açıyorsa yine sorar; istersen onu güncellersin.
+   - Bir zip ya da rar dosyasının içinden doğrudan açarsan SyHost nereye kurulacağını sorar.
+3. SyHost kendini o klasöre kopyalar ve oradan yeniden açılır; indirdiğin dosyaya artık gerek kalmaz. (Kendi
+   klasöründe kendini kopyalamaz, indirdiğin dosyanın adını `SyHost.exe` yapar.)
 4. Ardından kısa bir kurulum gelir: **Sistem → Java → Arkadaşlar → Yazı tipi → Kısayollar → Hazır.**
    - **Sistem**: Windows sürümünü, RAM'i ve çekirdek sayısını gösterir (8 GB'tan az RAM'de uyarır).
    - **Java**: bilgisayarında Java 21 yoksa şimdi indir (yaklaşık 50 MB, yalnızca SyHost klasörüne) ya da sonra,
@@ -133,7 +141,9 @@ C:\Users\<ad>\SyHost\
   ekler, başka hiçbir şey. Başka bir yerde tuttuğun sunucular olduğu yerde kalır.
 - **Taşınabilir.** Klasörü istediğin zaman taşıyabilir ya da adını değiştirebilirsin (önce SyHost'u kapat). Yeni
   yerindeki `SyHost.exe`'yi bir kez açman yeter: Masaüstü ve Başlat menüsü kısayollarını kendisi düzeltir. Klasörün
-  içindeki sunucular onunla birlikte taşınır.
+  içindeki sunucular onunla birlikte taşınır. Klasörü yazabildiğin bir yerde tut: `Program Files` gibi bir yerden
+  açılırsa SyHost yalnızca bir uyarı gösterir ve SyHost klasörünü bütünüyle (`Servers` ve gizli `Data` ile birlikte)
+  taşımanı söyler.
 - Explorer'da klasörler SyHost simgeleriyle görünür; `Servers` ve yedek klasörleri seçtiğin dilde adlandırılır
   (Türkçede `Sunucular` ve `Yedekler`).
 - `Data\playit.toml` playit bağlantının gizli anahtarıdır. Kimseyle paylaşma.
@@ -181,7 +191,7 @@ durur. Konsol yalnızca önemli olayları gösterir (girişler, çıkışlar, so
 | **F3** | Sunucu: performans paketi seç |
 | **F4** | Sunucu: köşedeki küçük mod / büyük mod |
 | **F5** | Sunucu: sade / detaylı konsol |
-| **F6** | Sunucu: küçük modu diğer pencerelerin üstünde tut |
+| **F6** | Sunucu: küçük pencereyi diğer pencerelerin üstüne sabitle / sabitlemeyi kaldır (başta sabittir) |
 | **F10** | Ana menü: çık. Sunucu: kapat (aşağıya bak) |
 | **Ctrl+Alt+K** | Küçük / büyük mod, her yerden, oyundayken bile (bir sunucu açıkken) |
 | **Ctrl+Alt+G** | SyHost'u gizle / göster, her yerden |
@@ -190,10 +200,11 @@ durur. Konsol yalnızca önemli olayları gösterir (girişler, çıkışlar, so
 
 **Kapatmak.** Sunucu ekranında F10 ne yapmak istediğini sorar: **Enter** oyunculara haber verir, dünyayı kaydeder,
 sunucuyu kapatır ve ana menüye döner; **K** aynısını yapıp SyHost'u da kapatır; **Esc** vazgeçer. Sunucu 60 saniye
-içinde kapanmazsa SyHost onu zorla kapatır.
+içinde kapanmazsa SyHost onu zorla kapatır. Sunucu açıkken pencere başka bir yoldan kapanırsa (görev çubuğundan ya da
+oturumu kapattığın için) SyHost sunucuya yine de kapanmasını söyler; sunucu dünyayı kaydetmeyi kendi kendine bitirir.
 
-**Küçük mod** (F4) ekranın köşesinde duran küçük bir penceredir: durum, oyuncular, RAM ve CPU, son olaylar. Oyun
-oynarken F6 onu üstte tutar.
+**Küçük mod** (F4) ekranın köşesinde duran küçük bir penceredir: durum, oyuncular, RAM ve CPU, son olaylar. Diğer
+pencerelerin üstüne sabitlenmiş gelir, oyun oynarken de görünür; F6 sabitlemeyi kaldırır ve yeniden sabitler.
 
 <img src="images/screens/mini-tr.png" width="434" alt="Ekranın köşesindeki küçük mod">
 
@@ -240,7 +251,8 @@ bir oyun oynarken **Düşük**, günlük kullanımda **Normal**, dev fabrikalar 
 
 **Kurmak için** ilk açılıştaki **Arkadaşlar** adımını ya da sonra **Ayarlar → Arkadaş bağlantısı (playit)**'i kullan:
 
-1. SyHost playit'i kendi klasörüne indirir (`Data\tools\playit`).
+1. SyHost playit'i kendi klasörüne indirir (`Data\tools\playit`). SyHost 0.5.0'ın playit'i hâlâ `Program Files`'ta
+   duruyorsa onun yerine o kullanılır.
 2. Tarayıcında playit.gg açılır: hesabın yoksa bedava oluştur, varsa giriş yap, sonra bu bilgisayarı onayla.
 3. playit'in tünel sayfası açılır: **Add Tunnel → Minecraft Java → Continue →** bölge **Automatic (Free) → Create Tunnel**.
    Simple Voice Chat modunu kullanıyorsan bir de **MC: Simple Voice Chat** tüneli oluştur.
@@ -261,8 +273,10 @@ yönlendirirsen playit'e yine gerek kalmaz.
 
 - SyHost önce bilgisayarında zaten kurulu bir Java arar (`Program Files` içindeki Microsoft Build of OpenJDK ya da
   Eclipse Temurin).
-- Doğru sürüm yoksa **Eclipse Temurin**'i (Adoptium'dan) SyHost klasöründeki `Data\tools\java-<sürüm>` içine indirir
-  ve Adoptium'un SHA-256 sağlama toplamıyla doğrular. Kurulum programı yok, yönetici izni yok, klasörün dışına hiçbir şey.
+- Sunucu eklerken doğru sürüm yoksa **Eclipse Temurin**'i (Adoptium'dan) SyHost klasöründeki `Data\tools\java-<sürüm>`
+  içine indirir. Adoptium'un SHA-256 sağlama toplamı alınabildiyse indirileni onunla doğrular; her durumda o Java'yı
+  kullanmadan önce `java -version` çalışıyor mu diye bakar. Kurulum programı yok, yönetici izni yok, klasörün dışına
+  hiçbir şey.
 - Her sunucu kendi Minecraft sürümünün istediği Java'yı kullanır: 1.20.5 ve sonrası → Java 21, 1.17 ile 1.20.4 arası → 17,
   daha eskiler → 8, Minecraft 26.x → 25.
 - **Ayarlar → Java** SyHost'un kullanabildiği sürümleri gösterir, Enter'la Java 21'i indirir.
@@ -317,16 +331,20 @@ Ana menüde **F9**'a bas. Her değişiklik hemen kaydedilir.
 **Ayarlar → SyHost'u kaldır**'ı aç. SyHost (ya da SyHost 0.5.0) klasörün **dışında** ne bıraktıysa her biri ayrı bir
 satırda listelenir; **Boşluk** tuşuyla sen seçersin:
 
-- Masaüstü ve Başlat menüsü kısayolları ve SyHost'un senin kullanıcına kurduğu yazı tipi (seçili gelir),
-- 0.5.0'dan kalanlar: eski veri klasörü, eski program klasörü, `Program Files`'taki playit ve Windows'a kurulan yazı
-  tipi; bir de bilgisayarda kurulu Java (Microsoft OpenJDK, 0.5.0 böyle kurmuştu). Bunların hiçbiri seçili gelmez.
+- Masaüstü ve Başlat menüsü kısayolları ve (SyHost kurduysa) senin kullanıcına kurduğu yazı tipi. Bunlar seçili gelir.
+- SyHost 0.5.0'ın bilgisayarda bıraktıkları: eski veri klasörü, eski program klasörü, `Program Files`'taki playit,
+  Windows'a kurulan yazı tipi ve bilgisayarda kurulu Java (Microsoft OpenJDK ve Eclipse Temurin 8; 0.5.0 bunları böyle
+  kurmuştu). Bunların hiçbiri seçili gelmez.
   **Java hiçbir zaman kendiliğinden seçilmez**, çünkü başka programlar da kullanıyor olabilir. "Windows izin isteyecek"
-  yazan satırlar yönetici izni ister.
-- **SyHost klasörünün kendisi**, içindeki sunucular ve dünyalarla birlikte. Seçili gelmez; seçersen SyHost bir kez daha
-  Enter'a basmanı ister. Klasör, SyHost kapandıktan hemen sonra silinir.
+  yazan satırlar yönetici izni ister. Yeni SyHost bu playit'i, yazı tipini ve Java'yı durdukları sürece kullanmaya
+  devam eder: silmeden önce [0.5.0'dan geçiş](#gecis) bölümünü oku.
+- **SyHost klasörünün kendisi**, içindeki sunucular ve dünyalarla birlikte. Satırında onunla birlikte kaç sunucunun
+  gideceği yazar: `Servers` içindeki her klasör sayılır, listeden kaldırdığın sunucular da. Seçili gelmez; seçersen
+  SyHost bir kez daha Enter'a basmanı ister. Klasör, SyHost kapandıktan hemen sonra silinir.
 
-Klasörü tutarsan SyHost işi bitince onu Explorer'da gösterir; istediğin zaman kendin silebilirsin.
-SyHost klasörünün dışındaki sunuculara asla dokunulmaz.
+**Enter** seçilenleri kaldırır. Son ekranda yalnızca **SyHost'u kapat** vardır, yani SyHost en sonunda kapanır.
+Klasörü tutarsan SyHost işi bitince onu Explorer'da gösterir; istediğin zaman kendin silebilirsin (hiçbir şey seçmeden
+Enter'a basarsan doğrudan o ekrana geçilir). SyHost klasörünün dışındaki sunuculara asla dokunulmaz.
 
 <a id="gecis"></a>
 ## 0.5.0'dan geçiş
@@ -335,10 +353,22 @@ SyHost klasörünün dışındaki sunuculara asla dokunulmaz.
 - SyHost 0.5.0 verilerini `%LOCALAPPDATA%\SyHost` içinde tutuyordu. Yeni SyHost kendi klasöründe ilk kez açıldığında
   ayarlarını, sunucu listeni ve playit bağlantını kendi `Data` klasörüne **bir kez kopyalar**.
 - **Eski klasör silinmez.** SyHost içine kısa bir not bırakır. Sonra istersen Ayarlar → SyHost'u kaldır →
-  *Eski sürümün veri klasörü* ile silebilirsin.
+  *Eski sürümün veri klasörü* ile silebilirsin. O ekranda Masaüstü ve Başlat menüsü kısayolları (SyHost kendi yazı
+  tipini kurduysa o da) seçili gelir: yalnızca 0.5.0'dan kalanları temizlemek istiyorsan önce bu satırların seçimini
+  Boşluk ile kaldır. Enter seçilenleri kaldırır, en sonunda da SyHost kapanır (**SyHost'u kapat**).
 - **Sunucuların olduğu yerde kalır** (ör. `%USERPROFILE%\SyHost Sunuculari`) ve oradan çalışmaya devam eder. Yeni
   sunucular SyHost klasöründeki `Servers` içine kurulur; 0.5.0'da kendin başka bir sunucu klasörü seçtiysen o korunur
   (Ayarlar → Sunucu klasörü).
+- **0.5.0'ın bilgisayara kurduklarını, durdukları sürece yeni SyHost da kullanır**; yani bunlar yalnızca eskiden kalan
+  şeyler değildir:
+  - `C:\Program Files\playit_gg` içindeki **playit**: SyHost'un `Data\tools\playit` içinde kendi playit'i olmadığı
+    sürece o kullanılır. Silersen **Ayarlar → Arkadaş bağlantısı (playit)** ile playit'i yeniden bağla; SyHost da
+    playit'i kendi klasörüne indirir.
+  - `Program Files` içindeki **Java**: silersen, onu kullanan sunucular SyHost o Java'yı kendi klasörüne indirene kadar
+    açılmaz (SyHost ör. "Java 21 bulunamadı" der). **Ayarlar → Java** Java 21'i indirir; sunucu eklemek de paketin
+    istediği Java'yı SyHost klasörüne indirir.
+  - `C:\Windows\Fonts` içindeki **Cascadia Mono yazı tipi**: SyHost kendi kopyasını senin kullanıcına yalnızca kurulum
+    sırasında kurar; bunu sonradan silersen logo ve animasyonlar düzgün görünmeyebilir.
 - Kısayollar adımı eski kısayolları yeni SyHost'u açanlarla değiştirir.
 - Sonra başka, ayrı bir SyHost kopyası açarsan eski verileri yeniden kopyalamadan önce sorar (aynı playit bağlantısını
   kullanan iki kopya birbirini bozar).
@@ -375,7 +405,7 @@ yoksa indirilir.
 `SyHost-1.0.0.exe`'yi. Terminal sürümü, PowerShell betiklerini okumayı sevenler için aynı uygulamadır.
 
 **Mac ya da Linux?**
-Şimdilik yalnızca Windows 10 ve 11.
+Yalnızca Windows 10 ve 11.
 
 ---
 
@@ -403,8 +433,11 @@ tek bir metin karesi olarak çizer (`SyHost.exe --frame` ve `SyHost.ps1 -TestFra
 zorundadır. CI bunu `main`'e yapılan her push'ta ve her pull request'te çalıştırır. Bu sayfadaki ekran görüntüleri de
 böyle senaryolardan (`docs-*.json`) `build\Render-Screens.ps1` ile çizilir.
 
-Metinler üç dilli tek bir tabloda durur (`src/SyHost/App/Lang*.cs`); `build\Sync-Lang.ps1` yenilerini Terminal sürümüne
-aktarır.
+**Metinler** üç dillidir. Temel tablo `legacy/src/Lang.ps1` ve `src/SyHost/App/Lang.Table.cs` içindedir; ikisi elle aynı
+tutulur. Yeni ekranların metinleri C# tarafında yazılır (`src/SyHost/App/Lang.Screens.cs`,
+`src/SyHost/Setup/Lang.Portable.cs`, `src/SyHost/Core/Installer.cs`, `src/SyHost/Core/Tray.cs`) ve
+`build\Sync-Lang.ps1` bunları `legacy/src/Lang.Screens.ps1` dosyasına kopyalar (`build\Sync-Lang.ps1 -Check` yalnızca
+kopyanın güncel olup olmadığına bakar).
 
 <a id="proje-duzeni"></a>
 ## Proje düzeni

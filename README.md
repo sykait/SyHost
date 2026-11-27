@@ -36,7 +36,8 @@ friends join over the internet and keep backups, all on one animated terminal sc
 - **Live status:** players, uptime, RAM and CPU, and a simple console with joins, chat and errors (F5 shows everything).
 - **Performance packs** (Low / Normal / High), tuned to your PC's memory and cores the first time SyHost starts.
 - **Automatic backups:** every 3 hours while the server is online, the newest 10 are kept.
-- **Safe stop:** F10 → Enter warns the players, saves the world and stops the server. Nothing keeps running after SyHost closes.
+- **Safe stop:** F10 → Enter warns the players, saves the world and stops the server. Even if the window gets closed
+  while the server runs, the server finishes saving before it stops. Nothing keeps running after that.
 - **Mini mode** in the corner of the screen (F4 or Ctrl+Alt+K), **hide and show** from anywhere (Ctrl+Alt+G), a tray icon.
 - **Settings screen** (F9) and an **uninstaller** built in.
 - **Three languages:** English, Türkçe, 日本語.
@@ -75,7 +76,7 @@ Both editions look and work the same; only the version line on screen says `C#` 
 files in the same folder, so you can switch later. Each one is a single file and there is nothing else to download.
 The SHA-256 checksums of both are at the end of the release notes.
 
-**You need:** Windows 10 or 11 and an internet connection for the downloads. Modded servers like memory:
+**You need:** 64-bit (x64) Windows 10 or 11 and an internet connection for the downloads. Modded servers like memory:
 8 GB of RAM or more is recommended.
 
 ### "Windows protected your PC"
@@ -94,11 +95,18 @@ Double-click the file you downloaded.
 1. **Language.** The language of your Windows is preselected (Turkish and Japanese Windows get their language,
    everything else English). You can change it any time later.
 2. **Where SyHost lives.** SyHost recommends `C:\Users\<name>\SyHost`. With **Choose another folder...** you can pick any
-   folder you can write to. If that folder already has other files in it, SyHost makes a `SyHost` folder inside it.
+   folder you can write to. If that folder already has other files in it, SyHost makes a `SyHost` folder inside it,
+   unless the folder is itself named `SyHost` or already holds a SyHost: then SyHost uses that folder directly
+   (the SyHost there is updated, or only opened if it is newer).
    - A folder that syncs with **OneDrive** gets a warning: server files are big and change all the time, so a folder
      outside OneDrive is recommended. Press Enter again if you really want it there.
    - Folders you can't write to (for example `Program Files`) are refused.
-3. SyHost copies itself into that folder and opens again from there. The file you downloaded isn't needed anymore.
+   - **A folder of its own:** if the file you downloaded sits alone in an empty folder (not Downloads, the Desktop,
+     Documents or a temporary folder), SyHost doesn't ask and installs right there. It still asks if a shortcut on
+     this PC opens another SyHost, so you can update that one instead.
+   - Opened straight from inside a zip or rar file, SyHost asks where to install.
+3. SyHost copies itself into that folder and opens again from there; the file you downloaded isn't needed anymore.
+   (In a folder of its own SyHost doesn't copy itself: it renames the download to `SyHost.exe`.)
 4. A short setup follows: **System → Java → Friends → Font → Shortcuts → Done.**
    - **System** shows your Windows, RAM and cores (it warns below 8 GB of RAM).
    - **Java**: if your PC has no Java 21, download it now (about 50 MB, into the SyHost folder only) or later,
@@ -125,6 +133,8 @@ C:\Users\<name>\SyHost\
   install it) and nothing else. Servers you keep in another folder stay where you put them.
 - **Portable.** You can move or rename the folder whenever you like (close SyHost first). Open `SyHost.exe` from its
   new place once and it repairs its Desktop and Start-menu shortcuts. Servers inside the folder move with it.
+  Keep it somewhere you can write to: opened from a folder like `Program Files`, SyHost only shows a warning that
+  tells you to move the whole SyHost folder (with `Servers` and the hidden `Data`).
 - In Explorer the folders get SyHost icons, and the `Servers` and backup folders show their names in your language.
 - `Data\playit.toml` is the secret key of your playit connection. Don't share it.
 
@@ -169,7 +179,7 @@ messages); **F5** switches to every log line. Type commands at the bottom.
 | **F3** | Server: choose a performance pack |
 | **F4** | Server: mini mode in the corner of the screen / full size |
 | **F5** | Server: simple / detailed console |
-| **F6** | Server: keep the mini mode on top of other windows |
+| **F6** | Server: pin or unpin the mini window on top of other windows (pinned by default) |
 | **F10** | Main menu: quit. Server: close (see below) |
 | **Ctrl+Alt+K** | Mini / full size from anywhere, even in the game (while a server is open) |
 | **Ctrl+Alt+G** | Hide / show SyHost, from anywhere |
@@ -178,10 +188,12 @@ messages); **F5** switches to every log line. Type commands at the bottom.
 
 **Closing.** F10 on the server screen asks what to do: **Enter** warns the players, saves the world, stops the
 server and goes back to the main menu; **K** does the same and then quits SyHost; **Esc** cancels. If the server
-does not stop within 60 seconds, SyHost stops it by force.
+does not stop within 60 seconds, SyHost stops it by force. If the window is closed some other way while the server
+runs (from the taskbar, or because you sign out), SyHost still tells the server to stop, and the server finishes
+saving the world by itself.
 
 **Mini mode** (F4) is a small window in the corner of the screen with the status, the players, RAM and CPU and the
-latest events. F6 keeps it on top while you play.
+latest events. It is pinned on top of other windows, so you can see it while you play; F6 unpins it and pins it again.
 
 <img src="docs/images/screens/mini-en.png" width="434" alt="Mini mode in the corner of the screen">
 
@@ -227,7 +239,8 @@ Most home internet connections (CGNAT) don't let your friends connect to your PC
 
 **Set it up** in the **Friends** step of the first start, or later in **Settings → Friend connection (playit)**:
 
-1. SyHost downloads playit into its own folder (`Data\tools\playit`).
+1. SyHost downloads playit into its own folder (`Data\tools\playit`). If SyHost 0.5.0's playit is still in
+   `Program Files`, that one is used instead.
 2. playit.gg opens in your browser: create a free account or sign in, then approve this PC.
 3. The playit tunnel page opens: **Add Tunnel → Minecraft Java → Continue →** region **Automatic (Free) → Create Tunnel**.
    If you use the Simple Voice Chat mod, also create a **MC: Simple Voice Chat** tunnel.
@@ -247,8 +260,9 @@ you don't need playit either.
 ## Java
 
 - SyHost first looks for a Java already on your PC (Microsoft Build of OpenJDK or Eclipse Temurin in `Program Files`).
-- If the right version is missing, it downloads **Eclipse Temurin** (from Adoptium) into
-  `Data\tools\java-<version>` inside the SyHost folder and checks it against Adoptium's SHA-256 checksum.
+- If the right version is missing when you add a server, it downloads **Eclipse Temurin** (from Adoptium) into
+  `Data\tools\java-<version>` inside the SyHost folder. It checks the download against Adoptium's SHA-256 checksum
+  when that checksum is available, and `java -version` has to run before SyHost uses it.
   No installer, no admin rights, nothing outside the folder.
 - Each server gets the version its Minecraft needs: 1.20.5 and newer → Java 21, 1.17 to 1.20.4 → 17, older → 8,
   Minecraft 26.x → 25.
@@ -300,16 +314,19 @@ If you choose **Update the SyHost on this PC** and that SyHost is already newer,
 Open **Settings → Uninstall SyHost**. SyHost lists everything it (or SyHost 0.5.0) left **outside** its folder, one
 line each, and you choose with **Space**:
 
-- the Desktop and Start-menu shortcuts and the font SyHost installed for your user (selected),
-- leftovers of 0.5.0: its data folder, its program folder, playit in `Program Files` and the font it put into Windows,
-  and Java installed on the PC (Microsoft OpenJDK, as 0.5.0 installed it). None of these is selected.
-  **Java is never selected by default**, because other programs may use it.
-  Lines marked "Windows will ask for permission" need admin rights.
-- **the SyHost folder itself**, with your servers and worlds inside. It is not selected, and if you select it,
+- the Desktop and Start-menu shortcuts and, if SyHost installed it, its font for your user. These are selected.
+- what SyHost 0.5.0 left on the PC: its data folder, its program folder, playit in `Program Files`, the font it put
+  into Windows, and Java installed on the PC (Microsoft OpenJDK and Eclipse Temurin 8, as 0.5.0 installed them).
+  None of these is selected. **Java is never selected by default**, because other programs may use it.
+  Lines marked "Windows will ask for permission" need admin rights. The new SyHost still uses that playit, font
+  and Java while they are there: read [Coming from 0.5.0](#coming-from-050) before you remove them.
+- **the SyHost folder itself**, with your servers and worlds inside. Its line says how many servers go with it: every
+  folder in `Servers` counts, also servers you removed from the list. It is not selected, and if you select it,
   SyHost asks you to press Enter a second time. The folder is deleted right after SyHost closes.
 
-If you keep the folder, SyHost shows it in Explorer at the end so you can delete it whenever you want.
-Servers outside the SyHost folder are never touched.
+**Enter** removes what is selected. The last screen only offers **Close SyHost**, so SyHost closes at the end.
+If you keep the folder, SyHost shows it in Explorer at the end so you can delete it whenever you want (with nothing
+selected, Enter goes straight to that screen). Servers outside the SyHost folder are never touched.
 
 ## Coming from 0.5.0
 
@@ -318,10 +335,22 @@ Servers outside the SyHost folder are never touched.
 - SyHost 0.5.0 kept its data in `%LOCALAPPDATA%\SyHost`. The first time the new SyHost starts in its folder, it
   **copies** your settings, your server list and your playit connection into its `Data` folder, **once**.
 - **The old folder is not deleted.** SyHost leaves a short note in it. You can remove it later with
-  Settings → Uninstall SyHost → *Data folder of the old version*.
+  Settings → Uninstall SyHost → *Data folder of the old version*. That screen already selects the Desktop and
+  Start-menu shortcuts (and SyHost's own font, if it installed one): if you only want to clean up after 0.5.0,
+  unselect those lines with Space first. Enter removes what is selected, and at the end SyHost closes
+  (**Close SyHost**).
 - **Your servers stay where they are** (for example in `%USERPROFILE%\SyHost Sunuculari`) and keep working from there.
   New servers go into `Servers` in the SyHost folder; if you had picked your own server folder in 0.5.0, that one is
   kept (Settings → Server folder).
+- **What 0.5.0 installed on the PC is still used** while it is there, so it is not just a leftover:
+  - **playit** in `C:\Program Files\playit_gg`, as long as SyHost has no playit of its own in `Data\tools\playit`.
+    If you remove it, link playit again in **Settings → Friend connection (playit)**; SyHost then downloads playit
+    into its folder.
+  - **Java** in `Program Files`. If you remove it, servers that used it don't start (SyHost says "Java 21 not found",
+    for example) until SyHost has downloaded that Java into its folder: **Settings → Java** downloads Java 21, and
+    adding a server downloads the Java its pack needs.
+  - **the Cascadia Mono font** in `C:\Windows\Fonts`. SyHost installs its own copy for your user only during the
+    setup, so if you remove this one later, the logo and the animations may not look right.
 - The Shortcuts step replaces the old shortcuts with ones that open the new SyHost.
 - If you later open another, separate copy of SyHost, it asks before copying the old data again (two copies sharing
   one playit connection would get in each other's way).
@@ -384,8 +413,11 @@ text frame, colors included (`SyHost.exe --frame` and `SyHost.ps1 -TestFrame`), 
 byte. CI runs it for every push to `main` and every pull request. The screenshots on this page are drawn from such
 scenarios (`docs-*.json`) by `build\Render-Screens.ps1`.
 
-Texts live in one table with three languages (`src/SyHost/App/Lang*.cs`); `build\Sync-Lang.ps1` copies the new ones
-to the Terminal edition.
+**Texts** come in three languages. The base table is in `legacy/src/Lang.ps1` and `src/SyHost/App/Lang.Table.cs`,
+kept the same by hand. The texts of the new screens are written in C# (`src/SyHost/App/Lang.Screens.cs`,
+`src/SyHost/Setup/Lang.Portable.cs`, `src/SyHost/Core/Installer.cs`, `src/SyHost/Core/Tray.cs`), and
+`build\Sync-Lang.ps1` copies them to `legacy/src/Lang.Screens.ps1` (`build\Sync-Lang.ps1 -Check` only checks that
+the copy is up to date).
 
 ## Project layout
 
