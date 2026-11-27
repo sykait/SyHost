@@ -2159,7 +2159,7 @@ function Apply-Shortcuts([bool]$desk, [bool]$start) {
     $want = @($desk, $start)
     for ($i = 0; $i -lt $locs.Count; $i++) {
         try {
-            if ($want[$i]) { Write-Shortcut $locs[$i] $ExePath $desc }
+            if ($want[$i]) { [void](Write-Shortcut $locs[$i] $ExePath $desc) }
             elseif ((Get-LinkState $locs[$i] $ExePath) -eq 'Ours') { Remove-Item -LiteralPath $locs[$i] -Force }
         } catch {}
     }
