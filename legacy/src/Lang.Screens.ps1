@@ -163,6 +163,8 @@ Tx 'kapat' 'close' '閉じる'
 Tx 'ayarlar' 'settings' '設定'
 Tx '  (F9 ayarlar)' '  (F9 settings)' '  （F9 設定）'
 Tx 'Java {0} otomatik olarak SyHost klasörüne indirilecek.' 'Java {0} will be downloaded into the SyHost folder automatically.' 'Java {0} は SyHost フォルダーに自動でダウンロードされます。'
+Tx 'playit açılamadı: Windows ya da bir virüs tarayıcısı engelledi ({0}). Yeniden denemek için: F9 > Arkadaş bağlantısı (playit) > Devam.' 'playit could not start: Windows or an antivirus program blocked it ({0}). To try again: F9 > Friend connection (playit) > Continue.' 'playit を起動できませんでした: Windows またはウイルス対策ソフトがブロックしました（{0}）。再試行するには: F9 > フレンド接続（playit） > 続ける。'
+Tx 'SyHost klasörünün içi boşaltılıyor...' 'Emptying the SyHost folder...' 'SyHost フォルダーの中身を削除しています...'
 
 # ---------- src\SyHost\Setup\Lang.Portable.cs ----------
 Tx 'Sunucular' 'Servers' 'サーバー'
@@ -170,6 +172,8 @@ Tx 'Yedekler' 'Backups' 'バックアップ'
 Tx 'SyHost - modlu Minecraft sunucu merkezi' 'SyHost - modded Minecraft server hub' 'SyHost - MOD入り Minecraft サーバーハブ'
 Tx 'Kısayollar yeni yere güncellendi.' 'Shortcuts now point to the new location.' 'ショートカットを新しい場所に更新しました。'
 Tx "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç." "SyHost can't write to this folder:`n{0}`n`nMove the whole SyHost folder (SyHost.exe together with Servers and Data) to a place you can write to (for example {1}) and open SyHost.exe from there." "SyHost はこのフォルダーに書き込めません:`n{0}`n`nSyHost フォルダーを中身ごと（SyHost.exe、Servers、Data）書き込める場所（例: {1}）に移動し、そこから SyHost.exe を開いてください。"
+Tx "Bir SyHost dosyası yazıldıktan hemen sonra kayboldu:`n{0}`n`nBir virüs tarayıcısı kaldırmış olabilir. README'deki `"Güvenlik ve virüs tarayıcıları`" bölümüne bak." "A SyHost file disappeared right after it was written:`n{0}`n`nAn antivirus program may have removed it. See `"Security and antivirus`" in the README." "SyHost のファイルが書き込まれた直後に消えました:`n{0}`n`nウイルス対策ソフトが削除した可能性があります。README の「セキュリティとウイルス対策ソフト」を参照してください。"
+Tx 'SyHost klasörü bir ağ konumunda. Windows PowerShell oradaki betikleri çalıştırmayabilir: SyHost klasörünü bu bilgisayardaki bir sürücüye taşı ya da SyHost''un ana sürümünü kullan.' 'The SyHost folder is on a network location. Windows PowerShell may refuse to run scripts there: move the SyHost folder to a drive on this PC, or use the main edition of SyHost.' 'SyHost フォルダーはネットワーク上にあります。Windows PowerShell はそこにあるスクリプトを実行しないことがあります。SyHost フォルダーをこの PC のドライブに移動するか、SyHost のメイン版を使ってください。'
 
 # ---------- src\SyHost\Core\Installer.cs ----------
 Tx 'Java {0} indiriliyor...' 'Downloading Java {0}...' 'Java {0} をダウンロード中...'

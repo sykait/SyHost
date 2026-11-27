@@ -131,12 +131,15 @@ C:\Users\<name>\SyHost\
 └── App\            (Terminal edition only) the PowerShell app
 ```
 
-- **Everything stays in this folder.** Outside of it SyHost only adds the shortcuts, the font (only if it had to
-  install it) and nothing else. Servers you keep in another folder stay where you put them.
+- **Everything stays in this folder.** Outside of it SyHost only adds the shortcuts and the font (only if it had to
+  install it); after a move from 0.5.0 it also leaves a short note in the old data folder. Servers you keep in
+  another folder stay where you put them.
 - **Portable.** You can move or rename the folder whenever you like (close SyHost first). Open `SyHost.exe` from its
   new place once and it repairs its Desktop and Start-menu shortcuts. Servers inside the folder move with it.
   Keep it somewhere you can write to: opened from a folder like `Program Files`, SyHost only shows a warning that
   tells you to move the whole SyHost folder (with `Servers` and `Data`).
+- **The Terminal edition needs a local drive.** Windows PowerShell may refuse to run scripts from a network share,
+  so keep that edition's folder on a drive of this PC (the main edition doesn't mind).
 - In Explorer the folders get SyHost icons, and the `Servers` and backup folders show their names in your language.
 - `Data\playit.toml` is the secret key of your playit connection. Don't share it.
 
@@ -324,8 +327,10 @@ line each, and you choose with **Space**:
   and Java while they are there: read [Coming from 0.5.0](#coming-from-050) before you remove them.
 - **the SyHost folder itself**, with your servers and worlds inside. Its line says how many servers go with it: every
   folder in `Servers` counts, also servers you removed from the list. It is not selected, and if you select it,
-  SyHost asks you to press Enter a second time. When SyHost closes, it deletes everything inside the folder itself and
-  then shows the folder in Explorer: delete what is left (SyHost.exe, which can't delete itself while it runs) there.
+  SyHost asks you to press Enter a second time. When SyHost closes, it deletes everything inside the folder and then
+  shows the folder in Explorer: delete what is left there (`SyHost.exe`, in the Terminal edition also its `App`
+  folder, and any file another program still had open). If the SyHost folder is a link to another place (a junction,
+  or a drive mounted into a folder), this line is not offered.
 
 **Enter** removes what is selected. The last screen only offers **Close SyHost**, so SyHost closes at the end.
 If you keep the folder, SyHost shows it in Explorer at the end so you can delete it whenever you want (with nothing
@@ -364,16 +369,26 @@ selected, Enter goes straight to that screen). Servers outside the SyHost folder
 
 SyHost is an ordinary program and tries to behave like one:
 
-- It works only in its own folder. It asks for admin rights only when you choose to remove something the old 0.5.0
-  setup installed for the whole PC (Settings → Uninstall SyHost): for its font the Windows prompt names SyHost itself,
-  for playit and Java it is their own Windows Installer.
-- It never starts hidden or encoded commands, never builds code from text while it runs, never removes the
-  "downloaded from the internet" mark from files and never deletes itself through a helper program. Uninstalling
-  empties the folder while SyHost is still open; you delete the empty folder in Explorer.
-- It downloads only from Adoptium (Java), GitHub (playit), Modrinth and the mod loaders' own servers (NeoForge, Forge,
-  Fabric). Java and mods are checked against their checksums. playit only runs when the file matches GitHub's checksum
-  and carries a valid signature from its publisher.
-- Nothing starts with Windows. playit runs only while SyHost is open.
+- Everything it needs stays in its own folder (see [The SyHost folder](#the-syhost-folder)). Opened outside a SyHost
+  folder (the first start, or an update from Downloads), the Terminal edition runs from a temporary copy in
+  `%TEMP%\SyHost-Terminal-…`, which is deleted when SyHost closes. SyHost asks for admin rights only when you choose
+  to remove something the old 0.5.0 setup installed for the whole PC (Settings → Uninstall SyHost): for its font the
+  Windows prompt names SyHost itself, for playit and Java it is their own Windows Installer.
+- It never opens a hidden PowerShell or cmd window and never passes encoded commands. It never builds code from text
+  while it runs, never removes the "downloaded from the internet" mark from files and never deletes itself through a
+  helper program. The programs it runs for you (your server's Java, the mod loader's installer, playit, and in the
+  Terminal edition Windows' `taskkill` to stop a stuck installer) run without a window of their own; your server's
+  console is shown on SyHost's screen. Uninstalling empties the folder while SyHost is still open; you delete the
+  rest in Explorer.
+- It downloads Java from Adoptium, playit from playit's GitHub releases and the mod loader from NeoForge, Forge or
+  Fabric; the mod loader then gets Minecraft and its libraries from Mojang. Mods come from the addresses in the
+  `.mrpack` you open (for Modrinth packs: Modrinth's CDN, GitHub or GitLab) and are kept only if they match the SHA-1
+  or SHA-512 the pack lists. Java is checked against Adoptium's SHA-256 whenever Adoptium returns one. A downloaded
+  playit is kept only if it matches the SHA-256 GitHub lists for it (when GitHub lists one) and Windows finds its
+  signature valid. A playit that SyHost 0.5.0 installed in `Program Files` is used as it is.
+- Nothing starts with Windows. playit runs only while SyHost is open. If Windows or a security program blocks playit,
+  SyHost doesn't keep retrying: the console says so, and **Settings → Friend connection (playit) → Continue** tries
+  again.
 
 SyHost is not code-signed yet, so SmartScreen may warn the first time and a security program may be extra careful with
 a file it has never seen. If yours flags SyHost:

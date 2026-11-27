@@ -1,6 +1,6 @@
 // =====================================================================
 //  SyHost - sunucu kurulumu (arka planda çalışır)
-//  legacy/src/SyHost.ps1: $InstallScript (634-793) birebir: aynı 7 adım,
+//  Terminal: legacy/src/InstallJob.ps1 (yardımcıları Install.ps1 ve InstallModJob.ps1) birebir: aynı 7 adım,
 //  aynı ekran metinleri, aynı dosyalar. Ekranda görünmeyen iyileştirmeler:
 //    - modlar 6'şar 6'şar paralel iner, SHA-1 (varsa SHA-512) ile doğrulanır
 //    - her indirme önce geçici dosyaya yazılır, doğrulanınca yerine taşınır
@@ -59,7 +59,7 @@ static class Installer
         return http;
     }
 
-    /// <summary>$InstallScript (SyHost.ps1 634-793): sunucuyu kurar. Arka plan iş parçacığında çağrılır,
+    /// <summary>Terminal: InstallJob.ps1 (Install.ps1): sunucuyu kurar. Arka plan iş parçacığında çağrılır,
     /// ilerlemeyi sync'e yazar, bitince sync.Done = true yapar. Hata olursa sync.Error doldurulur.</summary>
     public static void Run(InstallSync sync, PackInfo info, string target, string worldName, string voiceHost, int maxPlayers, string motd, string dataDir)
     {

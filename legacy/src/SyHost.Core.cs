@@ -14,12 +14,20 @@ using System.Windows.Forms;
 
 namespace SyHost
 {
-    // Ag ayari: TLS 1.2 bir kez, butun surec icin acilir (arka plan islerinin runspace'leri de ayni ayari kullanir)
+    // Ag ayari, bir kez butun surec icin (arka plan islerinin runspace'leri de ayni ayari kullanir). Windows'un
+    // kendi secimi (SystemDefault, TLS 1.3 dahil) oldugu gibi kalir; yalnizca eski bir ayar TLS 1.2'yi
+    // icermiyorsa TLS 1.2 eklenir. C# surumu de Windows'un secimini kullanir.
     public static class Net
     {
         public static void EnableTls12()
         {
-            try { System.Net.ServicePointManager.SecurityProtocol |= System.Net.SecurityProtocolType.Tls12; } catch { }
+            try
+            {
+                var p = System.Net.ServicePointManager.SecurityProtocol;
+                if ((int)p != 0 && (p & System.Net.SecurityProtocolType.Tls12) == 0)
+                    System.Net.ServicePointManager.SecurityProtocol = p | System.Net.SecurityProtocolType.Tls12;
+            }
+            catch { }
         }
     }
 

@@ -5,7 +5,10 @@
 //    SyHost.exe --selftest migration <eski veri kopyası> <SyHost klasörü>
 //    SyHost.exe --selftest paths <klasör>
 //    SyHost.exe --selftest uninstall <SyHost klasörü> [<silinecek deneme klasörü>]   (Uninstall.SelfTest; deneme modunda)
+//    SyHost.exe --selftest empty <deneme klasörü>   kaldırmadaki boşaltma, gerçekten (içinde syhost-selftest-bosalt.txt olmalı)
 //    SyHost.exe --selftest trust <dosya>...   her dosya için "signed" ya da "unsigned" (Trust.IsSigned; hiçbirini çalıştırmaz)
+//    SyHost.exe --selftest playitfile <dosya> <karma|-> ...   playit indirmesinin denetimi (App.PlayitFileOk)
+//    SyHost.exe --selftest playiturl <adres>...                 hesap bağlama adresi (App.IsPlayitUrl)
 //  Kullanıcının gerçek kısayollarına ve verilerine dokunmaz: hepsi verilen klasörlerde çalışır.
 // =====================================================================
 namespace SyHost;
@@ -24,8 +27,18 @@ static class SelfTest
                 case "migration": return TestMigration(args[2], args[3]);
                 case "paths": return TestPaths(args[2]);
                 case "uninstall": return Uninstall.SelfTest(args[2], args.Length > 3 ? args[3] : null);
+                case "empty": return TestEmpty(args[2]);
                 case "trust":
                     foreach (string f in args.Skip(2)) Console.WriteLine((Trust.IsSigned(f) ? "signed  " : "unsigned") + "  " + f);
+                    return 0;
+                // playit indirmesinin denetimi (App.PlayitFileOk: SHA-256 + imza; "-" boş karma) ve hesap bağlama adresi
+                // (App.IsPlayitUrl). Hiçbir dosya çalıştırılmaz; Test-Portable aynı girdileri Terminal sürümüne de verir.
+                case "playitfile":
+                    for (int i = 2; i + 1 < args.Length; i += 2)
+                        Console.WriteLine("file|" + args[i] + "|" + args[i + 1] + "|" + (App.PlayitFileOk(args[i], args[i + 1] == "-" ? "" : args[i + 1]) ? "ok" : "fail"));
+                    return 0;
+                case "playiturl":
+                    foreach (string u in args.Skip(2)) Console.WriteLine("url|" + u + "|" + (App.IsPlayitUrl(u) ? "ok" : "fail"));
                     return 0;
                 default: Console.WriteLine("bilinmeyen test: " + what); return 2;
             }
@@ -63,7 +76,9 @@ static class SelfTest
         int fail = 0;
         string srv = Path.Combine(root, "Servers", "Deneme Sunucu");
         Directory.CreateDirectory(Path.Combine(srv, "yedekler"));
-        Directory.CreateDirectory(Path.Combine(root, "Data"));
+        // Data eski sürümlerde gizliydi: görünür yapıldığı görülsün
+        var data = Directory.CreateDirectory(Path.Combine(root, "Data"));
+        data.Attributes |= FileAttributes.Hidden;
         FolderLook.Apply(root, lang, new[] { srv });
         foreach (string d in new[] { root, Path.Combine(root, "Servers"), srv, Path.Combine(srv, "yedekler") })
         {
@@ -74,6 +89,24 @@ static class SelfTest
         fail += Check((new DirectoryInfo(Path.Combine(root, "Data")).Attributes & FileAttributes.Hidden) == 0, "Data görünür (gizli değil)");
         Console.WriteLine(fail == 0 ? "SONUÇ: geçti" : $"SONUÇ: {fail} hata");
         return fail == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Kaldır > "SyHost klasörünün kendisi": SyHost kapanırken yapılan boşaltma, gerçekten (deneme modu değil). Yalnızca
+    /// içinde syhost-selftest-bosalt.txt olan bir deneme klasöründe çalışır; SyHost.exe saklanır. Kalanlar yazılır
+    /// (göreli yol ve öznitelik): Test-Uninstall aynı klasörü Terminal sürümüyle de boşaltıp karşılaştırır.
+    /// </summary>
+    static int TestEmpty(string dir)
+    {
+        Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+        dir = Path.GetFullPath(dir).TrimEnd('\\');
+        if (!File.Exists(Path.Combine(dir, "syhost-selftest-bosalt.txt"))) { Console.WriteLine("HATA  syhost-selftest-bosalt.txt yok: " + dir); return 1; }
+        Environment.SetEnvironmentVariable("SYHOST_DRYRUN", null);
+        Uninstall.DeleteFolderAfterExit(dir, new[] { Path.Combine(dir, Portable.ExeName) });
+        foreach (string e in Directory.EnumerateFileSystemEntries(dir, "*", SearchOption.AllDirectories).OrderBy(x => x, StringComparer.Ordinal))
+            Console.WriteLine("kalan|" + Path.GetRelativePath(dir, e));
+        Console.WriteLine("kok|" + (int)(new DirectoryInfo(dir).Attributes & (FileAttributes.ReadOnly | FileAttributes.System)));
+        return 0;
     }
 
     static int TestMigration(string legacy, string root)

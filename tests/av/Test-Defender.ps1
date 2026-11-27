@@ -24,12 +24,23 @@ $fails = 0
 function Check([bool]$ok, [string]$name) {
     if ($ok) { Write-Host "  ok    $name" -ForegroundColor Green } else { Write-Host "  HATA  $name" -ForegroundColor Red; $script:fails++ }
 }
-function Get-Detections { @(try { Get-MpThreatDetection -ErrorAction Stop } catch { }) }
+# Defender'ın tespit listesi; okunamazsa $null (o zaman bu denetim "temiz" diyemez)
+function Get-Detections { try { , @(Get-MpThreatDetection -ErrorAction Stop) } catch { $null } }
 
 $t0 = Get-Date
-$before = @(Get-Detections | ForEach-Object { [string]$_.DetectionID })
-try { $st = Get-MpComputerStatus -ErrorAction Stop; Write-Host ("  Defender: gerçek zamanlı koruma {0}, imzalar {1}" -f $(if ($st.RealTimeProtectionEnabled) { 'açık' } else { 'KAPALI' }), $st.AntivirusSignatureVersion) -ForegroundColor DarkGray }
-catch { Write-Host '  Defender durumu okunamadı (başka bir virüs tarayıcısı olabilir)' -ForegroundColor Yellow }
+$beforeList = Get-Detections
+Check ($null -ne $beforeList) 'Defender''ın tespit listesi okunabiliyor'
+$before = @($beforeList | ForEach-Object { [string]$_.DetectionID })
+# Gerçek zamanlı koruma kapalıysa 1. adım hiçbir şeyi engelleyemez: denetim geçmiş sayılmaz
+try {
+    $st = Get-MpComputerStatus -ErrorAction Stop
+    Write-Host ("  Defender: gerçek zamanlı koruma {0}, imzalar {1}" -f $(if ($st.RealTimeProtectionEnabled) { 'açık' } else { 'KAPALI' }), $st.AntivirusSignatureVersion) -ForegroundColor DarkGray
+    Check ([bool]$st.AMServiceEnabled -and [bool]$st.RealTimeProtectionEnabled) 'Defender çalışıyor ve gerçek zamanlı koruma açık'
+} catch { Check $false 'Defender durumu okunamadı (başka bir virüs tarayıcısı olabilir)' }
+# Exe'ler denetlenecekse ikisi de olmalı (önce build\Build.ps1 -Publish -Terminal)
+if (-not $NoExe) {
+    foreach ($n in 'SyHost.exe', 'SyHost-Terminal.exe') { Check (Test-Path -LiteralPath (Join-Path $Repo "dist\$n")) "dist\$n var" }
+}
 
 try {
     # ---------- 1) Betik parçaları ----------
@@ -80,9 +91,10 @@ try {
 
 # ---------- 3) Yeni tespit var mı? ----------
 Start-Sleep -Seconds 2
-$new = @(Get-Detections | Where-Object { $before -notcontains [string]$_.DetectionID -and $_.InitialDetectionTime -ge $t0.AddSeconds(-5) })
+$afterList = Get-Detections
+$new = @($afterList | Where-Object { $before -notcontains [string]$_.DetectionID -and $_.InitialDetectionTime -ge $t0.AddSeconds(-5) })
 foreach ($d in $new) { Write-Host ("      tespit: {0}  {1}  {2}" -f $d.InitialDetectionTime, $d.ThreatID, ($d.Resources -join ' | ')) -ForegroundColor Red }
-Check ($new.Count -eq 0) "Defender bu denetim sırasında yeni bir tehdit bildirmedi ($($new.Count))"
+Check ($null -ne $afterList -and $new.Count -eq 0) "Defender bu denetim sırasında yeni bir tehdit bildirmedi ($($new.Count))"
 
 if ($fails) { Write-Host "$fails denetim başarısız" -ForegroundColor Red; exit 1 }
 Write-Host 'Defender denetimi temiz' -ForegroundColor Green

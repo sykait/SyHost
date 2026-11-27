@@ -153,10 +153,14 @@ sealed partial class App
     const string SrvPlayitPipe = @"\\.\pipe\syhost-playit";
 
     // Kendiliğinden yeniden başlatma sınırı: 10 dakikada en çok 3 açılış. Windows ya da bir güvenlik programı
-    // playit'i açtırmıyorsa (Win32 hatası) bu oturumda bir daha denenmez: her 10 saniyede yeniden denemek
-    // kapatılınca geri gelen gizli bir program gibi görünürdü. (Terminal: SyHost.ps1 Start-Playit)
+    // playit'i Windows ya da bir virüs tarayıcısı açtırmıyorsa (PlayitBlockCodes) bu oturumda kendiliğinden bir daha
+    // denenmez: her 10 saniyede yeniden denemek kapatılınca geri gelen gizli bir program gibi görünürdü. Kullanıcı
+    // Ayarlar'da playit'i onaylayınca (Devam, Yeniden bağla) yeniden denenir. Diğer hatalar geçicidir (ör. bellek
+    // azlığı); onlar da 10 dakikada en fazla 3 başlatmayla sınırlıdır. (Terminal: SyHost.ps1 Start-Playit)
     readonly List<DateTime> PlayitStarts = new();
     bool PlayitBlocked;
+    // Win32: erişim reddedildi, virüs/istenmeyen yazılım, ilke engeli, akıllı uygulama denetimi ve itibar engelleri
+    static readonly int[] PlayitBlockCodes = { 5, 225, 226, 786, 1260, 4551, 4556, 4557, 4558, 4580, 4582 };
     // Kaldır ekranı klasörü silecekken playit yeniden açılmasın (dosyaları kilitli kalırdı)
     bool PlayitHold;
 
@@ -181,7 +185,11 @@ sealed partial class App
         Pl = new ServerProcess();
         PlayitStarts.Add(Now());
         try { Pl.Start(PlayitExe, $"--secret-path \"{PlayitSecret}\" --socket-path {SrvPlayitPipe} --log-path \"{Path.Combine(dir, "playit.log")}\"", dir); }
-        catch (System.ComponentModel.Win32Exception) { PlayitBlocked = true; }
+        catch (System.ComponentModel.Win32Exception e) when (Array.IndexOf(PlayitBlockCodes, e.NativeErrorCode) >= 0)
+        {
+            PlayitBlocked = true;
+            AddLog("warn", Lang.L("playit açılamadı: Windows ya da bir virüs tarayıcısı engelledi ({0}). Yeniden denemek için: F9 > Arkadaş bağlantısı (playit) > Devam.", e.Message));
+        }
         catch { }
         CloseGuard.Playit = Pl;
     }

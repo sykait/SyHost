@@ -1,8 +1,10 @@
 // =====================================================================
 //  SyHost - indirilen bir programın imzası (Authenticode) geçerli mi?
 //  playit GitHub'dan imzalı sürümüyle indirilir; dosya çalıştırılmadan önce Windows'a sorulur (WinVerifyTrust):
-//  imza bozuk, eksik ya da güvenilmeyen bir yayıncıdansa kullanılmaz. Pencere açılmaz, iptal listesi için internete
-//  çıkılmaz (yalnızca Windows'un önbelleği). Terminal sürümündeki karşılığı: Get-AuthenticodeSignature (FirstRunJob.ps1).
+//  imza bozuk, eksik ya da Windows'un güvenmediği bir yayıncıdansa kullanılmaz. Yayıncının adı denetlenmez (playit
+//  sertifikasını yenileyince kurulum bozulmasın). Pencere açılmaz, iptal listesi için internete çıkılmaz (yalnızca
+//  Windows'un önbelleği). Dosyaya gömülü imzaya bakar (playit öyledir). Terminal sürümünde aynı karar PowerShell'in
+//  Get-AuthenticodeSignature'ıyla verilir (FirstRunJob.ps1); o, iptal ve katalog denetimini Windows'un varsayılanıyla yapar.
 // =====================================================================
 using System.Runtime.InteropServices;
 

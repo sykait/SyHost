@@ -11,7 +11,7 @@
 #    - yazı tipi testi yalnızca bu kullanıcıda SyHost'un yazı tipi ve HKCU'da Cascadia kaydı yokken çalışır ve
 #      yalnızca kendi kurduğunu kaldırır (-SkipFont ile atlanır);
 #    - başta ve sonda gerçek yerlerin listesi alınıp karşılaştırılır.
-#  Portable.ps1 henüz iskeletse kısayol ve yazı tipi işleri için C# Shortcuts/Fonts ile aynı test yedekleri kullanılır.
+#  Arka plandaki kaldırma işi (UninstallJob.ps1) gerçek dosyalarla çalışır: SyHost.Core.dll testten önce derlenir.
 #  C# sürümüyle karşılaştırma: <Exe> --selftest uninstall (aynı satırları üretir; -SkipCs ile atlanır).
 # =====================================================================
 [CmdletBinding()]
@@ -35,17 +35,31 @@ function TdInside([string]$path, [string]$root) {
     $p = [IO.Path]::GetFullPath($path).TrimEnd('\') + '\'; $r = [IO.Path]::GetFullPath($root).TrimEnd('\') + '\'
     $p.StartsWith($r, [StringComparison]::OrdinalIgnoreCase)
 }
-# cmd'yi tam olarak verilen argümanla çalıştır (PowerShell 5.1 tırnakları bozmasın)
-function TdCmd([string]$arguments) {
-    $psi = New-Object Diagnostics.ProcessStartInfo ([IO.Path]::Combine([Environment]::SystemDirectory, 'cmd.exe')), $arguments
-    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-    $p = [Diagnostics.Process]::Start($psi); $p.WaitForExit(); $code = $p.ExitCode; $p.Dispose(); $code
-}
+# Deneme ağacını sil: bağlantıların (junction) içine girilmez, yalnızca bağlantının kendisi silinir; öznitelikler önce
+# temizlenir. Yardımcı süreç (cmd) kullanılmaz.
 function TdRemoveTree([string]$dir) {
     if (-not (TdInside $dir $WorkRoot)) { throw "deneme klasörünün dışı: $dir" }
-    if ([IO.Directory]::Exists($dir)) { [void](TdCmd ('/c rmdir /s /q "' + $dir + '"')) }
+    if ([IO.Directory]::Exists($dir)) { TdRemoveDir (New-Object IO.DirectoryInfo $dir) }
 }
-function TdJunction([string]$link, [string]$target) { [void](TdCmd ('/c mklink /J "' + $link + '" "' + $target + '"')); if (-not [IO.Directory]::Exists($link)) { throw "bağlantı kurulamadı: $link" } }
+function TdRemoveDir([IO.DirectoryInfo]$di) {
+    if (($di.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { $di.Delete(); return }
+    foreach ($e in @($di.EnumerateFileSystemInfos())) {
+        if ($e -is [IO.DirectoryInfo]) { TdRemoveDir $e }
+        elseif (($e.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { $e.Delete() }
+        else { $e.Attributes = [IO.FileAttributes]::Normal; $e.Delete() }
+    }
+    $di.Attributes = [IO.FileAttributes]::Directory; $di.Delete()
+}
+function TdJunction([string]$link, [string]$target) { [void](New-Item -ItemType Junction -Path $link -Value $target); if (-not [IO.Directory]::Exists($link)) { throw "bağlantı kurulamadı: $link" } }
+# C# yönteminin gövdesi (süslü parantezler sayılarak); bulunamazsa boş
+function Get-CsMethod([string]$text, [string]$name) {
+    $m = [regex]::Match($text, '(?m)^[ \t]*(?:(?:public|internal|private|static)[ \t]+)+[\w<>\[\],? \t]+?\b' + [regex]::Escape($name) + '[ \t]*\(')
+    if (-not $m.Success) { return '' }
+    $i = $text.IndexOf('{', $m.Index); if ($i -lt 0) { return '' }
+    $depth = 0
+    for ($j = $i; $j -lt $text.Length; $j++) { if ($text[$j] -eq '{') { $depth++ } elseif ($text[$j] -eq '}') { $depth--; if ($depth -eq 0) { return $text.Substring($m.Index, $j - $m.Index + 1) } } }
+    ''
+}
 function TdWrite([string]$path, [string]$text = 'x') { [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path)); [IO.File]::WriteAllText($path, $text, $Utf8) }
 function TdAttr([string]$path, [IO.FileAttributes]$a) { (Get-Item -LiteralPath $path -Force).Attributes = $a }
 function TdLink([string]$lnk, [string]$target, [string]$arguments) {
@@ -248,11 +262,18 @@ $gitRoot = Join-Path $WorkRoot 'GitRoot'; [void][IO.Directory]::CreateDirectory(
 Check ($null -eq (Find-Item (Get-UninstallItems $gitRoot (Join-Path $gitRoot 'SyHost.exe') $Servers) 'klasor')) 'git deposu olan SyHost klasörü önerilmez'
 $drive = [IO.Path]::GetPathRoot($WorkRoot)
 Check ($null -eq (Find-Item (Get-UninstallItems $drive (Join-Path $drive 'SyHost.exe') $Servers) 'klasor')) "sürücü kökü ($drive) önerilmez"
+# SyHost klasörünün kendisi bir bağlantıysa (junction; klasöre bağlanmış bir sürücü de böyledir) önerilmez: içini
+# boşaltmak bağlantının gösterdiği yerdeki her şeyi silerdi (ör. bir USB belleğin tamamı)
+$jTarget = Join-Path $WorkRoot 'Kok-Hedef'
+TdWrite (Join-Path $jTarget 'SyHost.exe') 'sahte exe'; TdWrite (Join-Path $jTarget 'Data\ayarlar.json') '{}'; TdWrite (Join-Path $jTarget 'kullanicinin-dosyasi.txt') 'dokunma'
+$jRoot = Join-Path $WorkRoot 'Kok-Baglanti'; TdJunction $jRoot $jTarget
+Check ($null -eq (Find-Item (Get-UninstallItems $jRoot (Join-Path $jRoot 'SyHost.exe') $Servers) 'klasor')) 'bağlantı (junction) olan SyHost klasörü önerilmez'
 $prof = [Environment]::GetFolderPath('UserProfile')
 foreach ($case in @(
         @($AppRoot, $true), @((Join-Path $prof 'SyHost'), $true), @($drive, $false), @($prof, $false), @((UnDownloads), $false),
         @([Environment]::GetFolderPath('DesktopDirectory'), $false), @([Environment]::GetFolderPath('MyDocuments'), $false), @([Environment]::GetFolderPath('Windows'), $false),
-        @([Environment]::GetFolderPath('ProgramFiles'), $false), @([IO.Path]::GetDirectoryName($prof), $false), @([Environment]::GetFolderPath('LocalApplicationData'), $false), @($gitRoot, $false))) {
+        @([Environment]::GetFolderPath('ProgramFiles'), $false), @([IO.Path]::GetDirectoryName($prof), $false), @([Environment]::GetFolderPath('LocalApplicationData'), $false), @($gitRoot, $false),
+        @($jRoot, $false), @($jTarget, $true))) {
     Check ((Test-RootDeletable $case[0]) -eq $case[1]) ('Test-RootDeletable ' + $case[0] + ' = ' + $case[1])
 }
 $UnItems = New-Object System.Collections.Generic.List[object]
@@ -281,16 +302,19 @@ if ([IO.File]::Exists($DryLog)) { [IO.File]::Delete($DryLog) }
 Check ($null -eq (UnDeleteDir $Legacy) -and [IO.Directory]::Exists($Legacy)) 'deneme modunda klasör silinmez'
 Remove-RootAfterExit $AppRoot @($ExePath)
 Check ([IO.Directory]::Exists($AppRoot) -and [IO.File]::Exists($ExePath) -and [IO.Directory]::Exists((Join-Path $AppRoot 'Servers')) -and ((Read-DryLog $DryLog) -contains ('klasör silinecekti: ' + $Legacy)) -and ((Read-DryLog $DryLog) -contains ('SyHost kapanınca klasör silinecekti: ' + $AppRoot))) 'deneme modunda Remove-RootAfterExit yalnızca günlüğe yazar'
-# Sistem yazı tipi (çalıştırılmaz): iki sürüm de SyHost.exe'yi yalnızca aynı anahtarla yönetici olarak açar;
-# kaldırma kodunda PowerShell'e kodlanmış komut, gizli pencere, Base64 ya da cmd silme döngüsü yoktur
+# Sistem yazı tipi (çalıştırılmaz): iki sürüm de SyHost.exe'yi yalnızca aynı anahtarla yönetici olarak açar.
+# (Kaldırma kodunda yasak kalıp olmadığını tests\av\Test-Lint.ps1 denetler.)
 $csUn = [IO.File]::ReadAllText((Join-Path $Repo 'src\SyHost\Setup\Uninstall.cs'), [Text.Encoding]::UTF8)
 $csFont = [IO.File]::ReadAllText((Join-Path $Repo 'src\SyHost\Setup\OldSystemFont.cs'), [Text.Encoding]::UTF8)
 $psUn = [IO.File]::ReadAllText((Join-Path $SrcDir 'Uninstall.ps1'), [Text.Encoding]::UTF8)
 $fontArg = [regex]::Match($csFont, 'const string Arg = "([^"]+)"').Groups[1].Value
 Check ($fontArg -ceq '--remove-old-system-font' -and $psUn.Contains("'" + $fontArg + "'") -and $csUn.Contains('OldSystemFont.Arg')) "sistem yazı tipi: iki sürüm de SyHost.exe $fontArg ile açar (çalıştırılmadı)"
-$banned = @('EncodedCommand', 'ToBase64String', 'WindowStyle Hidden', 'ProcessWindowStyle.Hidden', 'ping -n', 'rmdir /s', 'attrib -', 'cmd.exe', 'scriptblock]::Create', 'Get-ChildItem function:')
-$hits = @($banned | Where-Object { $csUn.Contains($_) -or $psUn.Contains($_) })
-Check ($hits.Count -eq 0) ('kaldırma kodunda kodlanmış komut, gizli pencere, metinden kod ya da cmd silme döngüsü yok' + $(if ($hits) { ': ' + ($hits -join ', ') }))
+# Klasörü boşaltan kod hiçbir süreç başlatmaz (iki sürümde de metin denetimi)
+$psAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $SrcDir 'Uninstall.ps1'), [ref]$null, [ref]$null)
+$psEmpty = @($psAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Remove-RootAfterExit', 'UnEmptyFolder', 'UnDeleteDir', 'UnClearReadOnly' }, $true))
+$csEmpty = @('DeleteFolderAfterExit', 'EmptyFolder', 'DeleteDir' | ForEach-Object { Get-CsMethod $csUn $_ })
+$spawnRx = 'Start-Process|Process\]::Start|ProcessStartInfo|Process\.Start|Invoke-Expression|\bcmd\b'
+Check ($psEmpty.Count -eq 4 -and @($csEmpty | Where-Object { $_.Length -gt 0 }).Count -eq 3 -and -not (($psEmpty | ForEach-Object { $_.Extent.Text }) -join "`n" -match $spawnRx) -and -not (($csEmpty -join "`n") -match $spawnRx)) 'klasörü boşaltan kod (iki sürüm) süreç başlatmaz'
 foreach ($pf in 'src\SyHost\Program.cs', 'src\SyHost.Terminal\Program.cs') {
     $t = [IO.File]::ReadAllText((Join-Path $Repo $pf), [Text.Encoding]::UTF8)
     $iArg = $t.IndexOf('OldSystemFont.Arg'); $iLock = $t.IndexOf('Mutex')
@@ -333,6 +357,18 @@ $UnItems = TdItems $false; $UnPhase = 'calisiyor'; $DeleteRootAfterExit = $false
 UnFinish
 Check ($UnPhase -ceq 'bitti' -and -not $DeleteRootAfterExit -and $TdCalls.Contains('Show-UninstallFolder ' + $AppRoot)) 'klasör seçili değilse: Explorer''da gösterilir, klasör silinmez'
 $env:SYHOST_DRYRUN = '1'
+# İş dosyası hiç çalışamadıysa (yok ya da bozuk; virüs tarayıcısının engeli de PowerShell'de bir ayrıştırma hatasıdır):
+# "Kaldırma tamamlandı." hatasız görünmez, seçili satırlar hatayla kapanır, klasör seçiliyse yine boşaltılır
+$badJob = Join-Path $WorkRoot 'bozuk-is.ps1'; [IO.File]::WriteAllText($badJob, 'param($Items) { ( ', $Utf8)
+foreach ($jf in (Join-Path $WorkRoot 'yok\UninstallJob.ps1'), $badJob) {
+    $UnItems = TdItems $true; $UnItems[0].On = $true; $UnPhase = 'calisiyor'; $DeleteRootAfterExit = $false; $TdCalls.Clear()
+    $psFail = [powershell]::Create(); [void]$psFail.AddCommand($jf).AddParameter('Items', $UnItems)
+    $UnJob = [pscustomobject]@{ PS = $psFail; Handle = $psFail.BeginInvoke() }
+    $swJ = [Diagnostics.Stopwatch]::StartNew(); while (-not $UnJob.Handle.IsCompleted -and $swJ.ElapsedMilliseconds -lt 15000) { Start-Sleep -Milliseconds 20 }
+    UnFinish
+    Check ($UnItems[0].State -eq 3 -and [bool]$UnItems[0].Error -and $UnItems[1].State -eq 4 -and $UnItems[2].State -eq 2 -and $DeleteRootAfterExit) ("iş dosyası çalışamadı ($([IO.Path]::GetFileName($jf))): seçili satır hata gösterir, seçili olmayan atlandı, klasör yine boşaltılacak`n      hata: " + $UnItems[0].Error)
+    $UnJob = $null; $DeleteRootAfterExit = $false
+}
 $UnItems = TdItems $true; $UnSel = 0; $UnPhase = 'liste'; $UnJob = $null; $TestFrame = 'senaryo.json'
 Handle-UninstallKey (TdKey 'Enter') $false; Handle-UninstallKey (TdKey 'Enter') $false
 Check ($UnPhase -ceq 'calisiyor' -and $null -eq $UnJob) 'test modunda kaldırma işi başlamaz'
@@ -438,13 +474,14 @@ TdAttr (Join-Path $gone 'Data') 'Directory, Hidden'; TdAttr $gone 'Directory, Re
 TdJunction (Join-Path $gone 'Servers\Disarida') $outside
 # Kapanmakta olan SyHost: başlatıcı exe ve App (yüklü SyHost.Core.dll) saklanır; Data'daki bir dosya da açık kalır
 $here = (Get-Location).Path
-$procsBefore = @(Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+# Yalnızca bu sürecin çocuklarına bakılır (bilgisayarda o sırada başka bir yerde açılan konsollar sayılmaz)
+$kidsBefore = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $PID" | ForEach-Object { $_.ProcessId })
 $fs = [IO.File]::Open((Join-Path $gone 'Data\kilit.dat'), 'Open', 'ReadWrite', 'None')
 $sw = [Diagnostics.Stopwatch]::StartNew()
 try { Remove-RootAfterExit $gone @((Join-Path $gone 'SyHost.exe'), (Join-Path $gone 'App')) } finally { $fs.Dispose(); Set-Location -LiteralPath $here; [Environment]::CurrentDirectory = $here }
 $secs = [Math]::Round($sw.Elapsed.TotalSeconds, 1)
-$spawned = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $procsBefore -notcontains $_.Id -and $_.ProcessName -in 'cmd', 'powershell', 'pwsh', 'conhost' })
-Check ($spawned.Count -eq 0) ('yardımcı süreç başlatılmadı (cmd ya da PowerShell yok)' + $(if ($spawned) { ': ' + (($spawned | ForEach-Object { $_.ProcessName }) -join ', ') }))
+$spawned = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $PID" | Where-Object { $kidsBefore -notcontains $_.ProcessId -and $_.Name -in 'cmd.exe', 'powershell.exe', 'pwsh.exe', 'conhost.exe' })
+Check ($spawned.Count -eq 0) ('yardımcı süreç başlatılmadı (cmd ya da PowerShell yok)' + $(if ($spawned) { ': ' + (($spawned | ForEach-Object { $_.Name }) -join ', ') }))
 Check ([IO.File]::Exists((Join-Path $gone 'SyHost.exe')) -and [IO.File]::Exists((Join-Path $gone 'App\bin\SyHost.Core.dll'))) 'saklananlar kaldı: SyHost.exe ve App'
 Check (-not [IO.Directory]::Exists((Join-Path $gone 'Servers')) -and -not [IO.File]::Exists((Join-Path $gone 'desktop.ini')) -and -not [IO.File]::Exists((Join-Path $gone 'Data\ro.txt')) -and -not [IO.File]::Exists((Join-Path $gone 'Data\ayarlar.json'))) 'sunucular, desktop.ini ve salt okunur/gizli/sistem dosyaları silindi'
 Check ([IO.File]::Exists((Join-Path $gone 'Data\kilit.dat')) -and $secs -ge 3 -and $secs -lt 20) "kullanımdaki dosya hata değil: bir süre denendi ($secs sn) ve kaldı (kullanıcı Explorer'dan siler)"
@@ -455,6 +492,9 @@ $git2 = Join-Path $WorkRoot 'gone\GitKok'; [void][IO.Directory]::CreateDirectory
 Remove-RootAfterExit $git2 @((Join-Path $git2 'SyHost.exe'))
 Set-Location -LiteralPath $here; [Environment]::CurrentDirectory = $here
 Check ([IO.File]::Exists((Join-Path $git2 'Data\ayarlar.json'))) 'git deposu olan klasörün içine dokunulmaz'
+Remove-RootAfterExit $jRoot @((Join-Path $jRoot 'SyHost.exe'))
+Set-Location -LiteralPath $here; [Environment]::CurrentDirectory = $here
+Check ([IO.File]::Exists((Join-Path $jTarget 'kullanicinin-dosyasi.txt')) -and [IO.File]::Exists((Join-Path $jTarget 'Data\ayarlar.json')) -and [IO.Directory]::Exists($jRoot)) 'SyHost klasörü bir bağlantıysa gösterdiği yere dokunulmaz'
 $env:SYHOST_DRYRUN = '1'
 
 # =====================================================================
@@ -488,9 +528,11 @@ else {
     Invoke-UninstallItems $items
     foreach ($it in $items) { $psLines.Add('run|' + $it.Key + '|' + $it.State + '|' + $it.Error) }
     foreach ($pp in @($AppRoot, [IO.Path]::GetDirectoryName($AppRoot), [IO.Path]::GetPathRoot($AppRoot), $prof, [IO.Path]::Combine($prof, 'SyHost'), (UnDownloads),
-            [Environment]::GetFolderPath('DesktopDirectory'), [Environment]::GetFolderPath('MyDocuments'), [Environment]::GetFolderPath('ProgramFiles'), [Environment]::GetFolderPath('Windows'), [IO.Path]::GetDirectoryName($prof))) {
+            [Environment]::GetFolderPath('DesktopDirectory'), [Environment]::GetFolderPath('MyDocuments'), [Environment]::GetFolderPath('ProgramFiles'), [Environment]::GetFolderPath('Windows'), [IO.Path]::GetDirectoryName($prof),
+            [IO.Path]::Combine([IO.Path]::GetDirectoryName($AppRoot), 'Kok-Baglanti'))) {
         $psLines.Add('candelete|' + $pp + '|' + (Test-RootDeletable $pp))
     }
+    Check ($csLines -contains ('candelete|' + $jRoot + '|False')) 'C# CanDeleteRoot: bağlantı olan SyHost klasörü silinmez'
     # Kaldırıcı komutları yalnızca ayrıştırılır, çalıştırılmaz: kayıt defterindekiler ve C# öz denetimindeki örnekler
     $cmds = @(@(UnFindMsi @('playit', 'Microsoft Build of OpenJDK', 'Eclipse Temurin JRE with Hotspot 8')) | ForEach-Object { $_.Uninstall })
     $cmds += @('MsiExec.exe /I{11111111-2222-3333-4444-555555555555}', '  msiexec.exe /i {AAAA} /qn  ', 'MsiExec.exe /X{BBBB}',
@@ -505,6 +547,33 @@ else {
     Check ($diffAt -lt 0) ("bulma, deneme çalıştırması, silinebilirlik ve kaldırıcı komutları iki sürümde aynı ($($psLines.Count) satır)" + $(if ($diffAt -ge 0) { "`n      C#      : " + $(if ($diffAt -lt $csCmp.Count) { $csCmp[$diffAt] } else { '(yok)' }) + "`n      Terminal: " + $(if ($diffAt -lt $psLines.Count) { $psLines[$diffAt] } else { '(yok)' }) } else { '' }))
     $lc = Read-DryLog (Join-Path $tCs 'syhost-dryrun.log'); $lp = Read-DryLog (Join-Path $tPs 'syhost-dryrun.log')
     Check (($lc -join "`n") -ceq ($lp -join "`n") -and $lc.Count -gt 0) "deneme günlüğü iki sürümde aynı ($($lc.Count) satır)"
+    # Kaldırmadaki boşaltma gerçekten, iki sürümde aynı klasörle: kalanlar, kökün öznitelikleri ve bağlantının
+    # gösterdiği yer aynı olmalı (C#: SyHost.exe --selftest empty; Terminal: Remove-RootAfterExit)
+    $eRoots = @{}
+    foreach ($ed in 'cs', 'ps') {
+        $eRoot = Join-Path $WorkRoot "bosalt-$ed\SyHost Kök"; $eOut = Join-Path $WorkRoot "bosalt-$ed-disari"
+        TdWrite (Join-Path $eOut 'keep.txt'); TdAttr (Join-Path $eOut 'keep.txt') 'Hidden, ReadOnly'
+        New-FakeRoot $eRoot
+        TdWrite (Join-Path $eRoot 'syhost-selftest-bosalt.txt')
+        TdWrite (Join-Path $eRoot 'Data\ro.txt'); TdAttr (Join-Path $eRoot 'Data\ro.txt') 'ReadOnly, Hidden, System'
+        TdWrite (Join-Path $eRoot 'desktop.ini') "[.ShellClassInfo]`r`n"; TdAttr (Join-Path $eRoot 'desktop.ini') 'Hidden, System'
+        TdWrite (Join-Path $eRoot 'Servers\Ic\world\region\r.0.0.mca')
+        TdJunction (Join-Path $eRoot 'Servers\Disarida') $eOut
+        TdAttr (Join-Path $eRoot 'Data') 'Directory, Hidden'; TdAttr $eRoot 'Directory, ReadOnly, System'
+        $eRoots[$ed] = @($eRoot, $eOut)
+    }
+    $psi = New-Object Diagnostics.ProcessStartInfo $Exe, ('--selftest empty "' + $eRoots['cs'][0] + '"')
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.StandardOutputEncoding = $Utf8
+    $cp = [Diagnostics.Process]::Start($psi); $csEmpty = @($cp.StandardOutput.ReadToEnd() -split "`r?`n" | Where-Object { $_ }); $cp.WaitForExit()
+    Remove-Item env:SYHOST_DRYRUN
+    $psRootE = $eRoots['ps'][0]
+    try { Remove-RootAfterExit $psRootE @((Join-Path $psRootE 'SyHost.exe')) } finally { Set-Location -LiteralPath $here; [Environment]::CurrentDirectory = $here; $env:SYHOST_DRYRUN = '1' }
+    $left = @([IO.Directory]::EnumerateFileSystemEntries($psRootE, '*', 'AllDirectories') | ForEach-Object { $_.Substring($psRootE.Length + 1) })
+    [Array]::Sort($left, [StringComparer]::Ordinal)
+    $psEmpty = @($left | ForEach-Object { 'kalan|' + $_ }) + @('kok|' + [int]((Get-Item -LiteralPath $psRootE -Force).Attributes -band ([IO.FileAttributes]::ReadOnly -bor [IO.FileAttributes]::System)))
+    Check ($cp.ExitCode -eq 0 -and ($csEmpty -join "`n") -ceq ($psEmpty -join "`n")) ("boşaltma iki sürümde aynı: " + ($psEmpty -join ', ') + $(if (($csEmpty -join "`n") -cne ($psEmpty -join "`n")) { "`n      C#: " + ($csEmpty -join ', ') } else { '' }))
+    Check (($psEmpty -join ',') -ceq 'kalan|SyHost.exe,kok|0') 'boşaltmadan sonra yalnızca SyHost.exe kaldı, kökün salt okunur ve sistem özniteliği kalktı'
+    Check (@('cs', 'ps' | Where-Object { -not [IO.File]::Exists((Join-Path $eRoots[$_][1] 'keep.txt')) }).Count -eq 0) 'boşaltma iki sürümde de bağlantının gösterdiği yere dokunmadı'
     foreach ($l in $psLines) { if ($l.StartsWith('item|')) { Write-Host ('      ' + $l) -ForegroundColor DarkGray } }
 }
 

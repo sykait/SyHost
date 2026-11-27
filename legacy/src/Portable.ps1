@@ -1,10 +1,10 @@
 ﻿# =====================================================================
 #  SyHost - taşınabilir klasör (Terminal sürümü)
 #  Her şey SyHost klasörünün içinde durur:
-#    SyHost\SyHost.exe       görünen tek dosya (Terminal sürümünde küçük bir başlatıcı)
+#    SyHost\SyHost.exe       açılacak tek dosya (Terminal sürümünde küçük bir başlatıcı)
 #    SyHost\Servers\         yeni sunucuların varsayılan yeri
-#    SyHost\Data\  (gizli)   ayarlar, sunucu listesi, playit anahtarı, indirilen Java ve playit
-#    SyHost\App\   (gizli)   bu uygulama (src, config, fonts, icons, bin\SyHost.Core.dll)
+#    SyHost\Data\            ayarlar, sunucu listesi, playit anahtarı, indirilen Java ve playit
+#    SyHost\App\             bu uygulama (src, config, fonts, icons, bin\SyHost.Core.dll)
 #  Klasör istenen yere taşınabilir; yollar SyHost klasörüne göre hesaplanır.
 #  C# karşılığı: src\SyHost\Setup\Portable.cs, Migration.cs, FolderLook.cs, Fonts.cs, Shortcuts.cs,
 #  Core\Native.Dialogs.cs (klasör seçici), Native.SetWindowIcon, App.Server.cs (SrvFindPlayit), App.cs (PortableStartup).
@@ -19,6 +19,21 @@
 function Get-InnerException($e) {
     while ($e -is [System.Management.Automation.MethodInvocationException] -and $null -ne $e.InnerException) { $e = $e.InnerException }
     $e
+}
+
+# Arka plan işi (ayrı bir çalışma alanında çalışan .ps1 dosyası) hatayla bittiyse nedeni, bittiyse $null. İş dosyası
+# yoksa, açılamadıysa ya da virüs tarayıcısı engellediyse işin hiçbir satırı çalışmaz ve iş kendi "bitti" bilgisini
+# yazamaz: ekranlar bunu buradan anlar. Virüs tarayıcısının engeli PowerShell'de bir ayrıştırma hatasıdır; onun tek
+# satırlık iletisi döner. (C# sürümünde işler aynı süreçte çalışır, karşılığı yok.)
+function Get-JobFailText($ps) {
+    try {
+        $st = $ps.InvocationStateInfo
+        if ($st.State -ne [System.Management.Automation.PSInvocationState]::Failed) { return $null }
+        $r = Get-InnerException $st.Reason
+        if ($r -is [System.Management.Automation.ParseException] -and $null -ne $r.Errors -and $r.Errors.Count -gt 0) { return [string]$r.Errors[0].Message }
+        if ($null -ne $r -and $r.Message) { return [string]$r.Message }
+    } catch {}
+    'PowerShell'
 }
 
 # ---------- Klasör ve kurulum (C#: Portable.cs) ----------

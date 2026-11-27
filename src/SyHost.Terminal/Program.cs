@@ -1,7 +1,7 @@
 // =====================================================================
 //  SyHost - Terminal sürümünün başlatıcısı (SyHost.exe)
 //  PowerShell uygulamasını (legacy\src) içinde taşır ve klasik konsol penceresinde (conhost) açar:
-//    kuruluysa (yanında Data var)       gizli App klasörüne çıkarır (yalnızca değişince), oradan açar
+//    kuruluysa (yanında Data var)       App klasörüne çıkarır (yalnızca değişince), oradan açar
 //    kurulu değilse (ör. İndirilenler)  %TEMP%'te geçici bir klasöre çıkarır, SyHost kapanınca siler
 //  Uygulama kendini yeniden açarken (kurulumdan sonra, dil değişince) bu exe'yi kullanır (-Exe).
 //
@@ -105,7 +105,37 @@ static class Program
         var psi = new ProcessStartInfo(conhost, arguments) { UseShellExecute = true, WorkingDirectory = workDir };
         Win.AllowSetForegroundWindow(uint.MaxValue);   // açılan pencere öne gelebilsin (ASFW_ANY)
         using Process host = Process.Start(psi) ?? throw new InvalidOperationException("conhost.exe did not start.");
-        Watch(host, untilExit);
+        try { Watch(host, untilExit); }
+        catch (EarlyExitException e) { throw new InvalidOperationException(e.Message + EarlyExitHint(app, root)); }
+    }
+
+    /// <summary>PowerShell açılmadı ya da hemen kapandı: hata penceresinde sebebin altına olası nedeni ekle.</summary>
+    sealed class EarlyExitException(string message) : Exception(message);
+
+    /// <summary>
+    /// Bilinen iki neden: yeni yazılan bir dosya kayboldu (bir virüs tarayıcısı kaldırmış olabilir) ya da SyHost
+    /// klasörü bir ağ konumunda (Windows PowerShell oradaki betikleri internetten gelmiş sayıp çalıştırmayabilir).
+    /// </summary>
+    static string EarlyExitHint(string app, string root)
+    {
+        Lang.Code = UiLanguage();
+        string missing = Payload.FirstMissing(app);
+        if (missing != null)
+            return "\n\n" + Lang.L("Bir SyHost dosyası yazıldıktan hemen sonra kayboldu:\n{0}\n\nBir virüs tarayıcısı kaldırmış olabilir. README'deki \"Güvenlik ve virüs tarayıcıları\" bölümüne bak.", missing);
+        if (IsNetworkPath(root))
+            return "\n\n" + Lang.L("SyHost klasörü bir ağ konumunda. Windows PowerShell oradaki betikleri çalıştırmayabilir: SyHost klasörünü bu bilgisayardaki bir sürücüye taşı ya da SyHost'un ana sürümünü kullan.");
+        return "";
+    }
+
+    static bool IsNetworkPath(string path)
+    {
+        try
+        {
+            if (path.StartsWith(@"\\", StringComparison.Ordinal)) return true;
+            string drive = Path.GetPathRoot(path);
+            return !string.IsNullOrEmpty(drive) && new DriveInfo(drive).DriveType == DriveType.Network;
+        }
+        catch { return false; }
     }
 
     /// <summary>
@@ -157,7 +187,7 @@ static class Program
             }
             if (ps == null)
             {
-                if (host.HasExited) throw new InvalidOperationException("Windows PowerShell did not start.");
+                if (host.HasExited) throw new EarlyExitException("Windows PowerShell did not start.");
                 TestLog.Write("powershell not found");
             }
             else
@@ -168,7 +198,7 @@ static class Program
                     uint code = ps.ExitCode;
                     TestLog.Write("powershell exited early, code " + code.ToString(CultureInfo.InvariantCulture));
                     if (code != 0 && code != StatusControlCExit && code != KilledExit)
-                        throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture,
+                        throw new EarlyExitException(string.Format(CultureInfo.InvariantCulture,
                             "Windows PowerShell closed right after starting (exit code {0}, 0x{1:X8}).", (int)code, code));
                 }
             }

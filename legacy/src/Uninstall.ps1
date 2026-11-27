@@ -6,7 +6,8 @@
 #  asla dokunulmaz. Görünüm "kapatılıyor" ekranındaki adım listesi gibidir.
 #  Bulunanlar: bu SyHost'un kısayolları, SyHost'un kurduğu kullanıcı yazı tipi, 0.5.0'dan kalanlar
 #  (eski veri klasörü, eski kurulum klasörü, Program Files'taki playit, C:\Windows\Fonts'taki yazı tipi,
-#  winget ile kurulmuş Java) ve istenirse SyHost klasörünün kendisi (SyHost kapandıktan sonra silinir).
+#  winget ile kurulmuş Java) ve istenirse SyHost klasörünün kendisi (SyHost kapanırken içi boşaltılır; klasör ve
+#  başlatıcı kalır, kullanıcı Explorer'dan siler).
 #  SYHOST_DRYRUN=1: hiçbir şey silinmez, yalnızca ne yapılacağı %TEMP%\syhost-dryrun.log dosyasına yazılır.
 #  C# karşılığı: src\SyHost\App\App.Uninstall.cs (ekran) ve src\SyHost\Setup\Uninstall.cs (bulma ve kaldırma).
 # =====================================================================
@@ -121,7 +122,14 @@ function Handle-UninstallKey([ConsoleKeyInfo]$k, [bool]$ctrl) {
 
 function UnFinish {
     $script:UnPhase = 'bitti'
-    if ($null -ne $UnJob) { try { [void]$UnJob.PS.EndInvoke($UnJob.Handle) } catch {}; try { $UnJob.PS.Dispose() } catch {} }
+    if ($null -ne $UnJob) {
+        try { [void]$UnJob.PS.EndInvoke($UnJob.Handle) } catch {}
+        # İş hatayla durduysa ya da hiç başlayamadıysa (UninstallJob.ps1 yok, açılamadı ya da virüs tarayıcısı
+        # engelledi) bitmemiş satırlar kapatılır: "Kaldırma tamamlandı." hatasız görünmesin
+        $err = Get-JobFailText $UnJob.PS
+        if ($null -ne $err) { UnFailRest $UnItems $err }
+        try { $UnJob.PS.Dispose() } catch {}
+    }
     if (UnFolderOn) { $script:DeleteRootAfterExit = $true }
     elseif (-not (Test-DryRun) -and -not $TestFrame) { Show-UninstallFolder $AppRoot }
     $script:Dirty = $true
@@ -172,6 +180,10 @@ function UnProtectedFolders {
 function Test-RootDeletable([string]$root) {
     try {
         $full = [IO.Path]::GetFullPath($root).TrimEnd('\')
+        # Klasörün kendisi bir bağlantıysa (junction, sembolik bağlantı, klasöre bağlanmış bir sürücü) içini boşaltmak
+        # gösterdiği yerdeki her şeyi silerdi (ör. bir USB belleğin tamamı): böyle bir klasör hiç önerilmez (C#: CanDeleteRoot)
+        $di = New-Object IO.DirectoryInfo $full
+        if ($di.Exists -and (($di.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
         $drive = [IO.Path]::GetPathRoot($full)
         if ([string]::IsNullOrEmpty($drive) -or [string]::Equals($drive.TrimEnd('\'), $full, [StringComparison]::OrdinalIgnoreCase)) { return $false }
         $git = [IO.Path]::Combine($full, '.git')
@@ -271,6 +283,17 @@ function UnFindMsi([string[]]$prefixes) {
 }
 
 # Seçili adımları sırayla çalıştır (C#: Uninstall.RunSelected; arka planda Start-UninstallJob çağırır)
+# Bitmemiş satırları kapat (iş hatayla durdu ya da hiç başlayamadı): seçili olanlar hata, seçili olmayanlar atlandı.
+# "SyHost klasörünün kendisi" Invoke-UninstallItems'taki gibi işaretlenir: seçiliyse SyHost kapanırken boşaltılır.
+function UnFailRest($items, [string]$msg) {
+    foreach ($it in $items) {
+        if ($it.State -ne 0 -and $it.State -ne 1) { continue }
+        if ($it.Key -ceq 'klasor') { $it.State = $(if ($it.On) { 2 } else { 4 }) }
+        elseif ($it.On) { $it.Error = $msg; $it.State = 3 }
+        else { $it.State = 4 }
+    }
+}
+
 function Invoke-UninstallItems($items) {
     foreach ($it in $items) {   # @($items) değil: bkz. UnHoldsServer
         if (-not $it.On -or $it.Key -ceq 'klasor') { $it.State = $(if ($it.On) { 2 } else { 4 }); continue }

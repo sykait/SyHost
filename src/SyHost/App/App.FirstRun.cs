@@ -407,10 +407,10 @@ sealed partial class App
         }
     }
 
-    /// <summary>Kısayolları istenen hâle getir: açıksa yaz (başka bir SyHost'unkini de değiştirir), kapalıysa bizimkini sil.</summary>
     /// <summary>Kısayollar yazılabilir mi: gerçek çalışmada evet; test modunda yalnızca SYHOST_SHORTCUT_DIR bir test klasörünü gösteriyorsa.</summary>
     bool ShortcutsWritable => !TestMode || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SYHOST_SHORTCUT_DIR"));
 
+    /// <summary>Kısayolları istenen hâle getir: açıksa yaz (başka bir SyHost'unkini de değiştirir), kapalıysa bizimkini sil.</summary>
     void ApplyShortcuts(bool desk, bool start)
     {
         Cfg.kisayolMasaustu = desk; Cfg.kisayolBaslat = start; SaveConfig();

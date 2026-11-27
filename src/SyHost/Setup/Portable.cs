@@ -1,9 +1,9 @@
 // =====================================================================
 //  SyHost - taşınabilir klasör
 //  Her şey SyHost klasörünün içinde durur:
-//    SyHost\SyHost.exe       görünen tek dosya
+//    SyHost\SyHost.exe       açılacak tek dosya
 //    SyHost\Servers\         yeni sunucuların varsayılan yeri
-//    SyHost\Data\  (gizli)   ayarlar, sunucu listesi, playit anahtarı, indirilen Java ve playit
+//    SyHost\Data\            ayarlar, sunucu listesi, playit anahtarı, indirilen Java ve playit
 //  Klasör istenen yere taşınabilir; yollar SyHost klasörüne göre hesaplanır.
 // =====================================================================
 using System.Globalization;

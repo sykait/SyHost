@@ -53,7 +53,7 @@ try {
     # Ayrı bir Windows PowerShell 5.1 sürecinde (DLL bu süreci kilitlemesin, klasör silinebilsin)
     $dll = Join-Path $work 'bin\SyHost.Core.dll'
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $types = & $ps -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -Path '$($dll.Replace("'", "''"))'; 'Native', 'Tray', 'Server', 'JobGuard', 'CloseGuard', 'Backup' | Where-Object { ('SyHost.' + `$_) -as [type] }"
+    $types = & $ps -NoProfile -ExecutionPolicy RemoteSigned -Command "Add-Type -Path '$($dll.Replace("'", "''"))'; 'Native', 'Tray', 'Server', 'JobGuard', 'CloseGuard', 'Backup' | Where-Object { ('SyHost.' + `$_) -as [type] }"
     Check "SyHost.Core.dll loads in Windows PowerShell 5.1 ($(@($types).Count) core types)" (@($types).Count -eq 6)
 } finally {
     if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }

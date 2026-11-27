@@ -72,6 +72,25 @@ static class Payload
         catch { return false; }
     }
 
+    /// <summary>
+    /// Çıkarılan uygulamada eksik ya da boyutu değişmiş ilk dosya (hepsi yerindeyse null). PowerShell açılışta
+    /// kapanınca sebebi aramak için: yazıldıktan hemen sonra kaybolan bir dosyayı çoğunlukla bir virüs tarayıcısı kaldırmıştır.
+    /// </summary>
+    public static string FirstMissing(string app)
+    {
+        try
+        {
+            foreach (var e in Entries())
+            {
+                string path = Path.Combine(app, e.Rel);
+                var fi = new FileInfo(path);
+                if (!fi.Exists || fi.Length != e.Size) return path;
+            }
+        }
+        catch { }
+        return null;
+    }
+
     /// <summary>Dosyanın "internetten geldi" (Mark of the Web) akışı var mı?</summary>
     static bool HasInternetMark(string file)
     {

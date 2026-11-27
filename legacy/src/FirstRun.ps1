@@ -197,7 +197,16 @@ function FrBusy { [bool]($null -ne $Fr -and $null -ne $Fr.Job -and -not $Fr.Sync
 
 # Her turda: biten işin sonucunu uygula
 function Fr-Poll {
-    if ($null -eq $Fr -or $null -eq $Fr.Job -or -not $Fr.Sync.Done) { return }
+    if ($null -eq $Fr -or $null -eq $Fr.Job) { return }
+    if (-not $Fr.Sync.Done) {
+        # FirstRunJob.ps1 hiç çalışamadıysa (yok, açılamadı ya da virüs tarayıcısı engelledi) "bitti" hiç gelmez:
+        # adım sonsuza dek beklemesin, hata gösterilsin (C#'ta iş aynı süreçte çalışır, finally her zaman bitirir)
+        if ($Fr.Job -is [string] -or -not $Fr.Job.Handle.IsCompleted) { return }
+        try { [void]$Fr.Job.PS.EndInvoke($Fr.Job.Handle) } catch {}
+        $msg = Get-JobFailText $Fr.Job.PS
+        if (-not $msg) { $msg = Join-Path $SrcDir 'FirstRunJob.ps1' }
+        $Fr.Sync.Error = $msg; $Fr.Sync.Proc = $null; $Fr.Sync.Done = $true
+    }
     $job = $Fr.Job; $Fr.Job = $null
     if ($job -isnot [string]) { try { [void]$job.PS.EndInvoke($job.Handle) } catch {}; try { $job.PS.Dispose() } catch {} }
     if ($null -ne $Fr.Sync.Code) { $Fr.Code = $Fr.Sync.Code }
@@ -564,7 +573,8 @@ function PlayitKey([ConsoleKeyInfo]$k) {
             if ($k.Key -ne 'Enter') { return }
             $Fr.Note = $null
             if (PlayitReady) {
-                if ($Fr.Sel -eq 0) { FrNext; return }
+                # Devam: kullanıcı bu playit'i onayladı; kapalıysa (engellendi ya da sınır doldu) şimdi yeniden denenir
+                if ($Fr.Sel -eq 0) { if (-not $TestFrame -and -not (PlayitOn)) { PlayitResetBudget; Start-Playit }; FrNext; return }
                 $Fr.Phase = 'bagla'; FrRun 'claim'; return   # yeniden bağla
             }
             if ($Fr.Sel -eq 1) {

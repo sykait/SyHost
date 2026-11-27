@@ -91,7 +91,7 @@ sealed partial class App
     }
 
     /// <summary>İndirilen dosya GitHub'ın SHA-256'sıyla tutuyor mu (verdiyse) ve imzası geçerli mi?</summary>
-    static bool PlayitFileOk(string file, string digest)
+    internal static bool PlayitFileOk(string file, string digest)
     {
         if (!string.IsNullOrEmpty(digest))
         {
@@ -104,7 +104,7 @@ sealed partial class App
     }
 
     /// <summary>Hesap bağlama sayfası yalnızca playit.gg'nin kendi https adresiyse tarayıcıda açılır.</summary>
-    static bool IsPlayitUrl(string url) =>
+    internal static bool IsPlayitUrl(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out Uri u) && u.Scheme == Uri.UriSchemeHttps &&
         (u.Host.Equals("playit.gg", StringComparison.OrdinalIgnoreCase) || u.Host.EndsWith(".playit.gg", StringComparison.OrdinalIgnoreCase));
 
@@ -188,7 +188,8 @@ sealed partial class App
                 Fr.Note = null;
                 if (PlayitReady())
                 {
-                    if (Fr.Sel == 0) { FrNext(); return; }
+                    // Devam: kullanıcı bu playit'i onayladı; kapalıysa (engellendi ya da sınır doldu) şimdi yeniden denenir
+                    if (Fr.Sel == 0) { if (!TestMode && !PlayitOn()) { PlayitResetBudget(); StartPlayit(); } FrNext(); return; }
                     Fr.Phase = "bagla"; FrRun(PlayitClaim); return;   // yeniden bağla
                 }
                 if (Fr.Sel == 1)

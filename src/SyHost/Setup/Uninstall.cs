@@ -105,6 +105,10 @@ static class Uninstall
         try
         {
             string full = Path.GetFullPath(root).TrimEnd('\\');
+            // Klasörün kendisi bir bağlantıysa (junction, sembolik bağlantı, klasöre bağlanmış bir sürücü) içini boşaltmak
+            // gösterdiği yerdeki her şeyi silerdi (ör. bir USB belleğin tamamı): böyle bir klasör hiç önerilmez
+            var di = new DirectoryInfo(full);
+            if (di.Exists && (di.Attributes & FileAttributes.ReparsePoint) != 0) return false;
             string drive = Path.GetPathRoot(full);
             if (string.IsNullOrEmpty(drive) || drive.TrimEnd('\\').Equals(full, StringComparison.OrdinalIgnoreCase)) return false;
             string git = Path.Combine(full, ".git");
@@ -371,6 +375,8 @@ static class Uninstall
                      Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                      Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.Windows),
                      Path.GetDirectoryName(profile),
+                     // Test-Uninstall burada bir bağlantı (junction) kurar: bağlantı olan SyHost klasörü silinmez
+                     Path.Combine(Path.GetDirectoryName(root), "Kok-Baglanti"),
                  })
             Console.WriteLine("candelete|" + p + "|" + CanDeleteRoot(p));
         // Kaldırıcı komutları yalnızca ayrıştırılır, çalıştırılmaz: kayıt defterindekiler ve örnekler

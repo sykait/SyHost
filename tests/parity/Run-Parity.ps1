@@ -40,7 +40,7 @@ $WideRx = [regex]'[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-�
 if (-not $NoBuild) {
     Write-Host 'C# sürümü derleniyor (build\Build.ps1 -Publish)...' -ForegroundColor DarkGray
     $ErrorActionPreference = 'Continue'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'build\Build.ps1') -Publish | Out-Host
+    & powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File (Join-Path $Repo 'build\Build.ps1') -Publish | Out-Host
     $code = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     if ($code -ne 0) { throw "Derleme başarısız (kod $code)" }
@@ -112,7 +112,7 @@ function Start-PsFrame($t) {
     $sandbox = Get-SandboxEnv $t; $saved = @{}
     foreach ($kv in $sandbox.GetEnumerator()) { $saved[$kv.Key] = [Environment]::GetEnvironmentVariable($kv.Key); [Environment]::SetEnvironmentVariable($kv.Key, $kv.Value) }
     try {
-        $a = "-NoProfile -ExecutionPolicy Bypass -File `"$PsApp`" -Root `"$(Join-Path $t.Dir 'ps')`" -TestFrame `"$($t.File)`" -TestOut `"$($t.PsOut)`""
+        $a = "-NoProfile -ExecutionPolicy RemoteSigned -File `"$PsApp`" -Root `"$(Join-Path $t.Dir 'ps')`" -TestFrame `"$($t.File)`" -TestOut `"$($t.PsOut)`""
         $p = Start-Process powershell.exe -ArgumentList $a -WorkingDirectory $t.Dir -WindowStyle Hidden -PassThru
         $null = $p.Handle   # çıkış kodunu sonra okuyabilmek için
         $t.Proc = $p; $t.Started = [DateTime]::Now

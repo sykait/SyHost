@@ -141,12 +141,15 @@ C:\Users\<ad>\SyHost\
 ```
 
 - **Her şey bu klasörde durur.** Klasörün dışına SyHost yalnızca kısayolları ve (kurmak zorunda kaldıysa) yazı tipini
-  ekler, başka hiçbir şey. Başka bir yerde tuttuğun sunucular olduğu yerde kalır.
+  ekler; 0.5.0'dan taşındıysa eski veri klasörüne kısa bir not da bırakır. Başka bir yerde tuttuğun sunucular olduğu
+  yerde kalır.
 - **Taşınabilir.** Klasörü istediğin zaman taşıyabilir ya da adını değiştirebilirsin (önce SyHost'u kapat). Yeni
   yerindeki `SyHost.exe`'yi bir kez açman yeter: Masaüstü ve Başlat menüsü kısayollarını kendisi düzeltir. Klasörün
   içindeki sunucular onunla birlikte taşınır. Klasörü yazabildiğin bir yerde tut: `Program Files` gibi bir yerden
   açılırsa SyHost yalnızca bir uyarı gösterir ve SyHost klasörünü bütünüyle (`Servers` ve `Data` ile birlikte)
   taşımanı söyler.
+- **Terminal sürümü yerel bir sürücü ister.** Windows PowerShell ağ paylaşımındaki betikleri çalıştırmayı
+  reddedebilir; bu sürümün klasörünü bu bilgisayardaki bir sürücüde tut (ana sürüm için fark etmez).
 - Explorer'da klasörler SyHost simgeleriyle görünür; `Servers` ve yedek klasörleri seçtiğin dilde adlandırılır
   (Türkçede `Sunucular` ve `Yedekler`).
 - `Data\playit.toml` playit bağlantının gizli anahtarıdır. Kimseyle paylaşma.
@@ -343,8 +346,10 @@ satırda listelenir; **Boşluk** tuşuyla sen seçersin:
   devam eder: silmeden önce [0.5.0'dan geçiş](#gecis) bölümünü oku.
 - **SyHost klasörünün kendisi**, içindeki sunucular ve dünyalarla birlikte. Satırında onunla birlikte kaç sunucunun
   gideceği yazar: `Servers` içindeki her klasör sayılır, listeden kaldırdığın sunucular da. Seçili gelmez; seçersen
-  SyHost bir kez daha Enter'a basmanı ister. SyHost kapanırken klasörün içindeki her şeyi kendisi siler, sonra klasörü
-  Explorer'da gösterir: kalanı (çalışırken kendini silemeyen SyHost.exe'yi) oradan silersin.
+  SyHost bir kez daha Enter'a basmanı ister. SyHost kapanırken klasörün içindeki her şeyi siler, sonra klasörü
+  Explorer'da gösterir: kalanı oradan silersin (`SyHost.exe`, Terminal sürümünde `App` klasörü de, bir de başka bir
+  programın hâlâ açık tuttuğu dosyalar). SyHost klasörü başka bir yeri gösteren bir bağlantıysa (junction ya da bir
+  klasöre bağlanmış bir sürücü) bu satır hiç çıkmaz.
 
 **Enter** seçilenleri kaldırır. Son ekranda yalnızca **SyHost'u kapat** vardır, yani SyHost en sonunda kapanır.
 Klasörü tutarsan SyHost işi bitince onu Explorer'da gösterir; istediğin zaman kendin silebilirsin (hiçbir şey seçmeden
@@ -384,16 +389,25 @@ Enter'a basarsan doğrudan o ekrana geçilir). SyHost klasörünün dışındaki
 
 SyHost sıradan bir programdır ve öyle davranmaya çalışır:
 
-- Yalnızca kendi klasöründe çalışır. Yönetici iznini yalnızca eski 0.5.0 kurulumunun bütün bilgisayara kurduğu bir
-  şeyi kaldırmayı seçtiğinde ister (Ayarlar → SyHost'u kaldır): yazı tipi için Windows izin penceresinde SyHost'un
-  kendisi görünür, playit ve Java için onların kendi Windows Installer'ı.
-- Hiçbir zaman gizli ya da kodlanmış komut çalıştırmaz, çalışırken metinden kod üretmez, dosyalardaki "internetten
-  indirildi" işaretini silmez ve kendini yardımcı bir programla silmez. Kaldırırken klasörün içini SyHost açıkken
-  boşaltır; boş kalan klasörü Explorer'dan sen silersin.
-- Yalnızca şuralardan indirir: Adoptium (Java), GitHub (playit), Modrinth ve mod yükleyicilerinin kendi sunucuları
-  (NeoForge, Forge, Fabric). Java ve modlar sağlama toplamlarıyla denetlenir. playit yalnızca dosyası GitHub'ın verdiği
-  sağlama toplamıyla tutuyorsa ve yayıncısının geçerli imzasını taşıyorsa çalıştırılır.
-- Windows açılınca hiçbir şey başlamaz. playit yalnızca SyHost açıkken çalışır.
+- İhtiyaç duyduğu her şey kendi klasöründe durur (yukarıdaki "SyHost klasörü" bölümüne bak). Bir SyHost klasörünün
+  dışından açılınca (ilk açılış ya da İndirilenler'den güncelleme) Terminal sürümü `%TEMP%\SyHost-Terminal-…` içindeki
+  geçici bir kopyadan çalışır; bu kopya SyHost kapanınca silinir. Yönetici iznini yalnızca eski 0.5.0 kurulumunun
+  bütün bilgisayara kurduğu bir şeyi kaldırmayı seçtiğinde ister (Ayarlar → SyHost'u kaldır): yazı tipi için Windows
+  izin penceresinde SyHost'un kendisi görünür, playit ve Java için onların kendi Windows Installer'ı.
+- Hiçbir zaman gizli bir PowerShell ya da cmd penceresi açmaz ve kodlanmış komut vermez. Çalışırken metinden kod
+  üretmez, dosyalardaki "internetten indirildi" işaretini silmez ve kendini yardımcı bir programla silmez. Senin için
+  çalıştırdığı programlar (sunucunun Java'sı, mod yükleyicisinin kurucusu, playit, Terminal sürümünde de takılan bir
+  kurucuyu durdurmak için Windows'un `taskkill`'i) kendi pencereleri olmadan çalışır; sunucunun konsolu SyHost'un
+  ekranında görünür. Kaldırırken klasörün içini SyHost açıkken boşaltır; kalanı Explorer'dan sen silersin.
+- Java'yı Adoptium'dan, playit'i playit'in GitHub sürümlerinden, mod yükleyicisini NeoForge, Forge ya da Fabric'ten
+  indirir; mod yükleyicisi de Minecraft'ı ve kitaplıklarını Mojang'dan alır. Modlar açtığın `.mrpack` dosyasındaki
+  adreslerden gelir (Modrinth paketlerinde: Modrinth'in CDN'i, GitHub ya da GitLab) ve yalnızca paketin verdiği SHA-1
+  ya da SHA-512 ile tutarsa saklanır. Java, Adoptium bir SHA-256 verdiğinde onunla denetlenir. İndirilen playit
+  yalnızca GitHub'ın verdiği SHA-256 ile tutuyorsa (GitHub verdiyse) ve Windows imzasını geçerli buluyorsa saklanır.
+  SyHost 0.5.0'ın `Program Files`'a kurduğu playit olduğu gibi kullanılır.
+- Windows açılınca hiçbir şey başlamaz. playit yalnızca SyHost açıkken çalışır. Windows ya da bir güvenlik programı
+  playit'i engellerse SyHost durmadan yeniden denemez: konsolda yazar; **Ayarlar → Arkadaş bağlantısı (playit) →
+  Devam** yeniden dener.
 
 SyHost henüz dijital olarak imzalı değil; bu yüzden SmartScreen ilk açılışta uyarabilir ve bir güvenlik programı hiç
 görmediği bir dosyaya karşı fazladan temkinli olabilir. Seninki SyHost'u işaretlerse:

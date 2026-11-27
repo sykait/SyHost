@@ -19,16 +19,22 @@ $Repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $Spec = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'lint-rules.json'), [Text.Encoding]::UTF8) | ConvertFrom-Json
 
 # Taranacak dosyalar
-$shippedCs = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'src') -Recurse -Filter *.cs | Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' })
+# (bin ve obj repo içindeki yola göre elenir: repo bir ...\bin\... klasöründe olsa da C# dosyaları taranır)
+function Get-RepoRel([IO.FileSystemInfo]$f) { $f.FullName.Substring($Repo.Length) }
+$shippedCs = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'src') -Recurse -Filter *.cs | Where-Object { (Get-RepoRel $_) -notmatch '\\(bin|obj)\\' })
 $legacyPs = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'legacy\src') -Filter *.ps1)
-$shipped = $shippedCs + $legacyPs + @(Get-ChildItem -LiteralPath (Join-Path $Repo 'legacy\src') -Filter *.cs) + @(Get-ChildItem -LiteralPath (Join-Path $Repo 'legacy') -Filter *.bat)
-$dev = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'tests'), (Join-Path $Repo 'build') -Recurse -File | Where-Object { $_.Extension -eq '.ps1' -and $_.FullName -notmatch '\\tests\\parity\\out\\' }) +
+$legacyCs = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'legacy\src') -Filter *.cs)
+$shipped = $shippedCs + $legacyPs + $legacyCs + @(Get-ChildItem -LiteralPath (Join-Path $Repo 'legacy') -Filter *.bat)
+$dev = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'tests'), (Join-Path $Repo 'build') -Recurse -File | Where-Object { $_.Extension -eq '.ps1' -and (Get-RepoRel $_) -notmatch '\\tests\\parity\\out\\' }) +
        @(Get-ChildItem -LiteralPath (Join-Path $Repo '.github') -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.yml' })
-$scopes = @{ shipped = $shipped; legacyPs = $legacyPs; all = $shipped + $dev }
+$scopes = @{ shipped = $shipped; legacy = $legacyPs + $legacyCs; legacyPs = $legacyPs; all = $shipped + $dev }
+if ($shippedCs.Count -lt 10 -or $legacyPs.Count -lt 10) { throw "taranacak dosya bulunamadı (C#: $($shippedCs.Count), PowerShell: $($legacyPs.Count))" }
 
 $fails = New-Object System.Collections.Generic.List[string]
 foreach ($r in $Spec.rules) {
-    $rx = [regex]$r.pattern
+    if (-not $scopes.ContainsKey([string]$r.scope)) { throw "lint-rules.json: bilinmeyen kapsam '$($r.scope)' ($($r.name))" }
+    # Kültürden bağımsız: tr-TR'de (?i) 'I' ile 'i'yi eşlemezdi
+    $rx = New-Object Text.RegularExpressions.Regex ([string]$r.pattern), ([Text.RegularExpressions.RegexOptions]::CultureInvariant)
     $allow = @(if ($r.PSObject.Properties['allow']) { $r.allow })
     foreach ($f in $scopes[$r.scope]) {
         $rel = $f.FullName.Substring($Repo.Length + 1)

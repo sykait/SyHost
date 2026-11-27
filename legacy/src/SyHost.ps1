@@ -19,7 +19,7 @@ $LaunchedByEnv = (-not $Root) -and [bool]$env:SYHOST_LAUNCH_ROOT
 if ($LaunchedByEnv) { $Root = $env:SYHOST_LAUNCH_ROOT; if (-not $Exe) { $Exe = $env:SYHOST_LAUNCH_EXE } }
 Remove-Item Env:SYHOST_LAUNCH_ROOT, Env:SYHOST_LAUNCH_EXE -ErrorAction SilentlyContinue
 $SrcDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
-# Uygulama dosyaları (src, config, fonts, icons). Kurulumda SyHost klasöründeki gizli App klasörüdür.
+# Uygulama dosyaları (src, config, fonts, icons). Kurulumda SyHost klasöründeki App klasörüdür.
 $AppDir  = Split-Path -Parent $SrcDir
 if (-not $Root) { $Root = Split-Path -Parent $AppDir }
 $AppRoot = [IO.Path]::GetFullPath($Root)
@@ -40,10 +40,24 @@ $Data = Join-Path $AppRoot 'Data'
 # (yalnızca bir Data klasörü yetmez: SyHost'un ayar ya da sunucu listesi aranır; C#: Portable.IsInstalled)
 $SetupMode = (-not $TestFrame) -and -not ([IO.File]::Exists([IO.Path]::Combine($Data, 'ayarlar.json')) -or [IO.File]::Exists([IO.Path]::Combine($Data, 'sunucular.json')))
 
+# ---------- Tek kopya (test modunda atlanır: açık bir SyHost'a dokunmasın) ----------
+# İki sürüm aynı kilidi kullanır: aynı anda yalnızca bir SyHost açık olabilir. Yardımcı koddan önce denetlenir:
+# ikinci kopya hiçbir şey derlemez, var olan DLL'i yükleyip açık pencereyi öne getirir ve kapanır.
+$MutexName = 'Local\SyHostSunucuMerkezi' + $(if ($Title -ceq 'SyHost') { '' } else { "-$Title" })
+if (-not $TestFrame) {
+    $created = $false
+    $mutex = New-Object System.Threading.Mutex($true, $MutexName, [ref]$created)
+    if (-not $created) {
+        foreach ($d in (Join-Path $AppDir 'bin\SyHost.Core.dll'), (Join-Path $AppDir 'cache\SyHost.Core.dll')) {
+            if (Test-Path -LiteralPath $d) { try { Add-Type -LiteralPath $d; [void][SyHost.Native]::FocusWindow($Title) } catch {}; break }
+        }
+        exit
+    }
+}
+
 # ---------- Yardımcı kod (C#) ----------
 # Başlatıcı (SyHost.exe) derlenmiş hâlini App\bin klasörüne koyar. Yalnızca geliştirirken (repodan çalışınca:
 # -Exe ve App\version.txt yok; legacy\SyHost.bat ve tests\parity böyle açar) kaynaktan derlenip App\cache'e yazılır.
-# Tek kopya denetiminden önce yüklenir: ikinci kopya açık pencereyi bu koddaki Native.FocusWindow ile öne getirir.
 $CoreDll = Join-Path $AppDir 'bin\SyHost.Core.dll'
 if (-not (Test-Path -LiteralPath $CoreDll)) {
     if ($Exe -or (Test-Path -LiteralPath (Join-Path $AppDir 'version.txt'))) {
@@ -64,15 +78,6 @@ Add-Type -AssemblyName Microsoft.VisualBasic
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [SyHost.Native]::DpiAware()
 [SyHost.Net]::EnableTls12()
-
-# ---------- Tek kopya (test modunda atlanır: açık bir SyHost'a dokunmasın) ----------
-# İki sürüm aynı kilidi kullanır: aynı anda yalnızca bir SyHost açık olabilir
-$MutexName = 'Local\SyHostSunucuMerkezi' + $(if ($Title -ceq 'SyHost') { '' } else { "-$Title" })
-if (-not $TestFrame) {
-    $created = $false
-    $mutex = New-Object System.Threading.Mutex($true, $MutexName, [ref]$created)
-    if (-not $created) { [void][SyHost.Native]::FocusWindow($Title); exit }
-}
 
 $Host.UI.RawUI.WindowTitle = $(if ($TestFrame) { "$Title test" } else { $Title })
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
@@ -614,6 +619,10 @@ $Pl = $null
 $PlayitStarts = New-Object System.Collections.Generic.List[DateTime]
 $PlayitBlocked = $false
 $PlayitHold = $false
+# Win32: erişim reddedildi, virüs/istenmeyen yazılım, ilke engeli, akıllı uygulama denetimi ve itibar engelleri.
+# Yalnızca bunlar playit'i bu oturumda durdurur; diğer hatalar geçicidir (sınır: 10 dakikada 3 başlatma).
+# Kullanıcı Ayarlar'da playit'i onaylayınca (Devam, Yeniden bağla) yeniden denenir.
+$PlayitBlockCodes = @(5, 225, 226, 786, 1260, 4551, 4556, 4557, 4558, 4580, 4582)
 function PlayitMayRestart([DateTime]$now) {
     if ($PlayitBlocked -or $PlayitHold) { return $false }
     for ($i = $PlayitStarts.Count - 1; $i -ge 0; $i--) { if (($now - $PlayitStarts[$i]).TotalMinutes -gt 10) { $PlayitStarts.RemoveAt($i) } }
@@ -632,7 +641,10 @@ function Start-Playit {
     try { $Pl.Start($PlayitExe, "--secret-path `"$PlayitSecret`" --socket-path \\.\pipe\syhost-playit --log-path `"$(Join-Path (Split-Path $PlayitSecret) 'playit.log')`"", (Split-Path $PlayitSecret)) }
     catch {
         $x = $_.Exception; while ($x -is [System.Management.Automation.MethodInvocationException] -and $null -ne $x.InnerException) { $x = $x.InnerException }
-        if ($x -is [System.ComponentModel.Win32Exception]) { $script:PlayitBlocked = $true }
+        if ($x -is [System.ComponentModel.Win32Exception] -and $PlayitBlockCodes -contains $x.NativeErrorCode) {
+            $script:PlayitBlocked = $true
+            Add-Log warn (L 'playit açılamadı: Windows ya da bir virüs tarayıcısı engelledi ({0}). Yeniden denemek için: F9 > Arkadaş bağlantısı (playit) > Devam.' $x.Message)
+        }
     }
     [SyHost.CloseGuard]::Playit = $Pl
 }
@@ -911,7 +923,16 @@ function Begin-Install {
     $w.Step = 'kurulum'
 }
 function Check-Install {
-    if (-not $Wiz -or $Wiz.Step -ne 'kurulum' -or -not $Wiz.Sync.Done) { return }
+    if (-not $Wiz -or $Wiz.Step -ne 'kurulum') { return }
+    if (-not $Wiz.Sync.Done) {
+        # InstallJob.ps1 hiç çalışamadıysa (yok, açılamadı ya da virüs tarayıcısı engelledi) "bitti" hiç gelmez:
+        # kurulum ekranı sonsuza dek beklemesin, hata ekranı açılsın (C#'ta iş aynı süreçte çalışır)
+        if ($null -eq $Wiz.Handle -or -not $Wiz.Handle.IsCompleted) { return }
+        try { [void]$Wiz.PS.EndInvoke($Wiz.Handle) } catch {}
+        $msg = Get-JobFailText $Wiz.PS
+        $Wiz.Sync.Error = $(if ($msg) { $msg } else { Join-Path $SrcDir 'InstallJob.ps1' })
+        $Wiz.Sync.Done = $true
+    }
     try { $Wiz.PS.EndInvoke($Wiz.Handle) } catch {}
     try { $Wiz.PS.Dispose() } catch {}
     if ($Wiz.Sync.Error) { $Wiz.Step = 'hata'; return }
@@ -2354,7 +2375,11 @@ finally {
     [SyHost.Tray]::Close()
     # Kaldır: klasörün içi, kilit hâlâ bizdeyken silinir (bu sırada ikinci bir SyHost açılıp yazmasın). Başlatıcı exe
     # ve SyHost.Core.dll'i bu süreçte yüklü App klasörü kalır. (C#: Program.cs)
-    if ($DeleteRootAfterExit) { Remove-RootAfterExit $AppRoot @($ExePath, $AppDir) }
+    if ($DeleteRootAfterExit) {
+        # Büyük bir klasörde boşaltmak uzun sürebilir: pencere boş kalmasın (C#: Program.cs)
+        try { [Console]::Write("$E[0m$E[2J$E[H  " + (L 'SyHost klasörünün içi boşaltılıyor...')) } catch {}
+        Remove-RootAfterExit $AppRoot @($ExePath, $AppDir)
+    }
     try { $mutex.ReleaseMutex(); $mutex.Dispose() } catch {}
     # Kurulumdan/güncellemeden sonra yeni yerden aç; dil değişince yeniden aç
     if ($LaunchAfterExit) { Start-SyHost $LaunchAfterExit -NoSplash } elseif ($RestartApp) { Start-SyHost $ExePath -NoSplash }

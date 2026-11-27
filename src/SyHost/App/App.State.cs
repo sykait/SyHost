@@ -26,7 +26,7 @@ sealed partial class App
 
     // ---------- Yollar (taşınabilir: hepsi SyHost klasörünün içinde) ----------
     public string AppRoot;      // SyHost.exe'nin bulunduğu klasör
-    public string Data;         // AppRoot\Data (gizli)
+    public string Data;         // AppRoot\Data
     public string CfgFile;      // Data\ayarlar.json
     public string ServersFile;  // Data\sunucular.json
     public string WinFile;      // Data\pencere.json

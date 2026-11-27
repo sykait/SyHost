@@ -1,6 +1,6 @@
 // =====================================================================
 //  SyHost - Java
-//  legacy/src/SyHost.ps1: Get-JavaMajor (113-121) ve Find-Java (122-127).
+//  Terminal: legacy/src/Java.ps1 (Get-JavaMajor, Find-Java, Install-Java).
 //  Yeni (sahibi onayladı): Java yoksa winget ile bilgisayara kurulmaz.
 //  Eclipse Temurin JRE, SyHost'un kendi klasörüne (Data\tools\java-N)
 //  indirilir: yönetici izni istemez, bilgisayarın geri kalanına dokunmaz.

@@ -62,7 +62,12 @@ static class Program
             {
                 // Kaldır: klasörün içi, kilit hâlâ bizdeyken silinir (bu sırada ikinci bir SyHost açılıp yazmasın).
                 // app.Run kapanırken sunucuyu, playit'i ve tepsiyi kapattı; çalışan bu exe klasörde kalır.
-                if (app.DeleteRootAfterExit) Uninstall.DeleteFolderAfterExit(root, new[] { exe });
+                if (app.DeleteRootAfterExit)
+                {
+                    // Büyük bir klasörde boşaltmak uzun sürebilir: pencere boş kalmasın (Terminal: SyHost.ps1 finally)
+                    try { Console.Write("\u001b[0m\u001b[2J\u001b[H  " + Lang.L("SyHost klasörünün içi boşaltılıyor...")); } catch { }
+                    Uninstall.DeleteFolderAfterExit(root, new[] { exe });
+                }
                 try { mutex.ReleaseMutex(); } catch { }
             }
         }

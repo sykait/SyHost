@@ -1,15 +1,16 @@
 {
-  "note": "SyHost - virüs tarayıcılarının kötü amaçlı yazılıma benzettiği kalıplar. tests\\av\\Test-Lint.ps1 okur. Kurallar betiğin içinde değil burada durur: denetim betiği bu sözcükleri kendisi taşırsa PowerShell onu çalıştırırken taranan metinde onlar da olurdu. scope: shipped = src, legacy\\src ve legacy\\*.bat; legacyPs = yalnızca legacy\\src\\*.ps1; all = dağıtılan kod ile tests, build ve .github. allow: kalıba izin verilen dosyalar (repo köküne göre).",
+  "note": "SyHost - virüs tarayıcılarının kötü amaçlı yazılıma benzettiği kalıplar. tests\\av\\Test-Lint.ps1 okur. Kurallar betiğin içinde değil burada durur: denetim betiği bu sözcükleri kendisi taşırsa PowerShell onu çalıştırırken taranan metinde onlar da olurdu. scope: shipped = src, legacy\\src ve legacy\\*.bat; legacy = legacy\\src (.ps1 ve .cs); legacyPs = yalnızca legacy\\src\\*.ps1; all = dağıtılan kod ile tests, build ve .github. allow: kalıba izin verilen dosyalar (repo köküne göre). Büyük-küçük harf kültürden bağımsız karşılaştırılır (ör. tr-TR'de I/i).",
   "rules": [
-    { "name": "kodlanmış PowerShell komutu", "pattern": "(?i)EncodedCommand|\\s-enc\\s", "scope": "shipped" },
-    { "name": "gizli pencere", "pattern": "(?i)WindowStyle\\s+Hidden|ProcessWindowStyle(\\]::|\\.)Hidden", "scope": "shipped" },
-    { "name": "ExecutionPolicy Bypass", "pattern": "(?i)ExecutionPolicy\\s+Bypass", "scope": "shipped" },
-    { "name": "kendini silen cmd kalıbı (ping, rmdir /s, attrib -)", "pattern": "(?i)ping\\s+-n|rmdir\\s+/s|\\battrib\\s+-", "scope": "shipped" },
+    { "name": "kodlanmış PowerShell komutu (kısaltmalar dahil)", "pattern": "(?i)EncodedCommand|\\s-e(c|n|nc|nco|ncod|ncode|ncoded)?\\s", "scope": "shipped" },
+    { "name": "gizli pencere", "pattern": "(?i)WindowStyle\\W{0,5}Hidden|\\s-w\\w*\\s+hidden", "scope": "shipped" },
+    { "name": "ExecutionPolicy Bypass (kısaltmalar dahil)", "pattern": "(?i)ExecutionPolicy\\s+(Bypass|Unrestricted)|(\\s-ep|\\s-ex\\w*)\\s+(Bypass|Unrestricted)", "scope": "shipped" },
+    { "name": "kendini silen cmd kalıbı (ping, rmdir/rd /s, del /f, attrib, timeout, choice)", "pattern": "(?i)ping\\s+-n|\\b(rmdir|rd)\\s+/s|\\bdel\\s+/[fqs]|\\battrib\\s+[+-]|\\btimeout\\s+/t|\\bchoice\\s+/t", "scope": "shipped" },
+    { "name": "cmd kabuğu", "pattern": "(?i)\\bcmd\\.exe\\b|ComSpec|\\bcmd\\s+/[ck]\\b", "scope": "shipped" },
     { "name": "Base64 ile kod taşıma", "pattern": "To(Base64)String|From(Base64)String", "scope": "shipped" },
-    { "name": "metinden kod üretme", "pattern": "(?i)\\[scriptblock\\]::Create|\\.AddScript\\(|Get-ChildItem\\s+function:|Invoke-Expression|\\biex\\b", "scope": "legacyPs" },
+    { "name": "metinden kod üretme", "pattern": "(?i)ScriptBlock\\]?\\s*::\\s*Create|NewScriptBlock|InvokeScript|-TypeDefinition|\\.AddScript\\(|Get-ChildItem\\s+(-Path\\s+)?function:|\\bgci\\s+function:|Invoke-Expression|\\biex\\b", "scope": "legacy" },
     { "name": "betikte çalışırken derlenen DllImport", "pattern": "(?i)-MemberDefinition|DllImport", "scope": "legacyPs" },
     { "name": "indirme kalıbı adları (yorumlar dahil: taranan metinde onlar da var)", "pattern": "(?i)DownloadString|DownloadFile|Net\\.WebClient|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer", "scope": "legacyPs" },
-    { "name": "\"internetten geldi\" işaretini silme", "pattern": "(?i)Unblock-File", "scope": "shipped" },
+    { "name": "\"internetten geldi\" işaretini silme", "pattern": "(?i)Unblock-File|Zone\\.Identifier", "scope": "shipped", "allow": [ "src\\SyHost.Terminal\\Payload.cs" ] },
     { "name": "COM kabuk nesnesi", "pattern": "(?i)-ComObject", "scope": "legacyPs" },
     { "name": "Defender ayarlarıyla oynama", "pattern": "(?i)Add-MpPreference|Set-MpPreference|ExclusionPath|DisableRealtimeMonitoring", "scope": "all" },
     { "name": "yönetici olarak açma (yalnızca kaldırma ekranının iki adımında)", "pattern": "(?i)\\brunas\\b", "scope": "shipped", "allow": [ "src\\SyHost\\Setup\\Uninstall.cs", "legacy\\src\\Uninstall.ps1" ] }

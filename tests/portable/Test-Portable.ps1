@@ -20,7 +20,9 @@ param(
     [switch]$Windows,
     [switch]$Font,
     [switch]$Java,
-    [switch]$App
+    [switch]$App,
+    # playit denetimi testi için gömülü imzalı bir program (yalnızca kopyalanır ve okunur)
+    [string]$SignedExe = (Join-Path $env:ProgramFiles 'dotnet\dotnet.exe')
 )
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -227,7 +229,7 @@ exit 0
 [IO.File]::WriteAllText($wcScript, $wcBody, (New-Object Text.UTF8Encoding $true))
 & icacls.exe $wcData /deny "${me}:(OI)(CI)(W)" | Out-Null
 try {
-    $p = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$wcScript`"" -WindowStyle Hidden -PassThru -Wait
+    $p = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -File `"$wcScript`"" -WindowStyle Hidden -PassThru -Wait
     $alert = if (Test-Path $wcOut) { [IO.File]::ReadAllText($wcOut, [Text.Encoding]::UTF8) } else { '' }
     $LangCode = Get-UiLanguage
     $expect = L "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç." $wcRoot (Get-DefaultRoot)
@@ -236,7 +238,7 @@ try {
     Check ($alert -ceq $expect) "yazma denetimi: uyarı Windows dilinde ve iki yer tutucu dolu: $($alert -replace "`n", ' | ')"
 } finally { & icacls.exe $wcData /remove:d $me | Out-Null }
 Remove-Item $wcOut -ErrorAction SilentlyContinue
-$p = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$wcScript`"" -WindowStyle Hidden -PassThru -Wait
+$p = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy RemoteSigned -File `"$wcScript`"" -WindowStyle Hidden -PassThru -Wait
 Check ($p.ExitCode -eq 0 -and (Test-Path "$wcOut.reached") -and -not (Test-Path $wcOut)) 'yazma denetimi: yazılabilen klasörde uyarı yok, açılış sürer'
 
 if ($CsExe) {
@@ -378,6 +380,8 @@ Section 'Klasör görünümü (FolderLook.cs)'
 function New-LookRoot([string]$root) {
     Clear-Dir $root
     New-Item -ItemType Directory -Force "$root\Servers\Deneme Sunucu\yedekler", "$root\Data" | Out-Null
+    # Data eski sürümlerde gizliydi: görünür yapıldığı görülsün
+    (Get-Item -LiteralPath "$root\Data" -Force).Attributes = 'Directory, Hidden'
     "$root\Servers\Deneme Sunucu"
 }
 function Get-Ini([string]$dir) { $f = Join-Path $dir 'desktop.ini'; if (Test-Path -LiteralPath $f) { [IO.File]::ReadAllBytes($f) } else { $null } }
@@ -493,6 +497,9 @@ Check ($null -eq (Find-OtherInstall $exeA)) 'Find-OtherInstall: kendisi başka k
 Remove-Item -LiteralPath (Join-Path $scRoot 'A\Data') -Recurse -Force
 Check ($null -eq (Find-OtherInstall $exeB)) 'Find-OtherInstall: Data yoksa kurulum sayılmaz'
 New-Item -ItemType Directory -Force (Join-Path $scRoot 'A\Data') | Out-Null
+# A yine kurulu sayılsın: aşağıdaki "exe yoksa" denetimi yalnızca exe eksik olduğu için $null döndürmeli
+[IO.File]::WriteAllText((Join-Path $scRoot 'A\Data\ayarlar.json'), '{}', $Utf8NoBom)
+Check ((Find-OtherInstall $exeB) -eq (Split-Path $exeA)) 'Find-OtherInstall: Data\ayarlar.json gelince A yine kurulum sayılır'
 # Taşınan klasör: A silinince iki kısayol da B için Dead, onarılınca Terminal biçiminde Ours
 Remove-Item $exeA
 Check ((Get-LinkState $desk $exeB) -ceq 'Dead' -and (Get-LinkState $start $exeB) -ceq 'Dead') 'A silinince iki biçim de B için Dead'
@@ -509,7 +516,7 @@ $broken = Join-Path $WorkRoot 'sc\bozuk.lnk'; [IO.File]::WriteAllBytes($broken, 
 Check ($null -eq (Read-Shortcut $broken) -and (Get-LinkState $broken $exeB) -ceq 'Foreign') 'bozuk .lnk okunamaz, Foreign'
 $oldPs1 = Join-Path $scRoot 'old\src\SyHost.ps1'; New-Item -ItemType Directory -Force (Split-Path $oldPs1) | Out-Null; [IO.File]::WriteAllText($oldPs1, 'x')
 $old = Join-Path $WorkRoot 'sc\old.lnk'
-[void][SyHost.ShellLink]::Write($old, $conhost, "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$oldPs1`"", '', 'SyHost', '', 0)
+[void][SyHost.ShellLink]::Write($old, $conhost, "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$oldPs1`"", '', 'SyHost', '', 0)
 Check ((Get-LinkSyHostPath (Read-Shortcut $old)) -eq $oldPs1 -and (Get-LinkState $old $exeB) -ceq 'OtherLive') '0.5.0 kısayolu (SyHost.ps1) duruyorsa OtherLive'
 Remove-Item $oldPs1
 Check ((Get-LinkState $old $exeB) -ceq 'Dead') '0.5.0 kısayolu, betik yoksa Dead'
@@ -925,7 +932,7 @@ Set-WindowIcon
 [IO.File]::WriteAllLines('$wOut', `$r.ToArray(), (New-Object Text.UTF8Encoding `$false))
 "@
     [IO.File]::WriteAllText($wScript, $wBody, (New-Object Text.UTF8Encoding $true))
-    $p = Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$wScript`"" -WindowStyle Hidden -PassThru
+    $p = Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$wScript`"" -WindowStyle Hidden -PassThru
     if (-not $p.WaitForExit(60000)) { try { $p.Kill() } catch {}; Check $false 'pencere testi bitmedi (60 sn)' }
     $wr = if (Test-Path $wOut) { [IO.File]::ReadAllLines($wOut, [Text.Encoding]::UTF8) } else { @() }
     $pick = @($wr | Where-Object { $_ -like 'pick=*' }) -join ''
@@ -953,7 +960,7 @@ if ($App) {
     Write-CsLink $desk $eExe 'C#'
     Write-Shortcut $start (Join-Path $WorkRoot 'e2e\eski\SyHost.exe') 'eski'
     $savedTitle = $env:SYHOST_TEST_TITLE; $env:SYHOST_TEST_TITLE = 'SyHostPortableE2E'
-    $con = Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$SrcDir\SyHost.ps1`" -Root `"$eRoot`"" -WindowStyle Hidden -PassThru
+    $con = Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File `"$SrcDir\SyHost.ps1`" -Root `"$eRoot`"" -WindowStyle Hidden -PassThru
     $env:SYHOST_TEST_TITLE = $savedTitle
     $sw = [Diagnostics.Stopwatch]::StartNew(); $ps = $null
     function Test-E2eDone { (Test-Path "$eData\sunucular.json") -and $null -ne (Get-Ini "$eRoot\Servers\A\yedekler") -and (Test-TerminalLink (Read-Shortcut $desk) $eExe) -and (Test-TerminalLink (Read-Shortcut $start) $eExe) }
@@ -970,6 +977,42 @@ if ($App) {
     Check ((Get-MovedTo) -eq $eRoot -and ([IO.File]::ReadAllText("$eData\ayarlar.json") | ConvertFrom-Json).maksOyuncu -eq 9) 'eski klasöre not bırakıldı, ayarlar taşındı'
     if ($psProc) { try { $psProc.Kill(); $psProc.WaitForExit(5000) | Out-Null } catch {} }
     try { if (-not $con.HasExited) { $con.Kill() } } catch {}
+}
+
+# =====================================================================
+Section 'playit indirmesinin denetimi (FirstRunJob.ps1: Test-FrPlayitFile ve Test-FrPlayitUrl)'
+# Gömülü imzası olan bir program (playit de öyledir) WorkRoot'a kopyalanır; yoksa imzalı durumlar atlanır.
+# Hiçbir dosya çalıştırılmaz. -CsExe verilirse C# sürümü (App.PlayitFileOk, App.IsPlayitUrl) aynı girdilerle karşılaştırılır.
+$pvDir = Join-Path $WorkRoot 'playit-denetim'; New-Item -ItemType Directory -Force $pvDir | Out-Null
+function Get-Sha256Hex([string]$f) { $sha = [Security.Cryptography.SHA256]::Create(); try { $fs = [IO.File]::OpenRead($f); try { [BitConverter]::ToString($sha.ComputeHash($fs)).Replace('-', '') } finally { $fs.Dispose() } } finally { $sha.Dispose() } }
+$unsigned = Join-Path $pvDir 'imzasiz.exe'; [IO.File]::WriteAllText($unsigned, 'imzasız bir dosya', $Utf8NoBom)
+$uHex = Get-Sha256Hex $unsigned
+$pv = New-Object System.Collections.Generic.List[object]   # dosya, karma ("-": GitHub karma vermedi), beklenen
+$pv.Add(@($unsigned, '-', 'fail')); $pv.Add(@($unsigned, "sha256:$uHex", 'fail'))
+if ($SignedExe -and (Test-Path -LiteralPath $SignedExe)) {
+    $signed = Join-Path $pvDir 'imzali.exe'; Copy-Item -LiteralPath $SignedExe $signed
+    $sHex = Get-Sha256Hex $signed
+    $bad = Join-Path $pvDir 'bozuk.exe'; $b = [IO.File]::ReadAllBytes($signed); $mid = [int]($b.Length / 2); $b[$mid] = $b[$mid] -bxor 0xFF; [IO.File]::WriteAllBytes($bad, $b)
+    $pv.Add(@($signed, "sha256:$sHex", 'ok')); $pv.Add(@($signed, ('SHA256:' + $sHex.ToLowerInvariant()), 'ok')); $pv.Add(@($signed, '-', 'ok'))
+    $pv.Add(@($signed, "sha256:$uHex", 'fail')); $pv.Add(@($signed, "sha512:$sHex", 'fail'))
+    $pv.Add(@($bad, '-', 'fail')); $pv.Add(@($bad, ('sha256:' + (Get-Sha256Hex $bad)), 'fail'))
+} else { Write-Host "imzalı durumlar atlandı: gömülü imzalı program yok ($SignedExe)" -ForegroundColor Yellow }
+$pvOk = @('https://playit.gg/claim/abc', 'https://www.playit.gg/x', 'https://PLAYIT.GG/x')
+$urls = $pvOk + @('http://playit.gg/claim/abc', 'https://playit.gg.example.com/x', 'https://evilplayit.gg/x', 'file:///C:/Windows/notepad.exe', 'ftp://playit.gg/x', 'playit.gg/claim')
+$want = @(foreach ($x in $pv) { 'file|' + $x[0] + '|' + $x[1] + '|' + $x[2] }) + @(foreach ($u in $urls) { 'url|' + $u + '|' + $(if ($pvOk -ccontains $u) { 'ok' } else { 'fail' }) })
+$rs = [powershell]::Create()
+[void]$rs.AddScript({ param($src, $pv, $urls)
+    $s = @{}; $c = @{ Texts = @{} }
+    . (Join-Path $src 'FirstRunJob.ps1') $s '' $c   # iş türü boş: yalnızca işlevler tanımlanır
+    foreach ($x in $pv) { 'file|' + $x[0] + '|' + $x[1] + '|' + $(if (Test-FrPlayitFile $x[0] $(if ($x[1] -ceq '-') { '' } else { $x[1] })) { 'ok' } else { 'fail' }) }
+    foreach ($u in $urls) { 'url|' + $u + '|' + $(if (Test-FrPlayitUrl $u) { 'ok' } else { 'fail' }) }
+}).AddArgument($SrcDir).AddArgument($pv).AddArgument($urls)
+$psPv = @($rs.Invoke() | ForEach-Object { [string]$_ }); $rs.Dispose()
+function Show-FirstDiff($a, $b) { for ($i = 0; $i -lt [Math]::Max($a.Count, $b.Count); $i++) { if ($i -ge $a.Count -or $i -ge $b.Count -or $a[$i] -cne $b[$i]) { return "`n      beklenen: " + $(if ($i -lt $a.Count) { $a[$i] } else { '(yok)' }) + "`n      çıkan   : " + $(if ($i -lt $b.Count) { $b[$i] } else { '(yok)' }) } }; '' }
+Check (($psPv -join "`n") -ceq ($want -join "`n")) ("Terminal: karma ve imza denetimi, adres kuralı ($($pv.Count) dosya durumu, $($urls.Count) adres)" + (Show-FirstDiff $want $psPv))
+if ($CsExe) {
+    $csPv = @(& $CsExe --selftest playitfile @(foreach ($x in $pv) { $x[0]; $x[1] })) + @(& $CsExe --selftest playiturl @urls)
+    Check (($csPv -join "`n") -ceq ($want -join "`n")) ("C# sürümü aynı kararı veriyor (App.PlayitFileOk, App.IsPlayitUrl)" + (Show-FirstDiff $want $csPv))
 }
 
 # =====================================================================
