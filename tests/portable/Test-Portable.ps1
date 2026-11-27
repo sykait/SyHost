@@ -713,6 +713,11 @@ Check ($e.Message -ceq 'Java 25 could not be downloaded: The Java 25 archive doe
 New-TestZip $fakeZip "$env:SystemRoot\System32\whoami.exe"
 $e = Invoke-MockedInstall { param($u, $p) Copy-Item $fakeZip $p; 'cc' } { $null }
 Check ($e.Message -like 'Java 25 could not be downloaded: java -version exited with code 1:*' -and -not (Test-Path "$tools\java-25\jdk-25.0.1+8-jre") -and @(Get-Leftovers $tools 25).Count -eq 0) "java -version çalışmıyorsa silinir: '$($e.Message.Substring(0, [Math]::Min(90, $e.Message.Length)))...'"
+# java.exe hiç başlatılamıyor (geçerli bir program değil): C# bu durumda kopyayı yerinde bırakırdı, burada silinir
+$notExe = Join-Path $WorkRoot 'not-an-exe.txt'; [IO.File]::WriteAllText($notExe, 'bu bir program değil')
+New-TestZip $fakeZip $notExe
+$e = Invoke-MockedInstall { param($u, $p) Copy-Item $fakeZip $p; 'dd' } { $null }
+Check ($e.Message -like 'Java 25 could not be downloaded: *' -and $e.Message -notlike '*java -version*' -and -not (Test-Path "$tools\java-25") -and @(Get-Leftovers $tools 25).Count -eq 0) "java.exe başlatılamıyorsa nedeni yazılır ve kopya silinir: '$($e.Message)'"
 # Gerçek ağ: olmayan sürüm (kalıcı hata) bir kez denenir
 $lines.Clear()
 $sw = [Diagnostics.Stopwatch]::StartNew()
