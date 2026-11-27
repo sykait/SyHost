@@ -553,6 +553,12 @@ else {
         $psLines.Add('candelete|' + $pp + '|' + (Test-RootDeletable $pp))
     }
     $psLines.Add('cmd|' + (UnDeleteCommand $AppRoot))
+    # Kaldırıcı komutları yalnızca ayrıştırılır, çalıştırılmaz: kayıt defterindekiler ve C# öz denetimindeki örnekler
+    $cmds = @(@(UnFindMsi @('playit', 'Microsoft Build of OpenJDK', 'Eclipse Temurin JRE with Hotspot 8')) | ForEach-Object { $_.Uninstall })
+    $cmds += @('MsiExec.exe /I{11111111-2222-3333-4444-555555555555}', '  msiexec.exe /i {AAAA} /qn  ', 'MsiExec.exe /X{BBBB}',
+        '"C:\Program Files\Deneme App\unins000.exe" /SILENT', 'C:\Deneme\uninstall.exe /S /D=x', 'C:\Deneme\uninstall.exe', '"C:\Kapanmayan tırnak')
+    foreach ($c in $cmds) { try { $fa = @(UnUninstallerCommand $c); $psLines.Add('uninst|' + $c + '|' + $fa[0] + '|' + $fa[1]) } catch { $psLines.Add('uninst|' + $c + '|HATA') } }
+    Check (@($psLines | Where-Object { $_ -like 'uninst|MsiExec.exe /I{*' -and $_ -notlike '*|msiexec.exe|/X{*} /qb' }).Count -eq 0) 'MSI kaldırıcısı: MsiExec.exe /I{GUID} -> msiexec.exe /X{GUID} /qb'
     Remove-RootAfterExit $AppRoot
     $env:TEMP = $Temp; $env:TMP = $Temp
     $csCmp = @($csLines | Where-Object { -not $_.StartsWith('sil|') })

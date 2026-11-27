@@ -342,23 +342,27 @@ function UnLinkSyHostPath([string]$lnk) {
     $null
 }
 
+# Kaldırıcı komutunu çalıştırılacak dosya ve argümanlara ayır: @(dosya, argümanlar) (C#: Uninstall.UninstallerCommand)
+function UnUninstallerCommand([string]$cmd) {
+    $cmd = $cmd.Trim()
+    # MsiExec.exe /I{GUID} -> /X{GUID} /qb (yalnızca ilerleme çubuğu)
+    if ($cmd.StartsWith('MsiExec.exe', [StringComparison]::OrdinalIgnoreCase)) {
+        return @('msiexec.exe', ([regex]::Replace($cmd.Substring('MsiExec.exe'.Length), '/I', '/X', [Text.RegularExpressions.RegexOptions]::IgnoreCase).Trim() + ' /qb'))
+    }
+    if ($cmd.StartsWith('"')) {
+        $q = $cmd.IndexOf([char]'"', 1)
+        return @($cmd.Substring(1, $q - 1), $cmd.Substring($q + 1).Trim())
+    }
+    $sp = $cmd.IndexOf([char]' ')
+    if ($sp -lt 0) { return @($cmd, '') }
+    @($cmd.Substring(0, $sp), $cmd.Substring($sp + 1))
+}
+
 # Bir programın kendi kaldırıcısını çalıştır (MSI ise Windows izin penceresi çıkar)
 function UnRunUninstaller([string]$cmd) {
     try {
-        $cmd = $cmd.Trim()
-        if ($cmd.StartsWith('MsiExec.exe', [StringComparison]::OrdinalIgnoreCase)) {
-            # MsiExec.exe /I{GUID} -> /X{GUID} /qb (yalnızca ilerleme çubuğu)
-            $file = 'msiexec.exe'
-            $arg = [regex]::Replace($cmd.Substring('MsiExec.exe'.Length), '/I', '/X', [Text.RegularExpressions.RegexOptions]::IgnoreCase).Trim() + ' /qb'
-        } elseif ($cmd.StartsWith('"')) {
-            $q = $cmd.IndexOf([char]'"', 1)
-            $file = $cmd.Substring(1, $q - 1); $arg = $cmd.Substring($q + 1).Trim()
-        } else {
-            $sp = $cmd.IndexOf([char]' ')
-            $file = if ($sp -lt 0) { $cmd } else { $cmd.Substring(0, $sp) }
-            $arg = if ($sp -lt 0) { '' } else { $cmd.Substring($sp + 1) }
-        }
-        $psi = New-Object Diagnostics.ProcessStartInfo $file, $arg
+        $fa = @(UnUninstallerCommand $cmd)
+        $psi = New-Object Diagnostics.ProcessStartInfo $fa[0], $fa[1]
         $psi.UseShellExecute = $true; $psi.Verb = 'runas'
         $p = [Diagnostics.Process]::Start($psi)
         if ($null -eq $p) { return $null }

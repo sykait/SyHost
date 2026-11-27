@@ -208,29 +208,28 @@ static class Uninstall
         return r;
     }
 
+    /// <summary>Kaldırıcı komutunu çalıştırılacak dosya ve argümanlara ayır.</summary>
+    internal static (string File, string Args) UninstallerCommand(string cmd)
+    {
+        cmd = cmd.Trim();
+        // MsiExec.exe /I{GUID} -> /X{GUID} /qb (yalnızca ilerleme çubuğu)
+        if (cmd.StartsWith("MsiExec.exe", StringComparison.OrdinalIgnoreCase))
+            return ("msiexec.exe", System.Text.RegularExpressions.Regex.Replace(cmd.Substring("MsiExec.exe".Length), "/I", "/X", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim() + " /qb");
+        if (cmd.StartsWith("\""))
+        {
+            int q = cmd.IndexOf('"', 1);
+            return (cmd.Substring(1, q - 1), cmd.Substring(q + 1).Trim());
+        }
+        int sp = cmd.IndexOf(' ');
+        return (sp < 0 ? cmd : cmd.Substring(0, sp), sp < 0 ? "" : cmd.Substring(sp + 1));
+    }
+
     /// <summary>Bir programın kendi kaldırıcısını çalıştır (MSI ise Windows izin penceresi çıkar).</summary>
     static string RunUninstaller(string cmd)
     {
         try
         {
-            string file, args;
-            cmd = cmd.Trim();
-            if (cmd.StartsWith("MsiExec.exe", StringComparison.OrdinalIgnoreCase))
-            {
-                // MsiExec.exe /I{GUID} -> /X{GUID} /qb (yalnızca ilerleme çubuğu)
-                file = "msiexec.exe";
-                args = System.Text.RegularExpressions.Regex.Replace(cmd.Substring("MsiExec.exe".Length), "/I", "/X", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim() + " /qb";
-            }
-            else if (cmd.StartsWith("\""))
-            {
-                int q = cmd.IndexOf('"', 1);
-                file = cmd.Substring(1, q - 1); args = cmd.Substring(q + 1).Trim();
-            }
-            else
-            {
-                int sp = cmd.IndexOf(' ');
-                file = sp < 0 ? cmd : cmd.Substring(0, sp); args = sp < 0 ? "" : cmd.Substring(sp + 1);
-            }
+            var (file, args) = UninstallerCommand(cmd);
             using var p = Process.Start(new ProcessStartInfo(file, args) { UseShellExecute = true, Verb = "runas" });
             p?.WaitForExit();
             return p == null || p.ExitCode == 0 || p.ExitCode == 3010 ? null : "kod " + p.ExitCode;
@@ -334,6 +333,18 @@ static class Uninstall
                  })
             Console.WriteLine("candelete|" + p + "|" + CanDeleteRoot(p));
         Console.WriteLine("cmd|" + DeleteFolderCommand(root));
+        // Kaldırıcı komutları yalnızca ayrıştırılır, çalıştırılmaz: kayıt defterindekiler ve örnekler
+        var cmds = FindMsiAll(n => n.StartsWith("playit", StringComparison.OrdinalIgnoreCase) || n.StartsWith("Microsoft Build of OpenJDK", StringComparison.OrdinalIgnoreCase) || n.StartsWith("Eclipse Temurin JRE with Hotspot 8", StringComparison.OrdinalIgnoreCase)).Select(m => m.Uninstall).ToList();
+        cmds.AddRange(new[]
+        {
+            "MsiExec.exe /I{11111111-2222-3333-4444-555555555555}", "  msiexec.exe /i {AAAA} /qn  ", "MsiExec.exe /X{BBBB}",
+            "\"C:\\Program Files\\Deneme App\\unins000.exe\" /SILENT", "C:\\Deneme\\uninstall.exe /S /D=x", "C:\\Deneme\\uninstall.exe", "\"C:\\Kapanmayan tırnak",
+        });
+        foreach (string c in cmds)
+        {
+            try { var (f, a) = UninstallerCommand(c); Console.WriteLine("uninst|" + c + "|" + f + "|" + a); }
+            catch { Console.WriteLine("uninst|" + c + "|HATA"); }
+        }
         DeleteFolderAfterExit(root);
         return 0;
     }
