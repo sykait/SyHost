@@ -1,0 +1,50 @@
+{
+  "t": 11.33,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 42,
+  "version": "1.0.0",
+  "edition": "C#",
+  "lang": "ja",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\Users\\Haruto\\SyHost\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "bright-falcon.joinmc.link",
+    "sesAdresi": "",
+    "playitKullan": true
+  },
+  "servers": [],
+  "state": {
+    "appRoot": "C:\\Users\\Haruto\\Downloads",
+    "defaultRoot": "C:\\Users\\Haruto\\SyHost",
+    "legacyDir": "C:\\Users\\Haruto\\AppData\\Local\\SyHost",
+    "osBuild": 26200,
+    "totalRam": 34359738368,
+    "threads": 12,
+    "sysFree": 13529146982,
+    "fontOk": true,
+    "dryRun": false,
+    "setupMode": true,
+    "screen": "firstrun",
+    "meteors": [
+      {
+        "x": 96.0,
+        "y": 31.0,
+        "vx": -24.0,
+        "vy": 9.0,
+        "len": 12,
+        "age": 0.45,
+        "life": 1.5
+      }
+    ],
+    "firstRun": {
+      "steps": [
+        "dil",
+        "konum"
+      ],
+      "index": 1,
+      "sel": 0,
+      "target": "C:\\Users\\Haruto\\SyHost"
+    }
+  }
+}

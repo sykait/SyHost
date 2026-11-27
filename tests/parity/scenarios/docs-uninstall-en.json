@@ -1,0 +1,118 @@
+{
+  "t": 6.62,
+  "now": "2026-11-27 14:30:00",
+  "w": 129,
+  "h": 42,
+  "version": "1.0.0",
+  "edition": "C#",
+  "lang": "en",
+  "cfg": {
+    "sunucuKokKlasoru": "C:\\Users\\Alex\\SyHost\\Servers",
+    "maksOyuncu": 8,
+    "arkadasAdresi": "bright-falcon.joinmc.link",
+    "sesAdresi": "",
+    "playitKullan": true
+  },
+  "servers": [
+    {
+      "id": "createplus",
+      "ad": "Create Plus",
+      "klasor": "C:\\Users\\Alex\\SyHost\\Servers\\CreatePlus",
+      "mc": "1.21.1",
+      "loader": "neoforge",
+      "loaderSurum": "21.1.172",
+      "java": 21,
+      "baslat": "@libraries/net/neoforged/neoforge/21.1.172/win_args.txt nogui",
+      "paket": "normal",
+      "eklenme": "2026-10-02 18:44",
+      "sonAcilis": "2026-11-27 11:02",
+      "sonBaslatmaSn": 48
+    },
+    {
+      "id": "skyblock",
+      "ad": "Fabric Skyblock",
+      "klasor": "C:\\Users\\Alex\\SyHost\\Servers\\FabricSkyblock",
+      "mc": "1.20.1",
+      "loader": "fabric",
+      "loaderSurum": "0.16.10",
+      "java": 17,
+      "baslat": "-jar fabric-server-launch.jar nogui",
+      "paket": "dusuk",
+      "eklenme": "2026-11-20 21:03",
+      "sonAcilis": "2026-11-26 21:40",
+      "sonBaslatmaSn": 31
+    },
+    {
+      "id": "medieval",
+      "ad": "Medieval Valley",
+      "klasor": "C:\\Users\\Alex\\SyHost\\Servers\\MedievalValley",
+      "mc": "1.20.1",
+      "loader": "forge",
+      "loaderSurum": "47.3.0",
+      "java": 17,
+      "baslat": "@libraries/net/minecraftforge/forge/1.20.1-47.3.0/win_args.txt nogui",
+      "paket": "yuksek",
+      "eklenme": "2026-11-26 18:12",
+      "sonAcilis": "2026-11-27 09:15",
+      "sonBaslatmaSn": 95
+    }
+  ],
+  "state": {
+    "appRoot": "C:\\Users\\Alex\\SyHost",
+    "defaultRoot": "C:\\Users\\Alex\\SyHost",
+    "legacyDir": "C:\\Users\\Alex\\AppData\\Local\\SyHost",
+    "osBuild": 26200,
+    "totalRam": 34359738368,
+    "threads": 12,
+    "sysFree": 13529146982,
+    "fontOk": true,
+    "dryRun": false,
+    "screen": "uninstall",
+    "uninstall": {
+      "phase": "liste",
+      "sel": 0,
+      "items": [
+        {
+          "key": "kisayol",
+          "title": "Masaüstü ve Başlat menüsü kısayolları",
+          "detail": "C:\\Users\\Alex\\Desktop\\SyHost.lnk  ·  C:\\Users\\Alex\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\SyHost.lnk",
+          "on": true,
+          "needsAdmin": false,
+          "state": 0
+        },
+        {
+          "key": "yazitipi",
+          "title": "SyHost'un kurduğu Cascadia Mono yazı tipi",
+          "detail": "C:\\Users\\Alex\\AppData\\Local\\Microsoft\\Windows\\Fonts",
+          "on": true,
+          "needsAdmin": false,
+          "state": 0
+        },
+        {
+          "key": "eskiveri",
+          "title": "Eski sürümün veri klasörü",
+          "detail": "C:\\Users\\Alex\\AppData\\Local\\SyHost",
+          "on": false,
+          "needsAdmin": false,
+          "state": 0
+        },
+        {
+          "key": "java",
+          "title": "Java (başka programlar da kullanıyor olabilir)",
+          "detail": "Microsoft Build of OpenJDK with Hotspot 21.0.5+11 (x64)",
+          "on": false,
+          "needsAdmin": true,
+          "state": 0
+        },
+        {
+          "key": "klasor",
+          "title": "SyHost klasörünün kendisi",
+          "detail": "C:\\Users\\Alex\\SyHost",
+          "on": false,
+          "needsAdmin": false,
+          "state": 0
+        }
+      ]
+    }
+  }
+}
