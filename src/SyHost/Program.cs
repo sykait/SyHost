@@ -21,25 +21,25 @@ static class Program
             return SelfTest.Run(args);
 
         bool hosted = HasArg(args, "--hosted");
-
-        // Pencere gizleme, küçük mod ve taşıma yalnızca klasik konsol penceresinde (conhost) çalışır.
-        // Windows Terminal'de açıldıysak kendimizi conhost'ta yeniden aç.
-        if (!hosted && !Native.IsConhost())
-        {
-            Launch(Environment.ProcessPath, args);
-            return 0;
-        }
-
         string exe = Environment.ProcessPath;
         string root = ArgValue(args, "--root") ?? Path.GetDirectoryName(exe);
         bool installed = Portable.IsInstalled(root);
 
-        // Kurulu klasöre yazılamıyorsa (ör. Program Files'a taşınmış) sessizce çökme, anlaşılır uyarı göster
+        // Kurulu klasöre yazılamıyorsa (ör. Program Files'a taşınmış) sessizce çökme, anlaşılır uyarı göster.
+        // Konsol penceresi açmadan önce bakılır: yalnızca uyarı görünsün.
         if (installed && !Portable.CanWrite(Path.Combine(root, Portable.DataName)))
         {
             Lang.Code = Portable.UiLanguage();
             Portable.Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost.exe'yi yazılabilir bir klasöre taşı (ör. {1}) ve oradan aç.", root, Portable.DefaultRoot()));
             return 1;
+        }
+
+        // Pencere gizleme, küçük mod ve taşıma yalnızca klasik konsol penceresinde (conhost) çalışır.
+        // Windows Terminal'de açıldıysak kendimizi conhost'ta yeniden aç.
+        if (!hosted && !Native.IsConhost())
+        {
+            Launch(exe, args);
+            return 0;
         }
 
         // Tek kopya: ikinci kez açılırsa açık olan pencereyi öne getir
@@ -59,7 +59,8 @@ static class Program
 
         // Kurulum/güncelleme bitti: SyHost'u yeni yerinden aç (animasyon tekrar oynamasın)
         if (app.LaunchAfterExit != null) Launch(app.LaunchAfterExit, new[] { "--no-splash" });
-        else if (app.RestartApp) Launch(exe, args);
+        // Dil değişince: aynı yerden, açılış animasyonu tekrar oynamadan (Terminal sürümü de böyle)
+        else if (app.RestartApp) Launch(exe, args.Where(a => a != "--no-splash").Append("--no-splash").ToArray());
         // Kaldır: SyHost kapandıktan sonra klasörü sil
         if (app.DeleteRootAfterExit) Uninstall.DeleteFolderAfterExit(root);
         return 0;

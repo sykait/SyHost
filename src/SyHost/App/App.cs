@@ -114,6 +114,8 @@ sealed partial class App
         // Klasör taşındıysa eski yeri gösteren kısayolları buraya çevir
         // Mesaj açılış animasyonundan sonra, ana menü görününce gösterilir (yoksa animasyon sırasında kaybolurdu)
         try { if (Shortcuts.FixMoved(ExePath, Lang.L("SyHost - modlu Minecraft sunucu merkezi")) > 0) PendingHomeMsg = "Kısayollar yeni yere güncellendi."; } catch { }
+        // Klasör Terminal sürümünden geldiyse kısayollarımız SyHost.exe'yi doğrudan açıyordur: conhost biçimine çevir
+        try { Shortcuts.Normalize(ExePath, Lang.L("SyHost - modlu Minecraft sunucu merkezi")); } catch { }
         RefreshFolderLook();
         NextAfterSplash = (Cfg.kurulumTamam == false || FrMigrated != null || FrMovedTo != null) ? "firstrun" : "home";
     }

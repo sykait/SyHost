@@ -127,6 +127,27 @@ static unsafe partial class Shortcuts
         return File.Exists(p) ? State.OtherLive : State.Dead;
     }
 
+    /// <summary>
+    /// Bu exe'yi doğrudan açan kısayollarımızı (Terminal sürümü SyHost.exe'yi böyle açar) conhost biçimine çevir:
+    /// klasör sürümler arasında değiştirildiyse kısayol yine doğru pencerede açılsın. Değişen sayısını döner.
+    /// </summary>
+    public static int Normalize(string exe, string description)
+    {
+        int n = 0;
+        string conhost = Path.Combine(Environment.SystemDirectory, "conhost.exe");
+        foreach (string lnk in Locations())
+        {
+            try
+            {
+                var i = Read(lnk);
+                if (i == null || StateOf(lnk, exe) != State.Ours) continue;
+                if (!string.Equals(i.Value.Target, conhost, StringComparison.OrdinalIgnoreCase) && Write(lnk, exe, description)) n++;
+            }
+            catch { }
+        }
+        return n;
+    }
+
     /// <summary>Taşınmış klasör: gösterdiği SyHost artık olmayan kısayolları bu exe'ye çevir. Değişen kısayol sayısını döner.</summary>
     public static int FixMoved(string exe, string description)
     {
