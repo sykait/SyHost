@@ -2,7 +2,7 @@
 
   <!--
     SyHost Terminal sürümü: PowerShell uygulamasını (legacy) içinde taşıyan tek exe.
-    Kullanıcı yalnızca indirir ve çift tıklar; exe uygulamayı gizli App klasörüne (kuruluysa)
+    Kullanıcı yalnızca indirir ve çift tıklar; exe uygulamayı App klasörüne (kuruluysa)
     ya da %TEMP%'te geçici bir klasöre (kurulum ekranı) çıkarır ve conhost içinde açar.
     Derleme: build\Build.ps1 -Publish -Terminal  ->  dist\SyHost-Terminal.exe
   -->
@@ -31,7 +31,8 @@
     <Authors>sykait</Authors>
     <Copyright>© 2026 sykait</Copyright>
     <Description>SyHost - modded Minecraft server hub (Terminal edition)</Description>
-    <AssemblyTitle>SyHost</AssemblyTitle>
+    <!-- Windows'taki "Dosya açıklaması": hangi sürüm olduğu görünsün (ürün adı yine SyHost) -->
+    <AssemblyTitle>SyHost (Terminal edition)</AssemblyTitle>
     <NeutralLanguage>en</NeutralLanguage>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
@@ -47,17 +48,19 @@
     <DebugType>embedded</DebugType>
   </PropertyGroup>
 
-  <!-- Ana sürümün dosyaları: uyarı metinleri (dil tablosu, Lang.L) ve PowerShell biçimlendirmesi (Ps.F) -->
+  <!-- Ana sürümün dosyaları: uyarı metinleri (dil tablosu, Lang.L), PowerShell biçimlendirmesi (Ps.F) ve
+       kaldır ekranının yönetici adımı (0.5.0'ın sistem yazı tipi, OldSystemFont.Arg) -->
   <ItemGroup>
     <Compile Include="..\SyHost\App\Lang.cs" Link="Shared\Lang.cs" />
     <Compile Include="..\SyHost\App\Lang.Table.cs" Link="Shared\Lang.Table.cs" />
     <Compile Include="..\SyHost\Setup\Lang.Portable.cs" Link="Shared\Lang.Portable.cs" />
     <Compile Include="..\SyHost\Core\Ps.cs" Link="Shared\Ps.cs" />
+    <Compile Include="..\SyHost\Setup\OldSystemFont.cs" Link="Shared\OldSystemFont.cs" />
   </ItemGroup>
 
   <!--
     Gömülü uygulama = kullanıcının App klasörü:
-      App\src\       legacy\src\*.ps1, *.cs
+      App\src\       legacy\src\*.ps1 (C# kaynakları değil: onlar App\bin\SyHost.Core.dll içinde derli gelir)
       App\config\    default-settings.json
       App\fonts\     Cascadia Mono + OFL.txt
       App\icons\     klasör simgeleri, SyHost.ico, server-icon.png
@@ -78,7 +81,7 @@
 
   <ItemGroup>
     <SyHostCoreSource Include="$(SyHostLegacyDir)src\SyHost.*.cs" />
-    <SyHostPayload Include="$(SyHostLegacyDir)src\*.ps1;$(SyHostLegacyDir)src\*.cs" Dest="src\%(Filename)%(Extension)" />
+    <SyHostPayload Include="$(SyHostLegacyDir)src\*.ps1" Dest="src\%(Filename)%(Extension)" />
     <SyHostPayload Include="$(SyHostLegacyDir)config\default-settings.json" Dest="config\%(Filename)%(Extension)" />
     <SyHostPayload Include="$(SyHostLegacyDir)fonts\*" Dest="fonts\%(Filename)%(Extension)" />
     <SyHostPayload Include="$(SyHostAssetsDir)icons\*.ico;$(SyHostAssetsDir)SyHost.ico;$(SyHostAssetsDir)server-icon.png" Dest="icons\%(Filename)%(Extension)" />

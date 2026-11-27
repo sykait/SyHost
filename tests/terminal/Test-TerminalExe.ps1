@@ -36,7 +36,8 @@ try {
     Check "--selftest extract (exit $($p.ExitCode))" ($p.ExitCode -eq 0)
 
     $map = [ordered]@{}
-    Get-ChildItem -Path (Join-Path $Repo 'legacy\src\*.ps1'), (Join-Path $Repo 'legacy\src\*.cs') | ForEach-Object { $map["src\$($_.Name)"] = $_.FullName }
+    # Yalnızca betikler: C# kaynakları exe'ye gömülmez (bin\SyHost.Core.dll içinde derli gelirler)
+    Get-ChildItem -Path (Join-Path $Repo 'legacy\src\*.ps1') | ForEach-Object { $map["src\$($_.Name)"] = $_.FullName }
     $map['config\default-settings.json'] = Join-Path $Repo 'legacy\config\default-settings.json'
     Get-ChildItem -LiteralPath (Join-Path $Repo 'legacy\fonts') -File | ForEach-Object { $map["fonts\$($_.Name)"] = $_.FullName }
     $assets = Join-Path $Repo 'src\SyHost\Assets'

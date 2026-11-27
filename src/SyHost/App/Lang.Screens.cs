@@ -188,7 +188,7 @@ static partial class Lang
         Tx("kaldır", "remove", "削除");
         Tx("Kaldırılıyor…", "Removing…", "削除中…");
         Tx("Kaldırma tamamlandı.", "Uninstall finished.", "アンインストールが完了しました。");
-        Tx("SyHost kapanınca klasörü de silinecek.", "The folder will be deleted when SyHost closes.", "SyHost を閉じるとフォルダーも削除されます。");
+        Tx("SyHost kapanınca klasörün içi silinecek; sonra klasörü Explorer'da göstereceğim, oradan silebilirsin.", "When SyHost closes, the folder's contents are deleted; then Explorer shows the folder so you can delete it.", "SyHost を閉じるとフォルダーの中身が削除されます。そのあとエクスプローラーでフォルダーを表示するので、そこで削除できます。");
         Tx("Artık SyHost klasörünü silebilirsin; Explorer'da gösterdim.", "You can delete the SyHost folder now; it's shown in Explorer.", "SyHost フォルダーを削除できます。エクスプローラーで表示しました。");
         Tx("Deneme modu: hiçbir şey silinmedi.", "Test mode: nothing was deleted.", "テストモード: 何も削除していません。");
         Tx(" SyHost'u kapat", " Close SyHost", " SyHost を閉じる");

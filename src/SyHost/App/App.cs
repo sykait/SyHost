@@ -1,4 +1,4 @@
-﻿// =====================================================================
+// =====================================================================
 //  SyHost - açılış, ana döngü ve test modu
 //  legacy/src/SyHost.ps1: üst kısım (ayarlar, 51-110) ve "Başlangıç" (1769-1904)
 // =====================================================================
@@ -332,7 +332,7 @@ sealed partial class App
                         LastSlow = now;
                         Native.MakeOpaque();
                         if (Pl != null) { while (Pl.Out.TryDequeue(out _)) { } }
-                        if (Cfg.playitKullan && !PlayitOn()) StartPlayit();
+                        if (Cfg.playitKullan && !PlayitOn() && PlayitMayRestart(now)) StartPlayit();
                         string tip = Screen == "server" ? Lang.L("SyHost · {0} · {1} · {2}/{3}", Cur?.ad, StatusLook[Status].Text, Players.Count, MaxPlayers) : Lang.L("SyHost · ana menü");
                         Tray.SetText(tip);
                     }

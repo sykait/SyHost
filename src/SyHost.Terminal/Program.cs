@@ -24,6 +24,10 @@ static class Program
         // Öz denetim hiçbir zaman uygulamayı açmaz (C# sürümünün denetimleri bu exe'de yok: 2 döner)
         if (args.Length >= 1 && args[0] == "--selftest")
             return args.Length >= 3 && args[1] == "extract" ? SelfTestExtract(args[2]) : 2;
+        // Kaldır ekranı bu exe'yi yönetici olarak yalnızca bu anahtarla açar (0.5.0'ın sistem yazı tipi).
+        // Tek kopya kilidinden önce: açık SyHost'un penceresini öne getirip "oldu" demesin. (C#: Program.cs)
+        if (args.Length == 1 && args[0] == OldSystemFont.Arg)
+            return OldSystemFont.Run();
 
         string root = null;
         bool installed = false;
@@ -50,7 +54,7 @@ static class Program
             if (installed && !CanWrite(Path.Combine(root, DataName)))
             {
                 Lang.Code = UiLanguage();
-                Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve gizli Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç.", root, DefaultRoot()), Win.MB_ICONWARNING);
+                Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç.", root, DefaultRoot()), Win.MB_ICONWARNING);
                 return 1;
             }
 
@@ -83,7 +87,7 @@ static class Program
 
     // ---------- PowerShell'i aç ----------
 
-    /// <summary>conhost içinde: powershell.exe -NoProfile -ExecutionPolicy Bypass -File App\src\SyHost.ps1 -Root ... -Exe ...</summary>
+    /// <summary>conhost içinde: powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File App\src\SyHost.ps1 -Root ... -Exe ...</summary>
     static void Run(string app, string root, string exe, bool noSplash, bool untilExit)
     {
         string sys = Environment.SystemDirectory;
@@ -94,32 +98,39 @@ static class Program
         foreach (string f in new[] { conhost, powershell })
             if (!File.Exists(f)) throw new FileNotFoundException("Windows component not found: " + f);
 
-        string arguments = PowerShellArguments(powershell, Path.Combine(app, "src", "SyHost.ps1"), root, exe, noSplash);
+        string arguments = PowerShellArguments(powershell, Path.Combine(app, "src", "SyHost.ps1"), root, exe, noSplash, out string workDir);
         TestLog.Write("start " + arguments);
         // ShellExecute (C# sürümündeki Launch gibi): conhost bizim boru/konsol tutamaçlarımızı devralırsa
-        // kendi penceresini açmaz. Çalışma klasörü SyHost klasörü (C# sürümüyle aynı).
-        var psi = new ProcessStartInfo(conhost, arguments) { UseShellExecute = true, WorkingDirectory = root };
+        // kendi penceresini açmaz. Çalışma klasörü SyHost klasörü (C# sürümüyle aynı; yolda % varsa bkz. PowerShellArguments).
+        var psi = new ProcessStartInfo(conhost, arguments) { UseShellExecute = true, WorkingDirectory = workDir };
         Win.AllowSetForegroundWindow(uint.MaxValue);   // açılan pencere öne gelebilsin (ASFW_ANY)
         using Process host = Process.Start(psi) ?? throw new InvalidOperationException("conhost.exe did not start.");
         Watch(host, untilExit);
     }
 
     /// <summary>
+    /// powershell.exe'nin komut satırı. Betikleri bu exe kendisi yazdığı için (internetten gelmiş işaretleri yok)
+    /// RemoteSigned yeter; Bypass kullanılmaz.
     /// conhost istemcinin komut satırını yeniden ayrıştırır: tırnakları kendi kurar ve %AD% kalıplarını ortam
-    /// değişkeniyle değiştirir. Bu yüzden: sürücü kökü "D:\." olarak verilir (kapanış tırnağından önce \ kalmasın)
-    /// ve yollardan birinde % varsa yollar ortam değişkenleriyle geçer (-Command, komut satırında % kalmaz).
+    /// değişkeniyle değiştirir. Bu yüzden sürücü kökü "D:\." olarak verilir (kapanış tırnağından önce \ kalmasın).
+    /// Yollardan birinde % varsa yollar komut satırına hiç yazılmaz: betik çalışma klasörüne göre (göreli) verilir,
+    /// SyHost klasörü ile exe veri olarak SYHOST_LAUNCH_ROOT ve SYHOST_LAUNCH_EXE'de geçer (SyHost.ps1 okur ve siler).
+    /// Kuruluysa çalışma klasörü yine SyHost klasörüdür (App\src\SyHost.ps1), kurulum ekranında geçici App klasörü.
     /// </summary>
-    static string PowerShellArguments(string powershell, string ps1, string root, string exe, bool noSplash)
+    static string PowerShellArguments(string powershell, string ps1, string root, string exe, bool noSplash, out string workDir)
     {
-        string head = "\"" + powershell + "\" -NoProfile -ExecutionPolicy Bypass ";
+        string head = "\"" + powershell + "\" -NoProfile -ExecutionPolicy RemoteSigned ";
         string tail = noSplash ? " -NoSplash" : "";
         if ((ps1 + root + exe).Contains('%'))
         {
-            Environment.SetEnvironmentVariable("SYHOST_LAUNCH_PS1", ps1);
             Environment.SetEnvironmentVariable("SYHOST_LAUNCH_ROOT", root);
             Environment.SetEnvironmentVariable("SYHOST_LAUNCH_EXE", exe);
-            return head + "-Command \"& $env:SYHOST_LAUNCH_PS1 -Root $env:SYHOST_LAUNCH_ROOT -Exe $env:SYHOST_LAUNCH_EXE" + tail + "\"";
+            string app = Path.GetDirectoryName(Path.GetDirectoryName(ps1));   // <App>\src\SyHost.ps1 -> <App>
+            bool underRoot = ps1.StartsWith(root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+            workDir = underRoot ? root : app;
+            return head + "-File \"" + Path.GetRelativePath(workDir, ps1) + "\"" + tail;
         }
+        workDir = root;
         string rootArg = root.EndsWith('\\') ? root + "." : root;
         return head + "-File \"" + ps1 + "\" -Root \"" + rootArg + "\" -Exe \"" + exe + "\"" + tail;
     }

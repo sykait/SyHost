@@ -5,6 +5,7 @@
 //    SyHost.exe --selftest migration <eski veri kopyası> <SyHost klasörü>
 //    SyHost.exe --selftest paths <klasör>
 //    SyHost.exe --selftest uninstall <SyHost klasörü> [<silinecek deneme klasörü>]   (Uninstall.SelfTest; deneme modunda)
+//    SyHost.exe --selftest trust <dosya>...   her dosya için "signed" ya da "unsigned" (Trust.IsSigned; hiçbirini çalıştırmaz)
 //  Kullanıcının gerçek kısayollarına ve verilerine dokunmaz: hepsi verilen klasörlerde çalışır.
 // =====================================================================
 namespace SyHost;
@@ -23,6 +24,9 @@ static class SelfTest
                 case "migration": return TestMigration(args[2], args[3]);
                 case "paths": return TestPaths(args[2]);
                 case "uninstall": return Uninstall.SelfTest(args[2], args.Length > 3 ? args[3] : null);
+                case "trust":
+                    foreach (string f in args.Skip(2)) Console.WriteLine((Trust.IsSigned(f) ? "signed  " : "unsigned") + "  " + f);
+                    return 0;
                 default: Console.WriteLine("bilinmeyen test: " + what); return 2;
             }
         }
@@ -67,7 +71,7 @@ static class SelfTest
             fail += Check(File.Exists(ini), "desktop.ini: " + d);
             if (File.Exists(ini)) Console.WriteLine("      " + File.ReadAllText(ini, System.Text.Encoding.Unicode).Replace("\r\n", " | "));
         }
-        fail += Check((new DirectoryInfo(Path.Combine(root, "Data")).Attributes & FileAttributes.Hidden) != 0, "Data gizli");
+        fail += Check((new DirectoryInfo(Path.Combine(root, "Data")).Attributes & FileAttributes.Hidden) == 0, "Data görünür (gizli değil)");
         Console.WriteLine(fail == 0 ? "SONUÇ: geçti" : $"SONUÇ: {fail} hata");
         return fail == 0 ? 0 : 1;
     }

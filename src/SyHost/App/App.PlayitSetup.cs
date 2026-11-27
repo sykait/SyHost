@@ -37,29 +37,76 @@ sealed partial class App
     /// <summary>Bağlantı zaten kurulu mu (anahtar, adres ve program var)?</summary>
     bool PlayitReady() => TestPlayitReady ?? Cfg.playitKullan && File.Exists(PlayitSecret) && !string.IsNullOrEmpty(Cfg.arkadasAdresi) && PlayitDaemonAvailable();
 
-    /// <summary>playit'in iki programını indir (GitHub'daki son sürüm, Windows x64, imzalı).</summary>
+    // İndirilen playit dosyası için akıl sınırı (bugün ~8 MB)
+    const long PlayitMaxBytes = 64L * 1024 * 1024;
+
+    /// <summary>
+    /// playit'in iki programını indir (GitHub'daki son sürüm, Windows x64). Yalnızca imzalı sürüm kabul edilir ve
+    /// dosya yerine konmadan (hiç çalıştırılmadan) önce doğrulanır: GitHub'ın verdiği SHA-256 tutmalı ve Windows
+    /// imzayı geçerli bulmalı. Tutmazsa dosya silinir, adım "kurulamadı" ile atlanır. (Terminal: FirstRunJob.ps1)
+    /// </summary>
     void PlayitDownload()
     {
         Fr.JobText = Lang.L("playit indiriliyor...");
+        string fail = Lang.L("playit kurulamadı, bu adım atlanıyor.");
         using var http = new HttpClient();
         http.DefaultRequestHeaders.UserAgent.ParseAdd("SyHost/1.0 (+https://github.com/sykait/SyHost)");
         http.Timeout = TimeSpan.FromMinutes(5);
         string json = http.GetStringAsync("https://api.github.com/repos/playit-cloud/playit-agent/releases/latest").GetAwaiter().GetResult();
         using var doc = System.Text.Json.JsonDocument.Parse(json);
-        var urls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var assets = new Dictionary<string, (string Url, string Digest)>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in doc.RootElement.GetProperty("assets").EnumerateArray())
-            urls[a.GetProperty("name").GetString() ?? ""] = a.GetProperty("browser_download_url").GetString();
-        Directory.CreateDirectory(PlayitToolDir);
-        foreach (var (asset, target) in new[] { ("playitd-windows-x86_64", "playitd.exe"), ("playit-windows-x86_64", "playit.exe") })
         {
-            string url = urls.TryGetValue(asset + "-signed.exe", out var u1) ? u1 : urls.TryGetValue(asset + ".exe", out var u2) ? u2 : null;
-            if (url == null) throw new Exception(Lang.L("playit kurulamadı, bu adım atlanıyor."));
+            string digest = a.TryGetProperty("digest", out var d) && d.ValueKind == System.Text.Json.JsonValueKind.String ? d.GetString() : null;
+            assets[a.GetProperty("name").GetString() ?? ""] = (a.GetProperty("browser_download_url").GetString(), digest);
+        }
+        Directory.CreateDirectory(PlayitToolDir);
+        foreach (var (asset, target) in new[] { ("playitd-windows-x86_64-signed.exe", "playitd.exe"), ("playit-windows-x86_64-signed.exe", "playit.exe") })
+        {
+            if (!assets.TryGetValue(asset, out var info) || !Uri.TryCreate(info.Url, UriKind.Absolute, out Uri url) || url.Scheme != Uri.UriSchemeHttps) throw new Exception(fail);
             string dst = Path.Combine(PlayitToolDir, target), tmp = dst + ".indiriliyor";
-            using (var s = http.GetStreamAsync(url).GetAwaiter().GetResult())
-            using (var f = File.Create(tmp)) s.CopyTo(f);
-            File.Move(tmp, dst, true);
+            try
+            {
+                using (var s = http.GetStreamAsync(url).GetAwaiter().GetResult())
+                using (var f = File.Create(tmp))
+                {
+                    var buf = new byte[81920];
+                    long total = 0;
+                    for (int n; (n = s.Read(buf, 0, buf.Length)) > 0;)
+                    {
+                        total += n;
+                        if (total > PlayitMaxBytes) throw new Exception(fail);
+                        f.Write(buf, 0, n);
+                    }
+                }
+                if (!PlayitFileOk(tmp, info.Digest)) throw new Exception(fail);
+                File.Move(tmp, dst, true);
+            }
+            catch
+            {
+                try { File.Delete(tmp); } catch { }
+                throw;
+            }
         }
     }
+
+    /// <summary>İndirilen dosya GitHub'ın SHA-256'sıyla tutuyor mu (verdiyse) ve imzası geçerli mi?</summary>
+    static bool PlayitFileOk(string file, string digest)
+    {
+        if (!string.IsNullOrEmpty(digest))
+        {
+            if (!digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) return false;
+            string hex;
+            using (var fs = File.OpenRead(file)) hex = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(fs));
+            if (!hex.Equals(digest.Substring(7), StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        return Trust.IsSigned(file);
+    }
+
+    /// <summary>Hesap bağlama sayfası yalnızca playit.gg'nin kendi https adresiyse tarayıcıda açılır.</summary>
+    static bool IsPlayitUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out Uri u) && u.Scheme == Uri.UriSchemeHttps &&
+        (u.Host.Equals("playit.gg", StringComparison.OrdinalIgnoreCase) || u.Host.EndsWith(".playit.gg", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>playit komutunu çalıştır, bütün çıktıyı döndür. Esc (PlayitCancel) hangi komut çalışırken basılırsa basılsın onu kapatır.</summary>
     string PlayitRun(string args, int timeoutMs)
@@ -93,7 +140,7 @@ sealed partial class App
         if (string.IsNullOrWhiteSpace(code)) throw new Exception(Lang.L("playit bağlantısı tamamlanmadı. Tekrar deneyebilirsin."));
         Fr.Code = code;
         string url = LastLine(PlayitRun("claim url " + code + " --name SyHost", 30000));
-        if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !TestMode && !Fr.Cancel) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }
+        if (IsPlayitUrl(url) && !TestMode && !Fr.Cancel) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }
         Fr.JobText = Lang.L("Tarayıcıda onaylamanı bekliyorum (en fazla 10 dakika)...");
         string outp = PlayitRun("claim exchange " + code + " --wait 600", 620000);
         var m = Regex.Match(outp, "([0-9a-f]{64})");
@@ -171,7 +218,7 @@ sealed partial class App
                     Cfg.arkadasAdresi = Fr.McAddr; Cfg.sesAdresi = Fr.VoiceAddr; Cfg.playitKullan = true;
                     SaveConfig();
                     HasFriendAddr = true; FriendAddr = Fr.McAddr;
-                    StopPlayit(); StartPlayit();
+                    StopPlayit(); PlayitResetBudget(); StartPlayit();
                     Fr.Phase = "hazir";
                     return;
                 }

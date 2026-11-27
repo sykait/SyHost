@@ -1,6 +1,6 @@
 // SyHost - tasinabilir klasor icin yardimci kod (PowerShell tarafindan SyHost.Core.cs ile birlikte derlenir)
 // Yalnizca Windows'a dokunan parcalar burada; kararlar Portable.ps1'de. C# surumundeki karsiliklari:
-//   Portable    src\SyHost\Setup\Portable.cs (Downloads, CopyExe, HideDir, IsInside, Alert), Fonts.cs (yazi tipi kaydi),
+//   Portable    src\SyHost\Setup\Portable.cs (Downloads, CopyExe, ShowDir, IsInside, Alert), Fonts.cs (yazi tipi kaydi),
 //               Core\Native.Dialogs.cs (PickFolder), Core\Native.cs (SetWindowIcon)
 //   ShellLink   src\SyHost\Setup\Shortcuts.cs (IShellLinkW ile okuma/yazma)
 //   FolderLook  src\SyHost\Setup\FolderLook.cs (desktop.ini, simgeler, SHChangeNotify)
@@ -46,12 +46,13 @@ namespace SyHost
             throw new IOException(new System.ComponentModel.Win32Exception(err).Message + " " + to, unchecked((int)0x80070000) | err);
         }
 
-        public static void HideDir(string dir)
+        // Klasor gizliyse gorunur yap: Data gizli degildir (icinde indirilen programlar da durur; C#: Portable.ShowDir)
+        public static void ShowDir(string dir)
         {
             try
             {
                 DirectoryInfo di = new DirectoryInfo(dir);
-                if ((di.Attributes & FileAttributes.Hidden) == 0) di.Attributes |= FileAttributes.Hidden;
+                if (di.Exists && (di.Attributes & FileAttributes.Hidden) != 0) di.Attributes &= ~FileAttributes.Hidden;
             }
             catch { }
         }
@@ -326,7 +327,7 @@ namespace SyHost
                 string icons = Path.Combine(data, "icons");
                 Directory.CreateDirectory(icons);
                 foreach (string n in IconNames) CopyIcon(iconSource, n, Path.Combine(icons, n));
-                Portable.HideDir(data);
+                Portable.ShowDir(data);
 
                 Write(root, Path.Combine(icons, "folder-syhost.ico"), null);
                 string servers = Path.Combine(root, "Servers");

@@ -155,7 +155,7 @@ Tx 'seç / bırak' 'select / unselect' '選択 / 解除'
 Tx 'kaldır' 'remove' '削除'
 Tx 'Kaldırılıyor…' 'Removing…' '削除中…'
 Tx 'Kaldırma tamamlandı.' 'Uninstall finished.' 'アンインストールが完了しました。'
-Tx 'SyHost kapanınca klasörü de silinecek.' 'The folder will be deleted when SyHost closes.' 'SyHost を閉じるとフォルダーも削除されます。'
+Tx 'SyHost kapanınca klasörün içi silinecek; sonra klasörü Explorer''da göstereceğim, oradan silebilirsin.' 'When SyHost closes, the folder''s contents are deleted; then Explorer shows the folder so you can delete it.' 'SyHost を閉じるとフォルダーの中身が削除されます。そのあとエクスプローラーでフォルダーを表示するので、そこで削除できます。'
 Tx 'Artık SyHost klasörünü silebilirsin; Explorer''da gösterdim.' 'You can delete the SyHost folder now; it''s shown in Explorer.' 'SyHost フォルダーを削除できます。エクスプローラーで表示しました。'
 Tx 'Deneme modu: hiçbir şey silinmedi.' 'Test mode: nothing was deleted.' 'テストモード: 何も削除していません。'
 Tx ' SyHost''u kapat' ' Close SyHost' ' SyHost を閉じる'
@@ -169,7 +169,7 @@ Tx 'Sunucular' 'Servers' 'サーバー'
 Tx 'Yedekler' 'Backups' 'バックアップ'
 Tx 'SyHost - modlu Minecraft sunucu merkezi' 'SyHost - modded Minecraft server hub' 'SyHost - MOD入り Minecraft サーバーハブ'
 Tx 'Kısayollar yeni yere güncellendi.' 'Shortcuts now point to the new location.' 'ショートカットを新しい場所に更新しました。'
-Tx "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve gizli Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç." "SyHost can't write to this folder:`n{0}`n`nMove the whole SyHost folder (SyHost.exe together with Servers and the hidden Data folder) to a place you can write to (for example {1}) and open SyHost.exe from there." "SyHost はこのフォルダーに書き込めません:`n{0}`n`nSyHost フォルダーを中身ごと（SyHost.exe、Servers、隠しフォルダー Data）書き込める場所（例: {1}）に移動し、そこから SyHost.exe を開いてください。"
+Tx "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç." "SyHost can't write to this folder:`n{0}`n`nMove the whole SyHost folder (SyHost.exe together with Servers and Data) to a place you can write to (for example {1}) and open SyHost.exe from there." "SyHost はこのフォルダーに書き込めません:`n{0}`n`nSyHost フォルダーを中身ごと（SyHost.exe、Servers、Data）書き込める場所（例: {1}）に移動し、そこから SyHost.exe を開いてください。"
 
 # ---------- src\SyHost\Core\Installer.cs ----------
 Tx 'Java {0} indiriliyor...' 'Downloading Java {0}...' 'Java {0} をダウンロード中...'

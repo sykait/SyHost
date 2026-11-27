@@ -14,6 +14,15 @@ using System.Windows.Forms;
 
 namespace SyHost
 {
+    // Ag ayari: TLS 1.2 bir kez, butun surec icin acilir (arka plan islerinin runspace'leri de ayni ayari kullanir)
+    public static class Net
+    {
+        public static void EnableTls12()
+        {
+            try { System.Net.ServicePointManager.SecurityProtocol |= System.Net.SecurityProtocolType.Tls12; } catch { }
+        }
+    }
+
     public static class Native
     {
         [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
@@ -27,8 +36,18 @@ namespace SyHost
         [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int n);
         [DllImport("kernel32.dll")] static extern bool GetConsoleMode(IntPtr h, out uint m);
         [DllImport("kernel32.dll")] static extern bool SetConsoleMode(IntPtr h, uint m);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);
 
         public static IntPtr Hwnd { get { return GetConsoleWindow(); } }
+
+        // Ikinci kopya acilinca: acik SyHost penceresini one getir (C#: Native.FocusWindow, baslatici: Program.Focus)
+        public static bool FocusWindow(string title)
+        {
+            IntPtr h = FindWindow("ConsoleWindowClass", title);
+            if (h == IntPtr.Zero) return false;
+            ShowWindow(h, 9); ShowWindow(h, 5); SetForegroundWindow(h);
+            return true;
+        }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         struct CONSOLE_FONT_INFOEX

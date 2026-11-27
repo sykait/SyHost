@@ -1,7 +1,8 @@
 // =====================================================================
 //  SyHost - gömülü uygulama (Terminal sürümünün App klasörü)
 //  Exe'nin içindeki dosyalar ("app\<göreli yol>" adlı kaynaklar) bir klasöre çıkarılır:
-//    Kurulu klasörde: <SyHost>\App (gizli). Yalnızca içerik değişince yenilenir: önce App.new'a
+//    Kurulu klasörde: <SyHost>\App (gizli değil: kullanıcı ne çalıştığını görebilsin). Yalnızca içerik değişince
+//    ya da bir dosyada "internetten geldi" işareti varsa (RemoteSigned onu çalıştırmaz) yenilenir: önce App.new'a
 //    çıkarılır, sonra App ile yer değiştirir; eski App değişim bitene kadar App.old olarak durur.
 //    Data ve Servers'a hiç dokunulmaz.
 //    Kurulum ekranında: %TEMP%\SyHost-Terminal-<karma>-<rastgele>. SyHost kapanınca silinir. Başlatıcı
@@ -48,7 +49,12 @@ static class Payload
         return entries = list;
     }
 
-    /// <summary>Klasörde bu exe'nin uygulaması eksiksiz duruyor mu? (işaret dosyası + her dosyanın boyutu)</summary>
+    /// <summary>
+    /// Klasörde bu exe'nin uygulaması eksiksiz duruyor mu? (işaret dosyası + her dosyanın boyutu). Bir dosyada
+    /// "internetten geldi" işareti (Zone.Identifier akışı; ör. klasör indirilen bir zip'ten geri yüklendiyse) varsa
+    /// güncel sayılmaz: PowerShell RemoteSigned ile o betiği çalıştırmaz, .NET o DLL'i yüklemez. İşaret hiçbir
+    /// zaman silinmez; işaretsiz yeni kopya exe'nin içinden çıkarılır.
+    /// </summary>
     public static bool IsCurrent(string app)
     {
         try
@@ -57,9 +63,21 @@ static class Payload
             if (!File.Exists(marker) || File.ReadAllText(marker) != Marker) return false;
             foreach (var e in Entries())
             {
-                var fi = new FileInfo(Path.Combine(app, e.Rel));
-                if (!fi.Exists || fi.Length != e.Size) return false;
+                string path = Path.Combine(app, e.Rel);
+                var fi = new FileInfo(path);
+                if (!fi.Exists || fi.Length != e.Size || HasInternetMark(path)) return false;
             }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Dosyanın "internetten geldi" (Mark of the Web) akışı var mı?</summary>
+    static bool HasInternetMark(string file)
+    {
+        try
+        {
+            using (new FileStream(file + ":Zone.Identifier", FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) { }
             return true;
         }
         catch { return false; }
@@ -101,7 +119,6 @@ static class Payload
                 TestLog.Write("extract " + app);
                 DeleteDir(fresh);   // yarıda kalmış bir önceki deneme
                 Directory.CreateDirectory(fresh);
-                Hide(fresh);
                 try
                 {
                     ExtractTo(fresh);
@@ -125,7 +142,6 @@ static class Payload
                 }
                 TestLog.Write("swapped " + app);
             }
-            Hide(app);
             TryDeleteDir(old);
             TryDeleteDir(fresh);
         }
@@ -231,16 +247,6 @@ static class Payload
         catch (DirectoryNotFoundException) { return false; }
         catch (IOException) { return true; }                   // paylaşım ihlali: açık
         catch (UnauthorizedAccessException) { return true; }   // açılamıyor: dokunma
-    }
-
-    static void Hide(string dir)
-    {
-        try
-        {
-            var di = new DirectoryInfo(dir);
-            if ((di.Attributes & FileAttributes.Hidden) == 0) di.Attributes |= FileAttributes.Hidden;
-        }
-        catch { }
     }
 
     /// <summary>Klasörü sil (yoksa bir şey yapma); kilitliyse bir süre yeniden dener, olmazsa hata.</summary>

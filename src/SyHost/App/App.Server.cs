@@ -152,16 +152,37 @@ sealed partial class App
     // Kurulu playit servisinin borusu (\\.\pipe\playitd-system) ile çakışmasın; bu boruya yalnız bu kullanıcı bağlanabilir
     const string SrvPlayitPipe = @"\\.\pipe\syhost-playit";
 
+    // Kendiliğinden yeniden başlatma sınırı: 10 dakikada en çok 3 açılış. Windows ya da bir güvenlik programı
+    // playit'i açtırmıyorsa (Win32 hatası) bu oturumda bir daha denenmez: her 10 saniyede yeniden denemek
+    // kapatılınca geri gelen gizli bir program gibi görünürdü. (Terminal: SyHost.ps1 Start-Playit)
+    readonly List<DateTime> PlayitStarts = new();
+    bool PlayitBlocked;
+    // Kaldır ekranı klasörü silecekken playit yeniden açılmasın (dosyaları kilitli kalırdı)
+    bool PlayitHold;
+
+    bool PlayitMayRestart(DateTime now)
+    {
+        if (PlayitBlocked || PlayitHold) return false;
+        PlayitStarts.RemoveAll(t => (now - t).TotalMinutes > 10);
+        return PlayitStarts.Count < 3;
+    }
+
+    /// <summary>Kullanıcı playit'i yeniden bağladı: sınır sıfırlanır.</summary>
+    void PlayitResetBudget() { PlayitStarts.Clear(); PlayitBlocked = false; }
+
     private partial void StartPlayit()
     {
-        if (!Cfg.playitKullan) return;
+        if (!Cfg.playitKullan || PlayitHold) return;
         if (Pl != null && Pl.Running) return;
         PlayitExe = SrvFindPlayit();
         // Ajan ya da anahtar yoksa playit'i bu oturum için kapat (dosyaya yazılmaz)
         if (PlayitExe == null || !File.Exists(PlayitSecret)) { HasFriendAddr = false; return; }   // ayar dosyadaki gibi kalır; program gelince yeniden denenir
         string dir = Path.GetDirectoryName(PlayitSecret);
         Pl = new ServerProcess();
-        try { Pl.Start(PlayitExe, $"--secret-path \"{PlayitSecret}\" --socket-path {SrvPlayitPipe} --log-path \"{Path.Combine(dir, "playit.log")}\"", dir); } catch { }
+        PlayitStarts.Add(Now());
+        try { Pl.Start(PlayitExe, $"--secret-path \"{PlayitSecret}\" --socket-path {SrvPlayitPipe} --log-path \"{Path.Combine(dir, "playit.log")}\"", dir); }
+        catch (System.ComponentModel.Win32Exception) { PlayitBlocked = true; }
+        catch { }
         CloseGuard.Playit = Pl;
     }
 
@@ -183,7 +204,8 @@ sealed partial class App
 
     private partial void StopPlayit()
     {
-        if (Pl != null && Pl.Running) { try { Pl.P.Kill(); } catch { } }
+        // Kapanmasını da bekle: hemen ardından klasör silinecekse playitd.exe ve playit.log serbest kalsın
+        if (Pl != null && Pl.Running) { try { Pl.P.Kill(); Pl.P.WaitForExit(5000); } catch { } }
     }
 
     // ---------- Sunucu kontrolü (437-484) ----------

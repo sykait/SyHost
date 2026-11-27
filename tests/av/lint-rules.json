@@ -1,0 +1,18 @@
+{
+  "note": "SyHost - virüs tarayıcılarının kötü amaçlı yazılıma benzettiği kalıplar. tests\\av\\Test-Lint.ps1 okur. Kurallar betiğin içinde değil burada durur: denetim betiği bu sözcükleri kendisi taşırsa PowerShell onu çalıştırırken taranan metinde onlar da olurdu. scope: shipped = src, legacy\\src ve legacy\\*.bat; legacyPs = yalnızca legacy\\src\\*.ps1; all = dağıtılan kod ile tests, build ve .github. allow: kalıba izin verilen dosyalar (repo köküne göre).",
+  "rules": [
+    { "name": "kodlanmış PowerShell komutu", "pattern": "(?i)EncodedCommand|\\s-enc\\s", "scope": "shipped" },
+    { "name": "gizli pencere", "pattern": "(?i)WindowStyle\\s+Hidden|ProcessWindowStyle(\\]::|\\.)Hidden", "scope": "shipped" },
+    { "name": "ExecutionPolicy Bypass", "pattern": "(?i)ExecutionPolicy\\s+Bypass", "scope": "shipped" },
+    { "name": "kendini silen cmd kalıbı (ping, rmdir /s, attrib -)", "pattern": "(?i)ping\\s+-n|rmdir\\s+/s|\\battrib\\s+-", "scope": "shipped" },
+    { "name": "Base64 ile kod taşıma", "pattern": "To(Base64)String|From(Base64)String", "scope": "shipped" },
+    { "name": "metinden kod üretme", "pattern": "(?i)\\[scriptblock\\]::Create|\\.AddScript\\(|Get-ChildItem\\s+function:|Invoke-Expression|\\biex\\b", "scope": "legacyPs" },
+    { "name": "betikte çalışırken derlenen DllImport", "pattern": "(?i)-MemberDefinition|DllImport", "scope": "legacyPs" },
+    { "name": "indirme kalıbı adları (yorumlar dahil: taranan metinde onlar da var)", "pattern": "(?i)DownloadString|DownloadFile|Net\\.WebClient|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer", "scope": "legacyPs" },
+    { "name": "\"internetten geldi\" işaretini silme", "pattern": "(?i)Unblock-File", "scope": "shipped" },
+    { "name": "COM kabuk nesnesi", "pattern": "(?i)-ComObject", "scope": "legacyPs" },
+    { "name": "Defender ayarlarıyla oynama", "pattern": "(?i)Add-MpPreference|Set-MpPreference|ExclusionPath|DisableRealtimeMonitoring", "scope": "all" },
+    { "name": "yönetici olarak açma (yalnızca kaldırma ekranının iki adımında)", "pattern": "(?i)\\brunas\\b", "scope": "shipped", "allow": [ "src\\SyHost\\Setup\\Uninstall.cs", "legacy\\src\\Uninstall.ps1" ] }
+  ],
+  "exeTokens": [ "EncodedCommand", "WindowStyle Hidden", "ExecutionPolicy Bypass", "ping -n", "rmdir /s", "attrib -r", "[scriptblock]::Create", ".AddScript(", "-MemberDefinition", "Get-ChildItem function:", "Unblock-File", "DllImport(" ]
+}

@@ -9,7 +9,7 @@
 #  C# karşılığı: src\SyHost\Setup\Portable.cs, Migration.cs, FolderLook.cs, Fonts.cs, Shortcuts.cs,
 #  Core\Native.Dialogs.cs (klasör seçici), Native.SetWindowIcon, App.Server.cs (SrvFindPlayit), App.cs (PortableStartup).
 #  Windows'a dokunan parçalar SyHost.Setup.cs'te: [SyHost.Portable], [SyHost.ShellLink], [SyHost.FolderLook].
-#  Java (bulma ve indirme) SyHost.ps1'deki $JavaFuncs'ta (arka plan işlerinde de yüklenir).
+#  Java (bulma ve indirme) Java.ps1'de (ana betik ve arka plan işleri onu diskten yükler).
 #  Testler için: SYHOST_DEFAULT_ROOT (varsayılan kurulum yeri), SYHOST_LEGACY_DATA (eski veri klasörü),
 #  SYHOST_SHORTCUT_DIR (kısayolların yeri), SYHOST_DRYRUN=1 (kaldır hiçbir şey silmez).
 # =====================================================================
@@ -112,7 +112,6 @@ function Install-SyHostTo([string]$root, [string]$sourceExe, [string]$lang) {
             $s | Add-Member -NotePropertyName kurulumTamam -NotePropertyValue $false -Force
             Write-TextFile $cfg ($s | ConvertTo-Json -Depth 6)
         }
-        [SyHost.Portable]::HideDir($dataDir)
     } catch { throw (Get-InnerException $_.Exception) }
 }
 

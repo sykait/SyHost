@@ -13,11 +13,18 @@
 #             C# sürümüyle (SyHost.exe --frame) aynı biçim; tests\parity iki çıktıyı karşılaştırır.
 param([string]$Root, [string]$Exe, [switch]$NoSplash, [string]$TestFrame, [string]$TestOut)
 $ErrorActionPreference = 'Stop'
+# Yolda % varsa başlatıcı yolları komut satırına yazmaz (conhost onları değiştirirdi), veri olarak ortam
+# değişkenleriyle verir: buradan okunur ve hemen silinir (java ve playit gibi alt süreçlere geçmesin).
+$LaunchedByEnv = (-not $Root) -and [bool]$env:SYHOST_LAUNCH_ROOT
+if ($LaunchedByEnv) { $Root = $env:SYHOST_LAUNCH_ROOT; if (-not $Exe) { $Exe = $env:SYHOST_LAUNCH_EXE } }
+Remove-Item Env:SYHOST_LAUNCH_ROOT, Env:SYHOST_LAUNCH_EXE -ErrorAction SilentlyContinue
 $SrcDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 # Uygulama dosyaları (src, config, fonts, icons). Kurulumda SyHost klasöründeki gizli App klasörüdür.
 $AppDir  = Split-Path -Parent $SrcDir
 if (-not $Root) { $Root = Split-Path -Parent $AppDir }
 $AppRoot = [IO.Path]::GetFullPath($Root)
+# Ortam değişkenleriyle açıldıysa çalışma klasörü SyHost klasörü olsun (kurulum ekranında geçici App klasörüydü; C# ile aynı)
+if ($LaunchedByEnv) { try { Set-Location -LiteralPath $AppRoot; [Environment]::CurrentDirectory = $AppRoot } catch {} }
 # Testlerde pencere adı (ve tek kopya kilidi) değişebilir: açık olan gerçek SyHost'a dokunulmaz
 $Title   = if ($env:SYHOST_TEST_TITLE) { $env:SYHOST_TEST_TITLE } else { 'SyHost' }
 $Version = '1.0.0'
@@ -26,42 +33,23 @@ $Edition = 'Terminal'
 # SyHost.exe (başlatıcı): kısayollar onu açar, kurulum onu kopyalar
 $ExePath = if ($Exe) { [IO.Path]::GetFullPath($Exe) } else { Join-Path $AppRoot 'SyHost.exe' }
 
-# Kullanıcı verileri (ayarlar, sunucu listesi, playit anahtarı) SyHost klasöründeki gizli Data klasöründe durur.
+# Kullanıcı verileri (ayarlar, sunucu listesi, playit anahtarı) SyHost klasöründeki Data klasöründe durur.
 # İki sürüm de aynı düzeni ve aynı dosyaları kullanır; biri bırakıp diğeri devam edebilir.
 $Data = Join-Path $AppRoot 'Data'
 # Data yoksa SyHost bu klasörde kurulu değil (ör. İndirilenler'den açıldı): ilk açılışın 1. aşaması, diske yazılmaz
 # (yalnızca bir Data klasörü yetmez: SyHost'un ayar ya da sunucu listesi aranır; C#: Portable.IsInstalled)
 $SetupMode = (-not $TestFrame) -and -not ([IO.File]::Exists([IO.Path]::Combine($Data, 'ayarlar.json')) -or [IO.File]::Exists([IO.Path]::Combine($Data, 'sunucular.json')))
 
-# ---------- Tek kopya (test modunda atlanır: açık bir SyHost'a dokunmasın) ----------
-# İki sürüm aynı kilidi kullanır: aynı anda yalnızca bir SyHost açık olabilir
-$MutexName = 'Local\SyHostSunucuMerkezi' + $(if ($Title -ceq 'SyHost') { '' } else { "-$Title" })
-if (-not $TestFrame) {
-    $created = $false
-    $mutex = New-Object System.Threading.Mutex($true, $MutexName, [ref]$created)
-    if (-not $created) {
-        Add-Type -Namespace W -Name U -MemberDefinition @'
-[DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string t);
-[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
-[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-'@
-        $hw = [W.U]::FindWindow('ConsoleWindowClass', $Title)
-        if ($hw -ne [IntPtr]::Zero) { [void][W.U]::ShowWindow($hw, 9); [void][W.U]::ShowWindow($hw, 5); [void][W.U]::SetForegroundWindow($hw) }
-        exit
-    }
-}
-
-$Host.UI.RawUI.WindowTitle = $(if ($TestFrame) { "$Title test" } else { $Title })
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
-[Console]::InputEncoding  = New-Object Text.UTF8Encoding $false
-[Console]::TreatControlCAsInput = $true
-try { (Get-Process -Id $PID).PriorityClass = 'High' } catch {}
-
 # ---------- Yardımcı kod (C#) ----------
-# Başlatıcı (SyHost.exe) derlenmiş hâlini App\bin klasörüne koyar. Geliştirirken kaynaktan derlenip
-# App\cache klasörüne yazılır (yalnızca kaynak değişince).
+# Başlatıcı (SyHost.exe) derlenmiş hâlini App\bin klasörüne koyar. Yalnızca geliştirirken (repodan çalışınca:
+# -Exe ve App\version.txt yok; legacy\SyHost.bat ve tests\parity böyle açar) kaynaktan derlenip App\cache'e yazılır.
+# Tek kopya denetiminden önce yüklenir: ikinci kopya açık pencereyi bu koddaki Native.FocusWindow ile öne getirir.
 $CoreDll = Join-Path $AppDir 'bin\SyHost.Core.dll'
 if (-not (Test-Path -LiteralPath $CoreDll)) {
+    if ($Exe -or (Test-Path -LiteralPath (Join-Path $AppDir 'version.txt'))) {
+        # Başlatıcının çıkardığı uygulamada DLL eksik: kaynaktan derlenmez. Başlatıcı bir sonraki açılışta App'i yeniler.
+        throw "SyHost.Core.dll is missing: $CoreDll. Open SyHost.exe again to restore it."
+    }
     $CoreSrc = @(Get-ChildItem -LiteralPath $SrcDir -Filter 'SyHost.*.cs' | Sort-Object Name)
     $CoreDll = Join-Path $AppDir 'cache\SyHost.Core.dll'
     $CoreNewest = ($CoreSrc | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc
@@ -75,6 +63,22 @@ Add-Type -Path $CoreDll
 Add-Type -AssemblyName Microsoft.VisualBasic
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [SyHost.Native]::DpiAware()
+[SyHost.Net]::EnableTls12()
+
+# ---------- Tek kopya (test modunda atlanır: açık bir SyHost'a dokunmasın) ----------
+# İki sürüm aynı kilidi kullanır: aynı anda yalnızca bir SyHost açık olabilir
+$MutexName = 'Local\SyHostSunucuMerkezi' + $(if ($Title -ceq 'SyHost') { '' } else { "-$Title" })
+if (-not $TestFrame) {
+    $created = $false
+    $mutex = New-Object System.Threading.Mutex($true, $MutexName, [ref]$created)
+    if (-not $created) { [void][SyHost.Native]::FocusWindow($Title); exit }
+}
+
+$Host.UI.RawUI.WindowTitle = $(if ($TestFrame) { "$Title test" } else { $Title })
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+[Console]::InputEncoding  = New-Object Text.UTF8Encoding $false
+[Console]::TreatControlCAsInput = $true
+try { (Get-Process -Id $PID).PriorityClass = 'High' } catch {}
 
 # ---------- Dosyalar ----------
 $DefaultCfgFile = Join-Path $AppDir 'config\default-settings.json'
@@ -200,7 +204,7 @@ function Save-Config {
 # Diske ilk yazan Load-Config'ten önce; uyarı Windows'un dilinde.
 if (-not $SetupMode -and -not $TestFrame -and -not (Test-CanWrite $Data)) {
     $LangCode = Get-UiLanguage
-    Show-Alert (L "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve gizli Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç." $AppRoot (Get-DefaultRoot))
+    Show-Alert (L "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç." $AppRoot (Get-DefaultRoot))
     exit 1
 }
 
@@ -246,261 +250,10 @@ function Save-Servers {
 if (-not $SetupMode) { Load-Servers }
 
 # ---------- Java (kurulumda da kullanılır; C#: Core\Java.cs) ----------
-# Java yoksa bilgisayara kurulmaz: Eclipse Temurin JRE, SyHost'un kendi klasörüne (Data\tools\java-N) indirilir;
-# yönetici izni istemez, bilgisayarın geri kalanına dokunmaz. Bu blok ana betikte ve arka plan işlerinde
-# (runspace) nokta ile yüklenir; yükleyen $DataDir'i ayarlar. Runspace'te L yoktur: Install-Java'ya ilk satırı
-# -HeadText ile ver (çevrilmiş metin; içinde {0} varsa Java sürümüyle doldurulur).
-#   Get-JavaMajor $mc                      Minecraft sürümüne göre gereken Java (8, 17, 21, 25)
-#   Find-Java $major                       java.exe ya da $null
-#   Install-Java $major $OnDetail $HeadText  indirir, java.exe'yi döner; olmazsa nedeniyle hata fırlatır.
-#                                          $OnDetail önce ilk satırla, sonra "<dosya>  ·  <MB> / <MB> MB" ile çağrılır
+# Java yoksa bilgisayara kurulmaz: Eclipse Temurin JRE, SyHost'un kendi klasörüne (Data\tools\java-N) indirilir.
+# Fonksiyonlar Java.ps1'de (arka plan işleri de aynı dosyayı yükler); $DataDir'i yükleyen ayarlar.
 $DataDir = $Data
-$JavaFuncs = {
-    # Baştaki rakamlar: "5-pre1" -> 5, "" -> 0 (sığmayan sayı: en büyük int)
-    function Get-JavaLead([string]$s) {
-        $m = [regex]::Match($s, '^[0-9]+')
-        if (-not $m.Success) { return 0 }
-        $v = 0
-        if ([int]::TryParse($m.Value, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture, [ref]$v)) { return $v }
-        [int]::MaxValue
-    }
-    # Minecraft sürümüne göre gereken Java (8, 17, 21, 25)
-    function Get-JavaMajor([string]$mc) {
-        $p = $mc.Split('.')
-        # Yıl numaralı sürümler (26.1, 26.2 ...) Java 25 ister (Mojang sürüm listesi: javaVersion.majorVersion = 25)
-        if ($p[0] -ne '1') { if ((Get-JavaLead $p[0]) -ge 26) { return 25 }; return 21 }
-        # Ön sürümlerde ("1.21-rc1", "1.20.5-pre1") baştaki sayı alınır
-        $minor = if ($p.Count -gt 1) { Get-JavaLead $p[1] } else { 0 }
-        $patch = if ($p.Count -gt 2) { Get-JavaLead $p[2] } else { 0 }
-        if ($minor -ge 21) { return 21 }
-        if ($minor -eq 20 -and $patch -ge 5) { return 21 }
-        if ($minor -ge 17) { return 17 }
-        8
-    }
-    # parent\desen\bin\java.exe: bulunanların en büyüğü (gizli klasörler sayılmaz, büyük-küçük harfe bakılmaz)
-    function Get-JavaNewest([string]$parent, [string]$pattern) {
-        $hits = New-Object System.Collections.Generic.List[string]
-        try {
-            if (-not [IO.Directory]::Exists($parent)) { return $null }
-            foreach ($d in (New-Object IO.DirectoryInfo $parent).EnumerateDirectories()) {
-                if (($d.Attributes -band [IO.FileAttributes]::Hidden) -ne 0 -or $d.Name -notlike $pattern) { continue }
-                $j = [IO.Path]::Combine($d.FullName, 'bin', 'java.exe')
-                if ([IO.File]::Exists($j)) { $hits.Add($j) }
-            }
-        } catch {}
-        if ($hits.Count -eq 0) { return $null }
-        @($hits | Sort-Object)[-1]
-    }
-    # klasör\bin\java.exe ya da bir alt klasörde (Adoptium zip'i böyle açılır: jdk-21.0.5+11-jre\bin\java.exe)
-    function Get-JavaLocate([string]$root) {
-        $j = [IO.Path]::Combine($root, 'bin', 'java.exe')
-        if ([IO.File]::Exists($j)) { return $j }
-        if ([IO.Directory]::Exists($root)) { return (Get-JavaNewest $root '*') }
-        $null
-    }
-    # Önce bilgisayardaki Java (Program Files, eski sürümdeki yerler ve sırayla), yoksa SyHost'un indirdiği (Data\tools\java-N)
-    function Find-Java([int]$major) {
-        $pats = if ($major -eq 8) { @(@('Eclipse Adoptium', 'jre-8*'), @('Eclipse Adoptium', 'jdk-8*')) }
-                else { @(@('Microsoft', "jdk-$major*"), @('Eclipse Adoptium', "jdk-$major*"), @('Eclipse Adoptium', "jre-$major*")) }
-        # Eski sürüm "C:\Program Files" yazardı; Windows başka sürücüdeyse oradaki de bakılır
-        $pfs = @('C:\Program Files')
-        $pf = [Environment]::GetFolderPath('ProgramFiles')
-        if (-not [string]::IsNullOrEmpty($pf) -and -not [string]::Equals($pf.TrimEnd('\'), 'C:\Program Files', [StringComparison]::OrdinalIgnoreCase)) { $pfs += $pf }
-        foreach ($pt in $pats) { foreach ($root in $pfs) { $j = Get-JavaNewest ([IO.Path]::Combine($root, $pt[0])) $pt[1]; if ($j) { return $j } } }
-        if ([string]::IsNullOrEmpty($DataDir)) { return $null }
-        try { Get-JavaLocate ([IO.Path]::Combine($DataDir, 'tools', "java-$major")) } catch { $null }
-    }
-
-    # PowerShell .NET hatalarını MethodInvocationException içine sarar: asıl hata (C# sürümündeki metin)
-    function Get-JavaError($e) {
-        while ($e -is [System.Management.Automation.MethodInvocationException] -and $null -ne $e.InnerException) { $e = $e.InnerException }
-        $e
-    }
-    # Sunucu "böyle bir şey yok" dedi (4xx; 408 ve 429 hariç): tekrar denemek boşuna
-    function Test-JavaPermanent($e) {
-        if ($e -isnot [Net.WebException] -or $e.Status -ne [Net.WebExceptionStatus]::ProtocolError -or $null -eq $e.Response) { return $false }
-        $code = [int]$e.Response.StatusCode
-        $code -ge 400 -and $code -lt 500 -and $code -ne 408 -and $code -ne 429
-    }
-    # İstek: SyHost'u tanıtan User-Agent, yönlendirmeler izlenir, sıkıştırma kapalı (karma baytı baytına doğrulansın).
-    # Başlıklar 100 sn içinde gelmeli; sonra 60 sn hiç veri gelmezse bağlantı kopmuş sayılır.
-    function New-JavaRequest([string]$url) {
-        $r = [Net.HttpWebRequest]::Create($url)
-        $r.UserAgent = 'SyHost/1.0 (+https://github.com/sykait/SyHost)'
-        $r.AllowAutoRedirect = $true; $r.MaximumAutomaticRedirections = 10
-        $r.AutomaticDecompression = [Net.DecompressionMethods]::None
-        $r.Timeout = 100000; $r.ReadWriteTimeout = 60000
-        $r
-    }
-    function Get-JavaText([string]$url) {
-        $resp = (New-JavaRequest $url).GetResponse()
-        try { $sr = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8); try { $sr.ReadToEnd() } finally { $sr.Dispose() } }
-        finally { $resp.Close() }
-    }
-    function Get-JavaStr($o, [string]$n) { $p = $o.PSObject.Properties[$n]; if ($null -ne $p -and $p.Value -is [string]) { $p.Value } else { $null } }
-    # assets API'sindeki package.checksum (zip'in SHA-256'sı); ulaşılamazsa $null
-    function Get-JavaChecksum([int]$major) {
-        try {
-            $doc = ConvertFrom-Json (Get-JavaText "https://api.adoptium.net/v3/assets/latest/$major/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse")
-            if ($doc -isnot [array]) { return $null }
-            foreach ($rel in $doc) {
-                if ($rel -isnot [System.Management.Automation.PSCustomObject]) { continue }
-                $b = $rel.PSObject.Properties['binary']
-                if ($null -eq $b -or $b.Value -isnot [System.Management.Automation.PSCustomObject]) { continue }
-                $b = $b.Value
-                if (-not ((Get-JavaStr $b 'os') -eq 'windows' -and (Get-JavaStr $b 'architecture') -eq 'x64' -and (Get-JavaStr $b 'image_type') -eq 'jre')) { continue }
-                $pk = $b.PSObject.Properties['package']
-                if ($null -eq $pk -or $pk.Value -isnot [System.Management.Automation.PSCustomObject]) { continue }
-                $sum = Get-JavaStr $pk.Value 'checksum'
-                if ($null -ne $sum -and $sum -match '^[0-9a-fA-F]{64}$') { return $sum }
-            }
-        } catch {}
-        $null
-    }
-    # İlerleme satırı (dile bağlı değil): "OpenJDK21U-jre_x64_windows_hotspot_21.0.5_11.zip  ·  23 / 48 MB"
-    function Format-JavaProgress([string]$name, [long]$got, [long]$total) {
-        $name + '  ·  ' + ($got -shr 20) + $(if ($total -gt 0) { ' / ' + ($total -shr 20) } else { '' }) + ' MB'
-    }
-    # Adresi dosyaya indirir (en çok 1 GB), inerken SHA-256'sını hesaplar ve döner. İlerleme en çok saniyede 5 kez.
-    function Save-JavaFile([string]$url, [string]$path, [scriptblock]$OnDetail) {
-        $resp = (New-JavaRequest $url).GetResponse()
-        try {
-            $length = $resp.ContentLength   # bilinmiyorsa -1
-            # Dosya adı: GitHub'ın son adresinde ad yerine bir kimlik durur; asıl ad Content-Disposition'da
-            $name = $null
-            $cd = $resp.Headers['Content-Disposition']
-            if ($cd) {
-                $m = [regex]::Match($cd, 'filename\*?\s*=\s*(?:[\w-]+''[\w-]*'')?"?([^";]+)"?', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-                if ($m.Success) { $name = [Uri]::UnescapeDataString($m.Groups[1].Value.Trim()) }
-            }
-            if (-not $name) { $name = [Uri]::UnescapeDataString([IO.Path]::GetFileName($resp.ResponseUri.AbsolutePath)) }
-            $tick = [Diagnostics.Stopwatch]::StartNew()
-            if ($OnDetail) { $null = & $OnDetail (Format-JavaProgress $name 0 $length) }
-            $sha = [Security.Cryptography.SHA256]::Create()
-            $body = $resp.GetResponseStream()
-            $fs = New-Object IO.FileStream($path, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None, 65536)
-            try {
-                $buf = New-Object byte[] 65536
-                $total = [long]0
-                while (($n = $body.Read($buf, 0, $buf.Length)) -gt 0) {
-                    $total += $n
-                    if ($total -gt 1GB) { throw (New-Object IO.InvalidDataException 'The download is larger than expected.') }
-                    [void]$sha.TransformBlock($buf, 0, $n, $null, 0)
-                    $fs.Write($buf, 0, $n)
-                    if ($OnDetail -and $tick.ElapsedMilliseconds -ge 200) { $tick.Restart(); $null = & $OnDetail (Format-JavaProgress $name $total $length) }
-                }
-                [void]$sha.TransformFinalBlock($buf, 0, 0)
-                if ($OnDetail) { $null = & $OnDetail (Format-JavaProgress $name $total $length) }
-                ([BitConverter]::ToString($sha.Hash) -replace '-', '').ToLowerInvariant()
-            } finally { $fs.Dispose(); $body.Dispose(); $sha.Dispose() }
-        } finally { $resp.Close() }
-    }
-    # java.exe -version çalışıyor mu? Sorun yoksa $null, varsa nedeni.
-    function Test-JavaRuns([string]$exe, [int]$major) {
-        if (-not $exe) { return 'java.exe not found after extracting' }
-        $psi = New-Object Diagnostics.ProcessStartInfo $exe
-        $psi.Arguments = '-version'
-        $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-        $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-        # Hiç başlatılamıyorsa (ör. güvenlik yazılımı engelledi) bu da bir neden: çalışmayan kopya yerinde kalmasın
-        try { $p = [Diagnostics.Process]::Start($psi) } catch { return (Get-JavaError $_.Exception).Message }
-        try {
-            $err = $p.StandardError.ReadToEndAsync(); $out = $p.StandardOutput.ReadToEndAsync()
-            if (-not $p.WaitForExit(60000)) { try { $p.Kill() } catch {}; return 'java -version did not finish' }
-            $text = $err.Result + $out.Result
-            if ($p.ExitCode -ne 0) { return ('java -version exited with code {0}: {1}' -f $p.ExitCode, $text.Trim()) }
-            # openjdk version "21.0.5" / "1.8.0_432"
-            $m = [regex]::Match($text, 'version "(\d+)(?:\.(\d+))?')
-            $v = 0
-            if ($m.Success -and [int]::TryParse($m.Groups[1].Value, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture, [ref]$v)) {
-                if ($v -eq 1 -and $m.Groups[2].Success) { [void][int]::TryParse($m.Groups[2].Value, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture, [ref]$v) }
-                if ($v -ne $major) { return "expected Java $major but the archive has Java $v" }
-            }
-            $null
-        } finally { $p.Dispose() }
-    }
-    function Remove-JavaFile([string]$path) { try { if ([IO.File]::Exists($path)) { [IO.File]::Delete($path) } } catch {} }
-    function Remove-JavaDir([string]$dir) {
-        for ($i = 0; $i -lt 5; $i++) {
-            try { if (-not [IO.Directory]::Exists($dir)) { return }; [IO.Directory]::Delete($dir, $true); return } catch { Start-Sleep -Milliseconds 300 }
-        }
-    }
-    # Virüs tarayıcısı yeni açılan dosyaları kısa süre kilitleyebilir: taşımayı birkaç kez dene
-    function Move-JavaDir([string]$from, [string]$to) {
-        for ($i = 0; ; $i++) {
-            try { [IO.Directory]::Move($from, $to); return }
-            catch {
-                $e = Get-JavaError $_.Exception
-                if ($i -lt 10 -and ($e -is [IO.IOException] -or $e -is [UnauthorizedAccessException])) { Start-Sleep -Milliseconds 300 } else { throw $e }
-            }
-        }
-    }
-    # Önceki yarım kalmış denemelerin artıkları: java-N.xxxx.zip / .tmp / .old
-    function Clear-JavaLeftovers([string]$tools, [int]$major) {
-        try {
-            foreach ($f in [IO.Directory]::GetFiles($tools, "java-$major.*.zip")) { Remove-JavaFile $f }
-            foreach ($d in [IO.Directory]::GetDirectories($tools, "java-$major.*.tmp")) { Remove-JavaDir $d }
-            foreach ($d in [IO.Directory]::GetDirectories($tools, "java-$major.*.old")) { Remove-JavaDir $d }
-        } catch {}
-    }
-    # Java'yı Data\tools\java-N içine indirir, java.exe yolunu döner (olmazsa nedeniyle hata fırlatır)
-    function Install-Java([int]$major, [scriptblock]$OnDetail, [string]$HeadText) {
-        $head = if ($HeadText) { if ($HeadText.Contains('{0}')) { $HeadText -f $major } else { $HeadText } }
-                elseif (Get-Command L -CommandType Function -ErrorAction SilentlyContinue) { L 'Java {0} indiriliyor...' $major }
-                else { 'Java {0} indiriliyor...' -f $major }
-        if ($OnDetail) { $null = & $OnDetail $head }
-        if ([string]::IsNullOrEmpty($DataDir)) { throw (New-Object InvalidOperationException 'Install-Java: $DataDir is not set.') }
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        # Eski Windows'larda TLS 1.2 kendiliğinden açık olmayabilir
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-        $tools = [IO.Path]::Combine([IO.Path]::GetFullPath($DataDir), 'tools')
-        [void][IO.Directory]::CreateDirectory($tools)
-        $final = [IO.Path]::Combine($tools, "java-$major")
-        Clear-JavaLeftovers $tools $major
-        $last = $null
-        for ($attempt = 0; $attempt -lt 3; $attempt++) {
-            if ($attempt -gt 0) { Start-Sleep -Milliseconds (2000 * $attempt) }
-            $id = [Guid]::NewGuid().ToString('N').Substring(0, 8)
-            $zip = [IO.Path]::Combine($tools, "java-$major.$id.zip")
-            $tmp = [IO.Path]::Combine($tools, "java-$major.$id.tmp")
-            try {
-                # Adoptium'un bildirdiği SHA-256 (ulaşılamazsa $null: o zaman zip'in açılması ve java -version yeter)
-                $sum = Get-JavaChecksum $major
-                $hash = Save-JavaFile "https://api.adoptium.net/v3/binary/latest/$major/ga/windows/x64/jre/hotspot/normal/eclipse" $zip $OnDetail
-                # Tutmazsa bir kez daha sor: iki istek arasında yeni sürüm çıkmış olabilir
-                if ($sum -and $sum -ne $hash -and (Get-JavaChecksum $major) -ne $hash) { throw (New-Object IO.InvalidDataException "The Java $major archive does not match its SHA-256 checksum.") }
-                [IO.Compression.ZipFile]::ExtractToDirectory($zip, $tmp)
-                if (-not (Get-JavaLocate $tmp)) { throw (New-Object IO.InvalidDataException "java.exe is missing from the Java $major archive.") }
-                Remove-JavaFile $zip
-                # Yarım kalmış eski klasörü kenara al, yenisini tek adımda yerine koy
-                if ([IO.Directory]::Exists($final)) {
-                    $old = [IO.Path]::Combine($tools, "java-$major.$id.old")
-                    Move-JavaDir $final $old
-                    Remove-JavaDir $old
-                }
-                Move-JavaDir $tmp $final
-                $exe = Get-JavaLocate $final
-                $why = Test-JavaRuns $exe $major
-                if ($why) {
-                    # Çalışmayan Java "bulunmuş" sayılmasın: silinemezse en azından adı değişsin
-                    Remove-JavaDir $final
-                    if ([IO.Directory]::Exists($final)) { $bad = [IO.Path]::Combine($tools, "java-$major.$id.old"); try { Move-JavaDir $final $bad; Remove-JavaDir $bad } catch {} }
-                    throw (New-Object IO.InvalidDataException $why)
-                }
-                return $exe
-            } catch {
-                $last = Get-JavaError $_.Exception
-                if (Test-JavaPermanent $last) { break }   # böyle bir sürüm yok: tekrar denemek boşuna
-            } finally {
-                Remove-JavaFile $zip
-                Remove-JavaDir $tmp
-            }
-        }
-        $msg = "Java $major could not be downloaded: " + $(if ($null -ne $last) { $last.Message } else { '' })
-        throw (New-Object IO.IOException -ArgumentList $msg, ([Exception]$last))
-    }
-}
-. $JavaFuncs
+. (Join-Path $SrcDir 'Java.ps1')
 
 # ---------- Renkler ve metin ----------
 $E = [char]27
@@ -854,17 +607,37 @@ $PlayitToolDir = Join-Path $Data 'tools\playit'
 $PlayitLegacyBin = 'C:\Program Files\playit_gg\bin'
 $PlayitExe = $null
 $Pl = $null
+# Kendiliğinden yeniden başlatma sınırı: 10 dakikada en çok 3 açılış. Windows ya da bir güvenlik programı playit'i
+# açtırmıyorsa (Win32 hatası) bu oturumda bir daha denenmez: her 10 saniyede yeniden denemek kapatılınca geri gelen
+# gizli bir program gibi görünürdü. $PlayitHold: kaldır ekranı klasörü silecek, playit yeniden açılmasın.
+# (C#: App.Server.cs PlayitMayRestart)
+$PlayitStarts = New-Object System.Collections.Generic.List[DateTime]
+$PlayitBlocked = $false
+$PlayitHold = $false
+function PlayitMayRestart([DateTime]$now) {
+    if ($PlayitBlocked -or $PlayitHold) { return $false }
+    for ($i = $PlayitStarts.Count - 1; $i -ge 0; $i--) { if (($now - $PlayitStarts[$i]).TotalMinutes -gt 10) { $PlayitStarts.RemoveAt($i) } }
+    $PlayitStarts.Count -lt 3
+}
+# Kullanıcı playit'i yeniden bağladı: sınır sıfırlanır
+function PlayitResetBudget { $PlayitStarts.Clear(); $script:PlayitBlocked = $false }
 function Start-Playit {
-    if (-not $Cfg.playitKullan) { return }
+    if (-not $Cfg.playitKullan -or $PlayitHold) { return }
     if ($Pl -and $Pl.Running) { return }
     $script:PlayitExe = Find-PlayitDaemon
     # Program ya da anahtar yoksa playit'i bu oturum için kapat (ayar dosyadaki gibi kalır; program gelince yeniden denenir)
     if (-not $PlayitExe -or -not (Test-Path -LiteralPath $PlayitSecret)) { $script:HasFriendAddr = $false; return }
     $script:Pl = New-Object SyHost.Server
-    try { $Pl.Start($PlayitExe, "--secret-path `"$PlayitSecret`" --socket-path \\.\pipe\syhost-playit --log-path `"$(Join-Path (Split-Path $PlayitSecret) 'playit.log')`"", (Split-Path $PlayitSecret)) } catch {}
+    $PlayitStarts.Add((Get-Date))
+    try { $Pl.Start($PlayitExe, "--secret-path `"$PlayitSecret`" --socket-path \\.\pipe\syhost-playit --log-path `"$(Join-Path (Split-Path $PlayitSecret) 'playit.log')`"", (Split-Path $PlayitSecret)) }
+    catch {
+        $x = $_.Exception; while ($x -is [System.Management.Automation.MethodInvocationException] -and $null -ne $x.InnerException) { $x = $x.InnerException }
+        if ($x -is [System.ComponentModel.Win32Exception]) { $script:PlayitBlocked = $true }
+    }
     [SyHost.CloseGuard]::Playit = $Pl
 }
-function Stop-Playit { if ($Pl -and $Pl.Running) { try { $Pl.P.Kill() } catch {} } }
+# Kapanmasını da bekle: hemen ardından klasör silinecekse playitd.exe ve playit.log serbest kalsın
+function Stop-Playit { if ($Pl -and $Pl.Running) { try { $Pl.P.Kill(); [void]$Pl.P.WaitForExit(5000) } catch {} } }
 function PlayitOn { [bool]($Pl -and $Pl.Running) }
 
 # ---------- Sunucu kontrolü ----------
@@ -1090,577 +863,11 @@ function Test-ReservedServerDir([string]$p) {
 }
 
 # ---------- Kurulum: indirme ve yükleyici yardımcıları ----------
-# C# Core/Installer.cs'teki Fetch, FetchVerified, DownloadAll, DownloadFile, GetText ve RunToLog'un karşılıkları.
-# Kurulumun arka plan iş parçacığında ve modları paralel indiren iş parçacıklarında tanımlanır. Yalnızca .NET
-# çağrıları kullanır (joker karakter yorumu yapan cmdlet yok: [ ] içeren adlar sorun olmaz); L burada yoktur.
-#   - her indirme önce '<dosya>.<n>.part' dosyasına yazılır, SHA-1 / SHA-512 tutunca yerine taşınır
-#   - yükleyici dosyaları ve Fabric bilgisi 3 kez denenir (4xx hatada, 408 ve 429 dışında, tekrar denenmez)
-#   - mod yükleyicisi 15 dakika hiçbir şey yazmazsa kapatılır, SyHost kapanırsa onunla kapanır (JobGuard)
-$InstallFuncs = {
-    $InstTries = 3                  # her iş 3 kez denenir
-    $InstAtOnce = 6                 # aynı anda inen dosya sayısı
-    $InstMaxFile = 4GB              # tek dosya için akıl sınırı (bitmeyen indirmeye karşı)
-    $InstSilenceMin = 15            # yükleyici bu kadar dakika hiçbir şey yazmazsa takılmış sayılır
-    $InstUserAgent = 'SyHost/1.0 (+https://github.com/sykait/SyHost)'
-    $InstBadChars = [char[]]('<>"|?*' + [string]::new([char[]](0..31)))
-    # Paralel indirmede her dosya için çalışan betik (kendi iş parçacığında, bu yardımcılarla)
-    $InstModWorker = 'param($f, $ctx, $funcs) $ErrorActionPreference = ''Stop''; . ([scriptblock]::Create($funcs)); Inst-ModJob $f $ctx'
+# Install.ps1 (arka plandaki kurulum işi InstallJob.ps1 ve paralel mod indirme InstallModJob.ps1 onu yükler)
 
-    # PowerShell'in .NET çağrısı sarmalını ('Exception calling "X" with "1" argument(s): ...') aç: asıl hata
-    function Inst-BaseError($ex) {
-        while ($ex -is [Management.Automation.ExtendedTypeSystemException] -and $ex.InnerException) { $ex = $ex.InnerException }
-        $ex
-    }
-    # Ağ hatası: asıl hata; sunucu hata kodu döndürdüyse kodu Data['SyHostCode']'a yazılır, yanıt kapatılır
-    # (kapatılmazsa bağlantı boşa çıkmaz). Metin .NET Framework'ün: "The remote server returned an error: (404) Not Found."
-    function Inst-NetError($ex) {
-        $ex = Inst-BaseError $ex
-        if ($ex -is [Net.WebException] -and $ex.Response) {
-            try { $ex.Data['SyHostCode'] = [int]$ex.Response.StatusCode } catch {}
-            try { $ex.Response.Close() } catch {}
-        }
-        $ex
-    }
-    # Tekrar denemek boşuna mı (4xx: dosya yok, yasak...; 408 ve 429 hariç)
-    function Inst-Permanent($ex) {
-        if ($ex -isnot [Net.WebException] -or $null -eq $ex.Data['SyHostCode']) { return $false }
-        $code = [int]$ex.Data['SyHostCode']
-        $code -ge 400 -and $code -lt 500 -and $code -ne 408 -and $code -ne 429
-    }
-    function Inst-Delete([string]$path) { try { if ([IO.File]::Exists($path)) { [IO.File]::Delete($path) } } catch {} }
-
-    function Inst-Request([string]$url) {
-        if ($url -notmatch '^https?://') { throw (New-Object NotSupportedException ('Only http and https downloads are supported: ' + $url)) }
-        $req = [Net.WebRequest]::Create($url)
-        $req.UserAgent = $InstUserAgent
-        $req.Timeout = 100000             # yanıt başlıkları 100 sn içinde gelmeli (.NET Framework varsayılanı)
-        $req.ReadWriteTimeout = 60000     # sonra 60 sn hiç veri gelmezse bağlantı kopmuş sayılır
-        $req.AllowAutoRedirect = $true; $req.MaximumAutomaticRedirections = 10
-        $req.AutomaticDecompression = [Net.DecompressionMethods]::None   # dosyalar baytı baytına insin (karma doğrulaması)
-        $req
-    }
-
-    # Tek deneme: adresi dosyaya indirir, inerken karmaları hesaplar. $max baytı aşan indirme kesilir.
-    function Inst-Fetch([string]$url, [string]$path, $hashes, [long]$max) {
-        $resp = $null; $body = $null; $fs = $null
-        try {
-            $resp = (Inst-Request $url).GetResponse()
-            $body = $resp.GetResponseStream()
-            $fs = New-Object IO.FileStream($path, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None, 65536)
-            $buf = New-Object byte[] 65536
-            [long]$total = 0
-            while (($n = $body.Read($buf, 0, $buf.Length)) -gt 0) {
-                $total += $n
-                if ($max -gt 0 -and $total -gt $max) { throw (New-Object IO.InvalidDataException 'The download is larger than expected.') }
-                foreach ($h in $hashes) { [void]$h.TransformBlock($buf, 0, $n, $null, 0) }
-                $fs.Write($buf, 0, $n)
-            }
-            foreach ($h in $hashes) { [void]$h.TransformFinalBlock($buf, 0, 0) }
-        } catch { throw (Inst-NetError $_.Exception) }
-        finally {
-            if ($fs) { $fs.Dispose() }
-            if ($body) { $body.Dispose() }
-            if ($resp) { $resp.Close() }
-        }
-    }
-
-    function Inst-Hex($h) { [BitConverter]::ToString($h.Hash).Replace('-', '').ToLowerInvariant() }
-
-    # .part dosyasını yerine koy, varsa üzerine yaz (C#: File.Move(part, dst, true)); aynı yola iki kayıt varsa sırayla
-    function Inst-Move([string]$part, [string]$dst, $gate) {
-        if ($gate) { [Threading.Monitor]::Enter($gate) }
-        try {
-            if ([IO.File]::Exists($dst)) {
-                try { [IO.File]::Replace($part, $dst, $null, $true); return } catch { [IO.File]::Delete($dst) }
-            }
-            [IO.File]::Move($part, $dst)
-        } finally { if ($gate) { [Threading.Monitor]::Exit($gate) } }
-    }
-
-    # 3 tur, her turda downloads[] içindeki her adres; karma tutunca dosya yerine konur (C# FetchVerified).
-    # Yarım ya da bozuk dosya hiç yerine geçmez. sha512'si olan dosya da kabul edilir (eskiden yalnızca sha1);
-    # adresi ya da karması olmayan hemen başarısız sayılır. Boyut sınırı: paketteki boyutun 2 katı + 1 MB.
-    function Inst-Verified($f, [string]$outp, $gate) {
-        if ($f.Urls.Count -eq 0 -or (-not $f.Sha1 -and -not $f.Sha512)) { return $false }
-        $part = $outp + '.' + $f.Index + '.part'
-        [long]$max = if ($f.Size -gt 0) { [long]$f.Size * 2 + 1MB } else { $InstMaxFile }
-        for ($round = 0; $round -lt $InstTries; $round++) {
-            if ($round -gt 0) { [Threading.Thread]::Sleep(500 * $round) }   # geçici ağ sorununa kısa bir nefes
-            foreach ($url in $f.Urls) {
-                $h1 = $null; $h5 = $null
-                try {
-                    $hs = New-Object System.Collections.Generic.List[Security.Cryptography.HashAlgorithm]
-                    if ($f.Sha1) { $h1 = [Security.Cryptography.SHA1]::Create(); $hs.Add($h1) }
-                    if ($f.Sha512) { $h5 = [Security.Cryptography.SHA512]::Create(); $hs.Add($h5) }
-                    Inst-Fetch $url $part $hs $max
-                    if ((-not $h1 -or (Inst-Hex $h1) -eq $f.Sha1) -and (-not $h5 -or (Inst-Hex $h5) -eq $f.Sha512)) {
-                        Inst-Move $part $outp $gate
-                        return $true
-                    }
-                } catch {
-                } finally {
-                    if ($h1) { $h1.Dispose() }
-                    if ($h5) { $h5.Dispose() }
-                }
-                Inst-Delete $part
-            }
-        }
-        $false
-    }
-
-    # Invoke-WebRequest -OutFile'ın yerine (C# DownloadFile): 3 kez dener, yarım dosya bırakmaz; olmazsa son hatayı fırlatır
-    function Inst-SaveUrl([string]$url, [string]$path) {
-        $part = $path + '.part'; $last = $null
-        for ($i = 0; $i -lt $InstTries; $i++) {
-            if ($i -gt 0) { [Threading.Thread]::Sleep(1500 * $i) }
-            try {
-                Inst-Fetch $url $part $null $InstMaxFile
-                Inst-Move $part $path $null
-                return
-            } catch {
-                $last = Inst-NetError $_.Exception
-                Inst-Delete $part
-                if (Inst-Permanent $last) { break }
-            }
-        }
-        throw $last
-    }
-
-    # Metin indir (API yanıtları, C# GetText): 3 kez dener; olmazsa son hatayı fırlatır
-    function Inst-GetText([string]$url) {
-        $last = $null
-        for ($i = 0; $i -lt $InstTries; $i++) {
-            if ($i -gt 0) { [Threading.Thread]::Sleep(1000 * $i) }
-            $resp = $null
-            try {
-                $resp = (Inst-Request $url).GetResponse()
-                $sr = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
-                try { return $sr.ReadToEnd() } finally { $sr.Dispose() }
-            } catch {
-                $last = Inst-NetError $_.Exception
-                if (Inst-Permanent $last) { break }
-            } finally { if ($resp) { $resp.Close() } }
-        }
-        throw $last
-    }
-
-    # Pakette verilen göreli yol kök klasörün içinde kalıyorsa tam yolu, değilse $null (C# Inside).
-    # Eskiden yalnızca "kökle başlıyor mu" diye bakılırdı: '../Sunucu-kardes/x' kardeş klasöre yazabiliyordu.
-    # Sürücü ya da akış adı (':'), geçersiz karakter ya da tam yola çevrilemeyen yol da geçmez.
-    function Inst-Inside([string]$baseDir, [string]$rel, [string]$rootFull) {
-        if ([string]::IsNullOrEmpty($rel)) { return $null }
-        $r = $rel.Replace('/', '\')
-        if ($r.IndexOf(':') -ge 0 -or $r.IndexOfAny($InstBadChars) -ge 0) { return $null }
-        try { $p = [IO.Path]::GetFullPath($baseDir.TrimEnd('\') + '\' + $r.TrimStart('\')) } catch { return $null }
-        $root = $rootFull.TrimEnd('\') + '\'
-        if ($p.Length -gt $root.Length -and $p.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { return $p }
-        $null
-    }
-    # Split-Path -Leaf gibi ($null'da hata vermez)
-    function Inst-Leaf([string]$p) { if (-not $p) { return '' }; $i = $p.LastIndexOfAny([char[]]'/\'); if ($i -ge 0) { $p.Substring($i + 1) } else { $p } }
-    # JSON değerinin metni (C# Text): metin olduğu gibi, null $null, diğerleri metne çevrilir
-    function Inst-JsonText($v) {
-        if ($null -eq $v -or $v -is [string]) { return $v }
-        if ($v -is [bool]) { if ($v) { return 'true' }; return 'false' }
-        [string]$v
-    }
-
-    # Sunucuya inecek dosyalar (C# ServerFiles): env.server 'unsupported' değil, resourcepacks/shaderpacks değil.
-    # Her biri bir tablo (iş parçacıkları arasında güvenle okunur): Index, Path, Leaf, Sha1, Sha512, Size, Urls
-    function Inst-ServerFiles($index) {
-        $list = New-Object System.Collections.Generic.List[object]
-        if ($index -isnot [Management.Automation.PSCustomObject] -or $index.files -isnot [array]) { return , $list }
-        foreach ($f in $index.files) {
-            if ($f -isnot [Management.Automation.PSCustomObject]) { continue }
-            $server = $null
-            if ($f.env -is [Management.Automation.PSCustomObject]) { $server = Inst-JsonText $f.env.server }
-            if ($server -eq 'unsupported') { continue }
-            $path = Inst-JsonText $f.path
-            if ([string]$path -match '^(resourcepacks|shaderpacks)/') { continue }
-            $urls = New-Object System.Collections.Generic.List[string]
-            $dl = $f.downloads
-            $dlAll = if ($dl -is [array]) { $dl } elseif ($null -ne $dl) { , $dl } else { @() }
-            foreach ($u in $dlAll) { $t = Inst-JsonText $u; if (-not [string]::IsNullOrWhiteSpace($t)) { $urls.Add($t) } }
-            $sha1 = $null; $sha512 = $null
-            if ($f.hashes -is [Management.Automation.PSCustomObject]) {
-                $sha1 = Inst-JsonText $f.hashes.sha1; if (-not $sha1) { $sha1 = $null }
-                $sha512 = Inst-JsonText $f.hashes.sha512; if (-not $sha512) { $sha512 = $null }
-            }
-            $size = [long]0
-            if ($f.fileSize -is [int] -or $f.fileSize -is [long]) { $size = [long]$f.fileSize }
-            $list.Add(@{ Index = $list.Count; Path = $path; Leaf = (Inst-Leaf $path); Sha1 = $sha1; Sha512 = $sha512; Size = $size; Urls = $urls.ToArray() })
-        }
-        , $list
-    }
-
-    # Paralel işlerden birinde beklenmedik hata: ilki saklanır, kurulum onunla durur (C# Parallel.ForEachAsync gibi)
-    function Inst-Fail($ctx, $ex) {
-        [Threading.Monitor]::Enter($ctx.Gate)
-        try { if (-not $ctx.Error) { $ctx.Error = Inst-BaseError $ex } } finally { [Threading.Monitor]::Exit($ctx.Gate) }
-    }
-
-    # Tek bir dosya (C# DownloadAll'daki iş). Ekranda hâlâ inen en son dosyanın adı görünür; % ve n/toplam dosyalar
-    # bittikçe ilerler. Kök klasörün dışına çıkan yol indirilmez ama sayılır (eskiden de öyleydi).
-    function Inst-ModJob($f, $ctx) {
-        if ($ctx.Error) { return }   # başka bir dosyada beklenmedik hata: yenisine başlama
-        $sync = $ctx.Sync; $gate = $ctx.Gate
-        [Threading.Monitor]::Enter($gate)
-        try { [void]$ctx.Running.Add($f.Index); $ctx.Shown = $f.Index; $sync.Detail = $f.Leaf } finally { [Threading.Monitor]::Exit($gate) }
-        try {
-            $outp = Inst-Inside $ctx.Target $f.Path $ctx.Full
-            if ($outp) {
-                [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($outp))
-                if (-not (Inst-Verified $f $outp $ctx.MoveGate)) { $ctx.Failed[$f.Index] = $true }
-            }
-        } catch { Inst-Fail $ctx $_.Exception }
-        finally {
-            [Threading.Monitor]::Enter($gate)
-            try {
-                $ctx.Running.Remove($f.Index)
-                # Ekranda biten dosyanın adı kalmasın: hâlâ inen en son dosyayı göster
-                if ($ctx.Shown -eq $f.Index -and $ctx.Running.Count -gt 0) { $ctx.Shown = $ctx.Running[$ctx.Running.Count - 1]; $sync.Detail = $ctx.Leaves[$ctx.Shown] }
-                $ctx.Done = $ctx.Done + 1
-                $sync.Pct = [int]($ctx.Done / [Math]::Max(1, $ctx.Total) * 100)
-                $sync.Count = '' + $ctx.Done + '/' + $ctx.Total
-            } finally { [Threading.Monitor]::Exit($gate) }
-        }
-    }
-
-    # Dosyaları $InstAtOnce'ar $InstAtOnce'ar indirir (C# DownloadAll): her dosya kendi iş parçacığında (RunspacePool),
-    # havuz açılamazsa sırayla. İnemeyenlerin adlarını paketteki sırayla döner.
-    function Inst-AllMods($sync, $files, [string]$target, [string]$full, [string]$funcs) {
-        $total = $files.Count
-        $leaves = New-Object string[] $total
-        for ($i = 0; $i -lt $total; $i++) { $leaves[$i] = $files[$i].Leaf }
-        $ctx = [hashtable]::Synchronized(@{
-            Sync = $sync; Gate = (New-Object object); MoveGate = (New-Object object); Running = (New-Object System.Collections.ArrayList)
-            Failed = (New-Object bool[] $total); Leaves = $leaves; Total = $total; Done = 0; Shown = -1; Target = $target; Full = $full; Error = $null
-        })
-        if ($total -gt 0) { $sync.Count = '0/' + $total }
-        $pool = $null
-        if ($total -gt 1) { try { $pool = [runspacefactory]::CreateRunspacePool(1, $InstAtOnce); $pool.Open() } catch { $pool = $null } }
-        if ($pool) {
-            $jobs = New-Object System.Collections.Generic.List[object]
-            try {
-                foreach ($f in $files) {
-                    $ps = [powershell]::Create(); $ps.RunspacePool = $pool
-                    [void]$ps.AddScript($InstModWorker).AddArgument($f).AddArgument($ctx).AddArgument($funcs)
-                    $jobs.Add(@($ps, $ps.BeginInvoke()))
-                }
-                foreach ($j in $jobs) { try { [void]$j[0].EndInvoke($j[1]) } catch { Inst-Fail $ctx $_.Exception } }
-            } finally {
-                foreach ($j in $jobs) { try { $j[0].Dispose() } catch {} }
-                try { $pool.Close() } catch {}
-                try { $pool.Dispose() } catch {}
-            }
-        } else {
-            foreach ($f in $files) { Inst-ModJob $f $ctx }
-        }
-        if ($ctx.Error) { throw $ctx.Error }
-        if ($total -gt 0) { $sync.Detail = $leaves[$total - 1] }   # eskisi gibi son dosyanın adı kalır
-        for ($i = 0; $i -lt $total; $i++) { if ($ctx.Failed[$i]) { $leaves[$i] } }
-    }
-
-    # (Invoke-RestMethod .../v2/versions/installer | Where-Object { $_.stable } | Select-Object -First 1).version
-    # Windows PowerShell 5.1 JSON dizisini boru hattına tek nesne olarak verdiği için bu satır bütün sürümleri boşlukla
-    # birleştirip adrese koyuyordu ve sunucu 400 dönüyordu. Burada amaçlanan yapılır: ilk kararlı sürüm (yoksa ilki).
-    function Inst-FabricVersion {
-        $arr = ConvertFrom-Json (Inst-GetText 'https://meta.fabricmc.net/v2/versions/installer')
-        $first = $null
-        if ($arr -is [array]) {
-            foreach ($v in $arr) {
-                if ($v -isnot [Management.Automation.PSCustomObject]) { continue }
-                $ver = Inst-JsonText $v.version
-                if (-not $ver) { continue }
-                if ($null -eq $first) { $first = $ver }
-                if ($v.stable -is [bool] -and $v.stable) { return $ver }
-            }
-        }
-        if ($null -ne $first) { $first } else { '' }
-    }
-
-    # Komut satırı (C# ArgumentList gibi): boşluk ya da tırnak içeren argüman tırnaklanır, ters bölüler korunur
-    function Inst-Args([string[]]$argv) {
-        $out = New-Object System.Collections.Generic.List[string]
-        foreach ($a in $argv) {
-            if ($a.Length -gt 0 -and $a.IndexOfAny([char[]]" `t`n`v`"") -lt 0) { $out.Add($a); continue }
-            $sb = New-Object Text.StringBuilder
-            [void]$sb.Append('"'); $bs = 0
-            foreach ($ch in $a.ToCharArray()) {
-                if ($ch -eq [char]'\') { $bs++; continue }
-                if ($ch -eq [char]'"') { [void]$sb.Append([char]'\', 2 * $bs + 1).Append('"'); $bs = 0; continue }
-                if ($bs) { [void]$sb.Append([char]'\', $bs); $bs = 0 }
-                [void]$sb.Append($ch)
-            }
-            [void]$sb.Append([char]'\', 2 * $bs).Append('"')
-            $out.Add($sb.ToString())
-        }
-        $out -join ' '
-    }
-
-    # Programı ve başlattıklarını kapat (C#: Kill(entireProcessTree: true))
-    function Inst-StopTree($p) {
-        try {
-            $k = New-Object Diagnostics.ProcessStartInfo ([IO.Path]::Combine([Environment]::SystemDirectory, 'taskkill.exe'))
-            $k.Arguments = '/PID ' + $p.Id + ' /T /F'
-            $k.UseShellExecute = $false; $k.CreateNoWindow = $true; $k.RedirectStandardOutput = $true; $k.RedirectStandardError = $true
-            $kp = [Diagnostics.Process]::Start($k)
-            [void]$kp.StandardOutput.ReadToEnd(); [void]$kp.StandardError.ReadToEnd()
-            [void]$kp.WaitForExit(15000); $kp.Dispose()
-        } catch {}
-        try { if (-not $p.HasExited) { $p.Kill() } } catch {}
-    }
-
-    # Programı çalıştırır, çıktısını ve hatalarını geldikleri sırayla dosyaya yazar (her denemede baştan), çıkış kodunu
-    # döner (C# RunToLog). Latin1 baytı baytına geçirir: Java'nın yazdığı metin dosyaya aynen gider. $silenceMin dakika
-    # hiçbir şey yazmazsa takılmış sayılır ve kapatılır (eskiden sonsuza kadar beklenirdi). SyHost kapanırsa yetim
-    # kalmasın diye JobGuard'a eklenir.
-    function Inst-RunToLog([string]$exe, [string[]]$argv, [string]$dir, [string]$logPath, [double]$silenceMin = $InstSilenceMin) {
-        $latin1 = [Text.Encoding]::GetEncoding(28591)
-        $log = New-Object IO.StreamWriter($logPath, $false, $latin1)
-        $p = $null
-        try {
-            $psi = New-Object Diagnostics.ProcessStartInfo $exe
-            $psi.Arguments = Inst-Args $argv
-            $psi.WorkingDirectory = $dir
-            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-            $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-            $psi.StandardOutputEncoding = $latin1; $psi.StandardErrorEncoding = $latin1
-            $p = New-Object Diagnostics.Process
-            $p.StartInfo = $psi
-            try { [void]$p.Start() }
-            catch { $log.WriteLine('SyHost: could not start ' + $exe + ': ' + (Inst-BaseError $_.Exception).Message); return -1 }
-            try { [SyHost.JobGuard]::Add($p) } catch {}
-            $rd = @($p.StandardOutput, $p.StandardError)
-            $tk = @($rd[0].ReadLineAsync(), $rd[1].ReadLineAsync())
-            $quiet = [Diagnostics.Stopwatch]::StartNew(); $gone = $null
-            while ($tk[0] -or $tk[1]) {
-                [void][Threading.Tasks.Task]::WaitAny([Threading.Tasks.Task[]]@($tk | Where-Object { $_ }), 1000)
-                for ($i = 0; $i -lt 2; $i++) {
-                    while ($tk[$i] -and $tk[$i].IsCompleted) {
-                        $line = $null
-                        try { $line = $tk[$i].Result } catch {}
-                        if ($null -eq $line) { $tk[$i] = $null; break }
-                        $log.WriteLine($line); $quiet.Restart()
-                        $tk[$i] = $rd[$i].ReadLineAsync()
-                    }
-                }
-                if ($quiet.Elapsed.TotalMinutes -ge $silenceMin) {
-                    $log.WriteLine('SyHost: the installer wrote nothing for ' + [int][Math]::Floor($silenceMin) + ' minutes, stopping it.')
-                    Inst-StopTree $p
-                    break
-                }
-                # Program bitti ama çıktı boruları kapanmıyor (açık kalan bir alt süreç tutuyor): fazla bekleme
-                if ($p.HasExited) { if (-not $gone) { $gone = [Diagnostics.Stopwatch]::StartNew() } elseif ($gone.Elapsed.TotalSeconds -ge 5) { break } }
-            }
-            [void]$p.WaitForExit(60000)
-            $log.Flush()
-            try { $p.ExitCode } catch { -1 }
-        } finally {
-            try { $log.Dispose() } catch {}
-            if ($p) { try { $p.Dispose() } catch {} }
-        }
-    }
-
-    # for ($try = 0; $try -lt 3 -and -not $ok; $try++) { & $java -jar $inst <bayrak> $target *> kurulum.log; $ok = ($LASTEXITCODE -eq 0) }
-    function Inst-RunInstaller([string]$java, [string]$jar, [string]$flag, [string]$target) {
-        $log = [IO.Path]::Combine($target, 'kurulum.log')
-        for ($t = 0; $t -lt $InstTries; $t++) {
-            if ($t -gt 0) { [Threading.Thread]::Sleep(2000) }
-            $code = @(Inst-RunToLog $java @('-jar', $jar, $flag, $target) $target $log)[-1]
-            if ($code -eq 0) { return $true }
-        }
-        $false
-    }
-
-    # kurulum.log'a SyHost'un notu (ör. Java neden hazırlanamadı)
-    function Inst-Note([string]$target, [string]$text) {
-        try { [IO.File]::AppendAllText([IO.Path]::Combine($target, 'kurulum.log'), 'SyHost: ' + $text + [Environment]::NewLine, (New-Object Text.UTF8Encoding $false)) } catch {}
-    }
-    function Inst-Chain($ex) {
-        $parts = New-Object System.Collections.Generic.List[string]
-        for ($e = $ex; $null -ne $e; $e = $e.InnerException) { $parts.Add([string]$e.Message) }
-        if ($parts.Count) { $parts -join ' <- ' } else { 'not found after download' }
-    }
-}
-
-# Sihirbazın arka plan kurulumu (C# Core/Installer.cs Run): aynı 7 adım, aynı ekran metinleri, aynı dosyalar.
-# İlerlemeyi $sync'e yazar; ne olursa olsun en sonda $sync.Done = $true olur (ekran "kuruluyor"da takılı kalmaz).
-$InstallScript = {
-    param($sync, $info, $target, $worldName, $voiceHost, $maxPlayers, $motd, $dataDir, $javaFuncs, $installFuncs, $tt)
-    $zip = $null; $cur = 0
-    try {
-        $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'
-        # Ekran metinleri ana iş parçacığında çevrildi ($tt); L burada aynı anahtarlarla o tablodan okur
-        function L([string]$Key) { $t = $tt[$Key]; if ($null -eq $t) { $t = $Key }; if ($args.Count) { return ($t -f $args) }; $t }
-        function Step([int]$i, [int]$st) { if ($i -ge 0 -and $i -lt $sync.Steps.Count) { $sync.Steps[$i].S = $st }; if ($st -eq 1) { Set-Variable -Name cur -Value $i -Scope 1 } }
-        function Det([string]$t) { $sync.Detail = $t }
-        . ([scriptblock]::Create($installFuncs))
-        # Java yardımcıları (Get-JavaMajor, Find-Java, Install-Java) SyHost'un Data klasörünü $DataDir'den okur
-        $DataDir = $dataDir; $Data = $dataDir
-        . ([scriptblock]::Create($javaFuncs))
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        # Paralel indirmeler aynı sunucuya gider: .NET Framework'ün varsayılanı sunucu başına 2 bağlantı
-        if ([Net.ServicePointManager]::DefaultConnectionLimit -lt 2 * $InstAtOnce) { [Net.ServicePointManager]::DefaultConnectionLimit = 2 * $InstAtOnce }
-
-        $zip = [IO.Compression.ZipFile]::OpenRead($info.Path)
-        $ie = $zip.GetEntry('modrinth.index.json')
-        if (-not $ie) { throw (L 'Bu dosya bir Modrinth paketi (.mrpack) değil.') }
-        $sr = New-Object IO.StreamReader($ie.Open())
-        try { $index = $sr.ReadToEnd() | ConvertFrom-Json } finally { $sr.Dispose() }
-        $files = Inst-ServerFiles $index
-        $mc = $info.Mc; $lv = $info.LoaderVer
-        $full = [IO.Path]::GetFullPath($target)
-
-        # 0 klasör
-        $cur = 0; Step 0 1
-        [void][IO.Directory]::CreateDirectory($target)
-        [void][IO.Directory]::CreateDirectory([IO.Path]::Combine($target, 'mods'))
-        Step 0 2
-
-        # 1 Java
-        $cur = 1; Step 1 1
-        $jm = Get-JavaMajor $mc
-        $java = Find-Java $jm
-        if (-not $java) {
-            # Eskiden winget ile bilgisayara kurulurdu; artık SyHost'un kendi klasörüne iner (Install-Java)
-            $why = $null; $got = @()
-            Det (L 'Java {0} indiriliyor...' $jm)
-            try {
-                $onDetail = { param($t) $sync.Detail = [string]$t }.GetNewClosure()
-                $more = @{}
-                $ij = Get-Command Install-Java -CommandType Function -ErrorAction SilentlyContinue
-                if ($ij -and $ij.Parameters.ContainsKey('HeadText')) { $more.HeadText = (L 'Java {0} indiriliyor...' $jm) }
-                $got = @(Install-Java $jm $onDetail @more)
-            } catch { $why = Inst-BaseError $_.Exception }
-            $java = Find-Java $jm
-            # Find-Java bulamadı ama Install-Java denetlenmiş java.exe'nin yolunu verdi
-            if (-not $java -and $got.Count -gt 0 -and $got[-1] -is [string] -and [IO.File]::Exists($got[-1])) { $java = $got[-1] }
-            if (-not $java) {
-                Inst-Note $target ('Java ' + $jm + ' could not be prepared: ' + (Inst-Chain $why))
-                throw (L 'Java {0} kurulamadı.' $jm)
-            }
-        }
-        Det (L 'Java {0} hazır' $jm)
-        Step 1 2
-
-        # 2 Mod yükleyici
-        $cur = 2; Step 2 1
-        $launch = $null
-        switch ($info.Loader) {
-            'neoforge' {
-                Det (L '{0} {1} indiriliyor' 'NeoForge' $lv)
-                $inst = [IO.Path]::Combine($target, 'neoforge-installer.jar')
-                Inst-SaveUrl "https://maven.neoforged.net/releases/net/neoforged/neoforge/$lv/neoforge-$lv-installer.jar" $inst
-                Det (L '{0} {1} kuruluyor (biraz sürebilir)' 'NeoForge' $lv)
-                if (-not (Inst-RunInstaller $java $inst '--install-server' $target)) { throw (L '{0} kurulamadı (kurulum.log dosyasına bak).' 'NeoForge') }
-                Inst-Delete $inst; Inst-Delete ([IO.Path]::Combine($target, 'neoforge-installer.jar.log'))
-                $launch = "@libraries/net/neoforged/neoforge/$lv/win_args.txt nogui"
-            }
-            'forge' {
-                $fv = "$mc-$lv"
-                Det (L '{0} {1} indiriliyor' 'Forge' $fv)
-                $inst = [IO.Path]::Combine($target, 'forge-installer.jar')
-                Inst-SaveUrl "https://maven.minecraftforge.net/net/minecraftforge/forge/$fv/forge-$fv-installer.jar" $inst
-                Det (L '{0} {1} kuruluyor (biraz sürebilir)' 'Forge' $fv)
-                if (-not (Inst-RunInstaller $java $inst '--installServer' $target)) { throw (L '{0} kurulamadı (kurulum.log dosyasına bak).' 'Forge') }
-                Inst-Delete $inst; Inst-Delete ([IO.Path]::Combine($target, 'forge-installer.jar.log'))
-                $winArgs = [IO.Path]::Combine($target, "libraries\net\minecraftforge\forge\$fv\win_args.txt")
-                if ([IO.File]::Exists($winArgs) -or [IO.Directory]::Exists($winArgs)) { $launch = "@libraries/net/minecraftforge/forge/$fv/win_args.txt nogui" }
-                else {
-                    # Eski Forge (1.16 ve öncesi): forge-*.jar ile başlar
-                    $jar = Get-ChildItem -LiteralPath $target -Filter 'forge-*.jar' | Where-Object { $_.Name -notmatch 'installer' } | Select-Object -First 1
-                    if (-not $jar) { throw (L 'Forge başlatma dosyası bulunamadı.') }
-                    $launch = "-jar $($jar.Name) nogui"
-                }
-            }
-            'fabric' {
-                Det (L '{0} {1} indiriliyor' 'Fabric' $lv)
-                $instVer = Inst-FabricVersion
-                Inst-SaveUrl "https://meta.fabricmc.net/v2/versions/loader/$mc/$lv/$instVer/server/jar" ([IO.Path]::Combine($target, 'fabric-server-launch.jar'))
-                $launch = '-jar fabric-server-launch.jar nogui'
-            }
-            default { throw (L '{0} henüz desteklenmiyor (NeoForge, Forge ve Fabric destekleniyor).' $info.Loader) }
-        }
-        Step 2 2
-
-        # 3 Modlar (aynı anda 6 dosya; doğrulanmayan dosya yerine konmaz)
-        $cur = 3; Step 3 1
-        $sync.Failed = @(Inst-AllMods $sync $files $target $full $installFuncs)
-        $sync.Pct = 100
-        Step 3 2
-
-        # 4 Ayar dosyaları: önce overrides, sonra server-overrides (Modrinth kuralı: sunucuya özel olan kazanır;
-        # eskiden zip'teki sıraya göre hangisi sonra geldiyse o kalıyordu)
-        $cur = 4; Step 4 1
-        foreach ($pre in 'overrides/', 'server-overrides/') {
-            foreach ($en in $zip.Entries) {
-                $fn = $en.FullName
-                if (-not $fn.StartsWith($pre, [StringComparison]::Ordinal) -or -not $en.Name) { continue }
-                $rel = $fn.Substring($pre.Length)
-                if ($rel -match '^(resourcepacks|shaderpacks|saves)/') { continue }
-                $dst = Inst-Inside $target $rel $full
-                if (-not $dst) { continue }
-                [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($dst))
-                [IO.Compression.ZipFileExtensions]::ExtractToFile($en, $dst, $true)
-            }
-        }
-        Step 4 2
-
-        # 5 Dünya
-        $cur = 5; Step 5 1
-        if ($worldName) {
-            Det (L 'Paketteki dünya kopyalanıyor')
-            $pre = "overrides/saves/$worldName/"
-            $worldDir = [IO.Path]::Combine($target, 'world')
-            foreach ($en in $zip.Entries) {
-                if (-not $en.FullName.StartsWith($pre, [StringComparison]::Ordinal) -or -not $en.Name) { continue }
-                $rel = $en.FullName.Substring($pre.Length)
-                if ($rel -eq 'session.lock') { continue }
-                $dst = Inst-Inside $worldDir $rel $full
-                if (-not $dst) { continue }
-                [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($dst))
-                [IO.Compression.ZipFileExtensions]::ExtractToFile($en, $dst, $true)
-            }
-        } else { Det (L 'İlk açılışta yeni bir dünya oluşturulacak') }
-        Step 5 2
-
-        # 6 Son ayarlar
-        $cur = 6; Step 6 1
-        $props = [ordered]@{ 'motd' = $motd; 'level-name' = 'world'; 'max-players' = "$maxPlayers"; 'online-mode' = 'true'; 'difficulty' = 'normal'; 'spawn-protection' = '0'; 'view-distance' = '10'; 'simulation-distance' = '8'; 'allow-flight' = 'true'; 'server-port' = '25565'; 'enable-command-block' = 'true' }
-        $pf = [IO.Path]::Combine($target, 'server.properties')
-        $lines = New-Object System.Collections.Generic.List[string]
-        if ([IO.File]::Exists($pf) -or [IO.Directory]::Exists($pf)) { foreach ($ln in [IO.File]::ReadAllLines($pf)) { $lines.Add($ln) } }
-        foreach ($k in $props.Keys) {
-            $found = $false
-            for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match "^$([regex]::Escape($k))=") { $lines[$i] = "$k=$($props[$k])"; $found = $true } }
-            if (-not $found) { $lines.Add("$k=$($props[$k])") }
-        }
-        [IO.File]::WriteAllLines($pf, $lines.ToArray(), (New-Object Text.UTF8Encoding $false))
-        [IO.File]::WriteAllText([IO.Path]::Combine($target, 'eula.txt'), "eula=true`r`n", [Text.Encoding]::ASCII)
-        $modsDir = [IO.Path]::Combine($target, 'mods')
-        if ($voiceHost -and [IO.Directory]::Exists($modsDir) -and @(Get-ChildItem -LiteralPath $modsDir -Filter '*voicechat*' -ErrorAction SilentlyContinue).Count) {
-            $vd = [IO.Path]::Combine($target, 'config\voicechat'); [void][IO.Directory]::CreateDirectory($vd)
-            $vp = [IO.Path]::Combine($vd, 'voicechat-server.properties')
-            if (-not ([IO.File]::Exists($vp) -or [IO.Directory]::Exists($vp))) { [IO.File]::WriteAllLines($vp, [string[]]@('port=24454', 'bind_address=', "voice_host=$voiceHost"), (New-Object Text.UTF8Encoding $false)) }
-            else { $vt = [IO.File]::ReadAllText($vp); if ($vt -match '(?m)^voice_host=') { $vt = [regex]::Replace($vt, '(?m)^voice_host=.*$', "voice_host=$voiceHost") } else { $vt = $vt.TrimEnd() + "`nvoice_host=$voiceHost`n" }; [IO.File]::WriteAllText($vp, $vt, (New-Object Text.UTF8Encoding $false)) }
-        }
-        Step 6 2
-        $zip.Dispose(); $zip = $null
-        $sync.Result = @{ mc = $mc; loader = $info.Loader; loaderSurum = $lv; java = $jm; baslat = $launch }
-    } catch {
-        # Ekranda olduğu gibi görünür: .NET hatasının asıl metni ('Exception calling ...' sarmalı olmadan)
-        $ex = $_.Exception
-        while ($ex -is [Management.Automation.ExtendedTypeSystemException] -and $ex.InnerException) { $ex = $ex.InnerException }
-        $sync.Error = $(if ($ex.Message) { $ex.Message } else { $ex.GetType().Name })
-        try { $sync.Steps[$cur].S = 3 } catch {}
-    } finally {
-        try { if ($zip) { $zip.Dispose() } } catch {}
-        $sync.Done = $true   # en sonda: ekran bunu görünce sonucu okur (Check-Install)
-    }
-}
-# Kurulumun ekran metinleri: arka planda dil tablosu yok. Begin-Install $InstallScript'teki L anahtarlarını çevirip verir.
-$InstallTextKeys = @([regex]::Matches($InstallScript.ToString(), "\bL '((?:[^']|'')*)'") | ForEach-Object { $_.Groups[1].Value.Replace("''", "'") } | Select-Object -Unique)
+# Sihirbazın arka plan kurulumu: InstallJob.ps1 (C# Core/Installer.cs Run)
+# Kurulumun ekran metinleri: arka planda dil tablosu yok. Begin-Install InstallJob.ps1'deki L anahtarlarını çevirip verir.
+$InstallTextKeys = @([regex]::Matches([IO.File]::ReadAllText((Join-Path $SrcDir 'InstallJob.ps1'), [Text.Encoding]::UTF8), "\bL '((?:[^']|'')*)'") | ForEach-Object { $_.Groups[1].Value.Replace("''", "'") } | Select-Object -Unique)
 
 function Start-Wizard {
     $path = [SyHost.Native]::PickFile((L 'Kurulacak modpack dosyasını seç (.mrpack)'), (L 'Modrinth paketi (*.mrpack)|*.mrpack'))
@@ -1682,7 +889,7 @@ function Wizard-WorldOptions {
     $opts += , @((L 'Yepyeni bir dünya oluştur'), '')
     , $opts
 }
-# Kurulum adımlarının ekranda görünen adları (sırası $InstallScript'teki adımlarla aynı)
+# Kurulum adımlarının ekranda görünen adları (sırası InstallJob.ps1'deki adımlarla aynı)
 function Get-InstallStepNames($info) {
     @((L 'Klasör hazırlanıyor'), (L 'Java {0} kontrol ediliyor' $info.Java), (L '{0} {1} kuruluyor' $LoaderName[$info.Loader] $info.LoaderVer), (L 'Modlar indiriliyor'), (L 'Ayar dosyaları kopyalanıyor'), (L 'Dünya hazırlanıyor'), (L 'Son ayarlar yapılıyor'))
 }
@@ -1699,7 +906,7 @@ function Begin-Install {
     # Paketin kurulumda gereken bilgileri (ekranın çizdiği nesne iki iş parçacığından birden okunmasın)
     $inf = @{ Path = [string]$w.Info.Path; Mc = [string]$w.Info.Mc; Loader = [string]$w.Info.Loader; LoaderVer = [string]$w.Info.LoaderVer }
     $ps = [powershell]::Create()
-    [void]$ps.AddScript($InstallScript.ToString()).AddArgument($sync).AddArgument($inf).AddArgument($w.Target).AddArgument($worldName).AddArgument($(if ($Cfg.playitKullan) { $Cfg.sesAdresi } else { '' })).AddArgument($MaxPlayers).AddArgument("$($w.Name) | SyHost").AddArgument($Data).AddArgument($JavaFuncs.ToString()).AddArgument($InstallFuncs.ToString()).AddArgument($tt)
+    [void]$ps.AddCommand((Join-Path $SrcDir 'InstallJob.ps1')).AddParameter('sync', $sync).AddParameter('info', $inf).AddParameter('target', $w.Target).AddParameter('worldName', $worldName).AddParameter('voiceHost', $(if ($Cfg.playitKullan) { $Cfg.sesAdresi } else { '' })).AddParameter('maxPlayers', $MaxPlayers).AddParameter('motd', "$($w.Name) | SyHost").AddParameter('dataDir', $Data).AddParameter('tt', $tt)
     $w.Sync = $sync; $w.PS = $ps; $w.Handle = $ps.BeginInvoke(); $w.StartedAt = Get-Date
     $w.Step = 'kurulum'
 }
@@ -2711,8 +1918,11 @@ function Start-SyHost([string]$exe, [switch]$NoSplash) {
         if ($NoSplash) { Start-Process -FilePath $exe -ArgumentList '--no-splash' } else { Start-Process -FilePath $exe }
         return
     }
-    $a = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$SrcDir\SyHost.ps1`" -Root `"$AppRoot`"" + $(if ($NoSplash) { ' -NoSplash' } else { '' })
-    Start-Process "$env:SystemRoot\System32\conhost.exe" -ArgumentList $a
+    # Başlatıcı yok (geliştirirken repodan çalışıyor): conhost içinde PowerShell'le yeniden aç. Betikler bu bilgisayarda
+    # yazıldığı için RemoteSigned yeter. Tam yollar: yalın adlar çalışma klasöründe (SyHost klasörü) de aranırdı.
+    $sys = [Environment]::SystemDirectory
+    $a = "`"$([IO.Path]::Combine($sys, 'WindowsPowerShell\v1.0\powershell.exe'))`" -NoProfile -ExecutionPolicy RemoteSigned -File `"$SrcDir\SyHost.ps1`" -Root `"$AppRoot`"" + $(if ($NoSplash) { ' -NoSplash' } else { '' })
+    Start-Process ([IO.Path]::Combine($sys, 'conhost.exe')) -ArgumentList $a
 }
 
 # Yeni ekranlar (her biri kendi dosyasında; C# App.FirstRun.cs + App.PlayitSetup.cs, App.Settings.cs, App.Uninstall.cs)
@@ -3105,7 +2315,7 @@ try {
                 $script:LastSlow = $now
                 [SyHost.Native]::MakeOpaque()
                 if ($Pl) { $pll = $null; while ($Pl.Out.TryDequeue([ref]$pll)) {} }
-                if ($Cfg.playitKullan -and -not (PlayitOn)) { Start-Playit }
+                if ($Cfg.playitKullan -and -not (PlayitOn) -and (PlayitMayRestart $now)) { Start-Playit }
                 $tip = if ($Screen -eq 'server') { (L 'SyHost · {0} · {1} · {2}/{3}' $Cur.ad $StatusLook[$Status][1] $Players.Count $MaxPlayers) } else { (L 'SyHost · ana menü') }
                 [SyHost.Tray]::SetText($tip)
             }
@@ -3142,9 +2352,13 @@ finally {
     if ($S -and $S.Running) { try { $S.P.Kill() } catch {} }
     Stop-Playit
     [SyHost.Tray]::Close()
+    # Kaldır: klasörün içi, kilit hâlâ bizdeyken silinir (bu sırada ikinci bir SyHost açılıp yazmasın). Başlatıcı exe
+    # ve SyHost.Core.dll'i bu süreçte yüklü App klasörü kalır. (C#: Program.cs)
+    if ($DeleteRootAfterExit) { Remove-RootAfterExit $AppRoot @($ExePath, $AppDir) }
     try { $mutex.ReleaseMutex(); $mutex.Dispose() } catch {}
-    # Kurulumdan/güncellemeden sonra yeni yerden aç; dil değişince yeniden aç; kaldırdıysa klasörü sil
+    # Kurulumdan/güncellemeden sonra yeni yerden aç; dil değişince yeniden aç
     if ($LaunchAfterExit) { Start-SyHost $LaunchAfterExit -NoSplash } elseif ($RestartApp) { Start-SyHost $ExePath -NoSplash }
-    if ($DeleteRootAfterExit) { Remove-RootAfterExit $AppRoot }
+    # Kaldır: boş kalan klasörü Explorer'da göster, kullanıcı oradan siler
+    if ($DeleteRootAfterExit -and -not (Test-DryRun)) { Show-UninstallFolder $AppRoot }
 }
 [Environment]::Exit(0)

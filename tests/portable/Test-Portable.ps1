@@ -1,6 +1,6 @@
 ﻿# =====================================================================
 #  SyHost - Terminal sürümünün taşınabilir arka ucu: işlev testleri
-#  legacy\src\Portable.ps1, legacy\src\SyHost.Setup.cs ve SyHost.ps1'deki $JavaFuncs ile açılıştaki yazma denetimi.
+#  legacy\src\Portable.ps1, legacy\src\SyHost.Setup.cs, legacy\src\Java.ps1 ve SyHost.ps1'deki açılış yazma denetimi.
 #
 #    tests\portable\Test-Portable.ps1                         hızlı testler (hepsi WorkRoot içinde)
 #    ... -CsExe dist\SyHost.exe                               C# sürümünün --selftest / --frame çıktısıyla karşılaştır
@@ -63,6 +63,7 @@ Add-Type -Path @(Get-ChildItem -LiteralPath $SrcDir -Filter 'SyHost.*.cs' | Sort
 Add-Type -Path $CoreDll
 Add-Type -AssemblyName Microsoft.VisualBasic
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+[SyHost.Net]::EnableTls12()   # SyHost.ps1 gibi: süreç başında bir kez (arka plan işleri de bunu kullanır)
 
 # SyHost.ps1'in değişkenleri (Use-Root her test kökü için yeniden kurar)
 $AppDir = Join-Path $Repo 'legacy'
@@ -93,20 +94,23 @@ $PlayitLegacyBin = Join-Path $WorkRoot 'programfiles\playit_gg\bin'
 $LangCode = 'tr'
 . (Join-Path $SrcDir 'Portable.ps1')
 
-# SyHost.ps1'den gerekenler: ayar/sunucu işlevleri, $JavaFuncs ve açılıştaki yazma denetimi (betiği çalıştırmadan, AST ile)
+# SyHost.ps1'den gerekenler: ayar/sunucu işlevleri ve açılıştaki yazma denetimi (betiği çalıştırmadan, AST ile).
+# Java yardımcıları Java.ps1'de: SyHost ve arka plan işleri gibi diskten yüklenir.
 $MainAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $SrcDir 'SyHost.ps1'), [ref]$null, [ref]$null)
 $CoreFuncs = 'Write-TextFile', 'Read-DefaultSettings', 'Resolve-RootDir', 'ConvertTo-StoredPath', 'ConvertFrom-StoredPath', 'Load-Config', 'Save-Config', 'Load-Servers', 'Save-Servers', 'Home-Msg'
 $WriteCheckText = $null
 foreach ($st in $MainAst.EndBlock.Statements) {
     if ($st -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $CoreFuncs -contains $st.Name) { . ([scriptblock]::Create($st.Extent.Text)) }
-    elseif ($st -is [System.Management.Automation.Language.AssignmentStatementAst] -and @('$CfgDefaults', '$PackKeys', '$JavaFuncs') -contains $st.Left.Extent.Text) { . ([scriptblock]::Create($st.Extent.Text)) }
+    elseif ($st -is [System.Management.Automation.Language.AssignmentStatementAst] -and @('$CfgDefaults', '$PackKeys') -contains $st.Left.Extent.Text) { . ([scriptblock]::Create($st.Extent.Text)) }
     elseif ($st -is [System.Management.Automation.Language.IfStatementAst] -and $st.Extent.Text -like '*Test-CanWrite $Data*') { $WriteCheckText = $st.Extent.Text }
 }
-. $JavaFuncs
-Check ($null -ne (Get-Command Install-Java -ErrorAction SilentlyContinue) -and $null -ne (Get-Command Load-Config -ErrorAction SilentlyContinue)) 'SyHost.ps1: $JavaFuncs ve ayar işlevleri yüklendi'
+. (Join-Path $SrcDir 'Java.ps1')
+Check ($null -ne (Get-Command Install-Java -ErrorAction SilentlyContinue) -and $null -ne (Get-Command Load-Config -ErrorAction SilentlyContinue)) 'Java.ps1 ve SyHost.ps1''in ayar işlevleri yüklendi'
 Check ($null -ne $WriteCheckText) 'SyHost.ps1: açılıştaki yazma denetimi bulundu'
 Check ($null -eq (Get-Command Remove-RootAfterExit -ErrorAction SilentlyContinue)) 'Portable.ps1: Remove-RootAfterExit yok (Uninstall.ps1 sağlar)'
-Check ($null -eq (Get-Command Get-JavaWingetId -ErrorAction SilentlyContinue)) '$JavaFuncs: winget kalmadı'
+Check ($null -eq (Get-Command Get-JavaWingetId -ErrorAction SilentlyContinue)) 'Java.ps1: winget kalmadı'
+$javaText = [IO.File]::ReadAllText((Join-Path $SrcDir 'Java.ps1'), [Text.Encoding]::UTF8)
+Check ($javaText -notmatch 'SecurityProtocol') 'Java.ps1: TLS ayarı betikte değil (süreç başında SyHost.Core.dll açar)'
 
 # Test için küçük exe'ler: uzun süre çalışan (kilitli exe) ve ürün adı "playit-cli" olan
 $Sleeper = Join-Path $Bin 'Sleeper.exe'
@@ -152,7 +156,8 @@ Check ($locs.Count -eq 2 -and $locs[0] -eq (Join-Path $env:SYHOST_SHORTCUT_DIR '
 $r0 = Join-Path $WorkRoot 'root'
 Check (Test-Inside $r0 $r0) 'Test-Inside: klasörün kendisi içinde sayılır'
 Check (Test-Inside "$r0\Servers\A" "$r0\") 'Test-Inside: alt klasör (kökün sonunda \ olsa da)'
-Check (Test-Inside "$($r0.ToUpper())\X" $r0) 'Test-Inside: büyük-küçük harf farkı önemsiz'
+# ToUpperInvariant: Türkçe bölge ayarında ToUpper 'i'yi 'İ' yapar ve Windows için başka bir yol olur
+Check (Test-Inside "$($r0.ToUpperInvariant())\X" $r0) 'Test-Inside: büyük-küçük harf farkı önemsiz'
 Check (-not (Test-Inside "$r0-2\X" $r0)) 'Test-Inside: aynı adla başlayan komşu klasör içinde değil'
 Check (-not (Test-Inside '' $r0)) 'Test-Inside: boş yol içinde değil'
 Check (-not (Test-Inside 'C:\a|b' $r0)) 'Test-Inside: geçersiz yol içinde değil'
@@ -225,7 +230,7 @@ try {
     $p = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$wcScript`"" -WindowStyle Hidden -PassThru -Wait
     $alert = if (Test-Path $wcOut) { [IO.File]::ReadAllText($wcOut, [Text.Encoding]::UTF8) } else { '' }
     $LangCode = Get-UiLanguage
-    $expect = L "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost.exe'yi yazılabilir bir klasöre taşı (ör. {1}) ve oradan aç." $wcRoot (Get-DefaultRoot)
+    $expect = L "SyHost bu klasöre yazamıyor:`n{0}`n`nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç." $wcRoot (Get-DefaultRoot)
     $LangCode = 'tr'
     Check ($p.ExitCode -eq 1 -and -not (Test-Path "$wcOut.reached")) "yazma denetimi: çıkış kodu 1, betik durdu (kod $($p.ExitCode))"
     Check ($alert -ceq $expect) "yazma denetimi: uyarı Windows dilinde ve iki yer tutucu dolu: $($alert -replace "`n", ' | ')"
@@ -259,7 +264,7 @@ Install-SyHostTo $inst $src 'ja'
 $ic = [IO.File]::ReadAllText("$inst\Data\ayarlar.json", [Text.Encoding]::UTF8) | ConvertFrom-Json
 Check ((Test-Path "$inst\SyHost.exe") -and (Test-Path "$inst\Servers") -and (Test-Path "$inst\Data")) 'Install-SyHostTo: exe, Data ve Servers'
 Check ([IO.File]::ReadAllBytes("$inst\SyHost.exe").Length -eq 200 -and -not (Test-Path "$inst\SyHost.exe.yeni")) 'Install-SyHostTo: exe kopyalandı, geçici dosya kalmadı'
-Check (((Get-Item -LiteralPath "$inst\Data" -Force).Attributes -band 'Hidden') -ne 0) 'Install-SyHostTo: Data gizli'
+Check (((Get-Item -LiteralPath "$inst\Data" -Force).Attributes -band 'Hidden') -eq 0) 'Install-SyHostTo: Data görünür (gizli değil)'
 Check ($ic.dil -ceq 'ja' -and $ic.kurulumTamam -eq $false -and $ic.paketler.normal.ramMax -eq 10) 'Install-SyHostTo: ilk ayarlar (dil, kurulumTamam=false, varsayılan paketler)'
 $cfgBytes = [IO.File]::ReadAllBytes("$inst\Data\ayarlar.json")
 Check (-not ($cfgBytes[0] -eq 0xEF -and $cfgBytes[1] -eq 0xBB)) 'Install-SyHostTo: ayarlar.json UTF-8 BOM''suz'
@@ -396,7 +401,7 @@ foreach ($d in $expect.Keys) {
     Check (($ia -band 'Hidden') -and ($ia -band 'System')) "desktop.ini gizli + sistem: $($d.Substring($WorkRoot.Length))"
     Check (((Get-Item -LiteralPath $d -Force).Attributes -band 'ReadOnly') -ne 0) "klasör salt okunur (Explorer desktop.ini'yi okusun): $($d.Substring($WorkRoot.Length))"
 }
-Check (((Get-Item -LiteralPath "$flRoot\Data" -Force).Attributes -band 'Hidden') -ne 0) 'Data gizli'
+Check (((Get-Item -LiteralPath "$flRoot\Data" -Force).Attributes -band 'Hidden') -eq 0) 'Data görünür (gizli değil)'
 foreach ($n in 'folder-syhost.ico', 'folder-servers.ico', 'folder-server.ico', 'folder-backups.ico') {
     Check ((Hex ([IO.File]::ReadAllBytes("$flRoot\Data\icons\$n"))) -eq (Hex ([IO.File]::ReadAllBytes("$IconSrc\$n")))) "Data\icons\$n kaynakla aynı"
 }
@@ -460,6 +465,8 @@ $scRoot = Join-Path $WorkRoot 'sc'
 $exeA = Join-Path $scRoot 'A\SyHost.exe'; $exeB = Join-Path $scRoot 'B\SyHost.exe'
 New-Item -ItemType Directory -Force (Split-Path $exeA), (Split-Path $exeB), (Join-Path $scRoot 'A\Data') | Out-Null
 [IO.File]::WriteAllText($exeA, 'x'); [IO.File]::WriteAllText($exeB, 'x')
+# A kurulu bir SyHost: yalnızca bir Data klasörü yetmez, ayar dosyası da olmalı (Test-Installed, C#: Portable.IsInstalled)
+[IO.File]::WriteAllText((Join-Path $scRoot 'A\Data\ayarlar.json'), '{}')
 $desk = $locs[0]; $start = $locs[1]
 $conhost = Join-Path ([Environment]::SystemDirectory) 'conhost.exe'
 # C# sürümünün yazdığı biçim (Shortcuts.Write): conhost.exe "<exe>" --hosted, çalışma klasörü exe'nin klasörü, simge exe
@@ -474,7 +481,7 @@ Check ($null -ne $i -and $i.Target -eq $exeA -and $i.Args -eq '' -and $i.WorkDir
 Check ((Test-TerminalLink $i $exeA)) 'Test-TerminalLink: Terminal biçimi tanınır'
 Check ((Get-LinkState $desk $exeA) -ceq 'Ours') 'Terminal biçimi: A için Ours'
 Check ((Get-LinkState $desk $exeB) -ceq 'OtherLive') 'Terminal biçimi: B için OtherLive (A duruyor)'
-Check ((Get-LinkState $desk "$($exeA.ToUpper())") -ceq 'Ours') 'durum: yol büyük-küçük harf farkıyla da Ours'
+Check ((Get-LinkState $desk "$($exeA.ToUpperInvariant())") -ceq 'Ours') 'durum: yol büyük-küçük harf farkıyla da Ours'
 # C# biçimi: conhost.exe "<exe>" --hosted
 Write-CsLink $start $exeA 'SyHost test'
 $ci = Read-Shortcut $start
@@ -483,7 +490,7 @@ Check ((Get-LinkSyHostPath $ci) -eq $exeA -and -not (Test-TerminalLink $ci $exeA
 Check ((Get-LinkState $start $exeA) -ceq 'Ours' -and (Get-LinkState $start $exeB) -ceq 'OtherLive') 'C# biçimi de A için Ours, B için OtherLive'
 Check ((Find-OtherInstall $exeB) -eq (Split-Path $exeA)) 'Find-OtherInstall: B açılınca A''nın klasörü (Data var)'
 Check ($null -eq (Find-OtherInstall $exeA)) 'Find-OtherInstall: kendisi başka kurulum sayılmaz'
-Remove-Item (Join-Path $scRoot 'A\Data')
+Remove-Item -LiteralPath (Join-Path $scRoot 'A\Data') -Recurse -Force
 Check ($null -eq (Find-OtherInstall $exeB)) 'Find-OtherInstall: Data yoksa kurulum sayılmaz'
 New-Item -ItemType Directory -Force (Join-Path $scRoot 'A\Data') | Out-Null
 # Taşınan klasör: A silinince iki kısayol da B için Dead, onarılınca Terminal biçiminde Ours
@@ -624,10 +631,12 @@ Write-Shortcut $desk $gone 'eski'
 $live = Join-Path $WorkRoot 'baska\SyHost.exe'; New-Item -ItemType Directory -Force (Split-Path $live) | Out-Null; [IO.File]::WriteAllText($live, 'x')
 Write-Shortcut $start $live 'başka'
 $LangCode = 'tr'
+$PendingHomeMsg = $null
 Invoke-PortableStartup
 $di = Read-Shortcut $desk
 Check ((Test-TerminalLink $di $ExePath) -and (Get-LinkState $start $ExePath) -ceq 'OtherLive') 'taşınan klasör: ölü kısayol buraya çevrildi, başka SyHost''unkine dokunulmadı'
-Check ($HomeMsg -ceq (L 'Kısayollar yeni yere güncellendi.') -and $HomeMsgUntil -gt (Get-Date)) "ana menü notu: $HomeMsg"
+# Not, ana menüye girilince gösterilir (Show-PendingHomeMsg; C#: PendingHomeMsg)
+Check ($PendingHomeMsg -ceq 'Kısayollar yeni yere güncellendi.') "ana menü notu bekliyor: $PendingHomeMsg"
 Check ($di.WorkDir -eq $s9) 'çevrilen kısayolun çalışma klasörü SyHost klasörü'
 # 10) C# biçimindeki kısayolumuz Terminal biçimine çevrilir (simge ve açıklama dahil)
 Write-CsLink $desk $ExePath 'C#'
@@ -761,18 +770,18 @@ if ($Java) {
     Check ($exe2 -eq $exe -and (Test-Path $exe2) -and @(Get-Leftovers (Join-Path $jd 'tools') 17).Count -eq 0 -and @(Get-ChildItem (Join-Path $jd 'tools\java-17') -Directory).Count -eq 1) 'ikinci indirme eskisinin yerine geçti, artık yok'
     # Arka plan işinde (runspace, L yok): FirstRun ve kurulum böyle kullanır
     $rs = [powershell]::Create()
-    [void]$rs.AddScript({ param($funcs, $dataDir) $DataDir = $dataDir; . ([scriptblock]::Create($funcs)); $j = Find-Java 17; [pscustomobject]@{ Java = $j; HasL = [bool](Get-Command L -ErrorAction SilentlyContinue) } }).AddArgument($JavaFuncs.ToString()).AddArgument($jd)
+    [void]$rs.AddScript({ param($src, $dataDir) $DataDir = $dataDir; . (Join-Path $src 'Java.ps1'); $j = Find-Java 17; [pscustomobject]@{ Java = $j; HasL = [bool](Get-Command L -ErrorAction SilentlyContinue) } }).AddArgument($SrcDir).AddArgument($jd)
     $rr = @($rs.Invoke()); $rs.Dispose()
-    Check ($rr.Count -eq 1 -and $rr[0].Java -eq $exe -and -not $rr[0].HasL) 'runspace içinde $JavaFuncs: Find-Java indirilen kopyayı bulur (L olmadan)'
+    Check ($rr.Count -eq 1 -and $rr[0].Java -eq $exe -and -not $rr[0].HasL) 'runspace içinde Java.ps1: Find-Java indirilen kopyayı bulur (L olmadan)'
     # İlk açılıştaki gibi: arka plan işi, ortak (synchronized) tablo, ilk satır -HeadText ile; geri çağrı runspace içinde tanımlı
     $sync = [hashtable]::Synchronized(@{ Text = ''; Lines = (New-Object System.Collections.ArrayList); Error = $null; Done = $false; Exe = $null })
     $rs = [powershell]::Create()
     [void]$rs.AddScript({
-        param($funcs, $dataDir, $sync, $head)
-        $DataDir = $dataDir; . ([scriptblock]::Create($funcs))
+        param($src, $dataDir, $sync, $head)
+        $DataDir = $dataDir; . (Join-Path $src 'Java.ps1')
         try { $sync.Exe = Install-Java 17 { param($t) $sync.Text = $t; [void]$sync.Lines.Add($t) } $head } catch { $sync.Error = $_.Exception.Message }
         $sync.Done = $true
-    }).AddArgument($JavaFuncs.ToString()).AddArgument($jd).AddArgument($sync).AddArgument((L 'Java {0} indiriliyor...'))
+    }).AddArgument($SrcDir).AddArgument($jd).AddArgument($sync).AddArgument((L 'Java {0} indiriliyor...'))
     $h = $rs.BeginInvoke()
     $seen = New-Object System.Collections.Generic.List[string]
     $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -789,7 +798,7 @@ Section 'Arka plan işleri (runspace): Install-Java ve Portable.ps1'
 # Arka plan işinde (runspace) -HeadText verilmezse ve L yoksa ilk satır Türkçe anahtar olur; kalıcı hata yine tek denemede
 $sync2 = [hashtable]::Synchronized(@{ Lines = (New-Object System.Collections.ArrayList); Error = $null })
 $rs = [powershell]::Create()
-[void]$rs.AddScript({ param($funcs, $dataDir, $sync) $DataDir = $dataDir; . ([scriptblock]::Create($funcs)); try { Install-Java 99 { param($t) [void]$sync.Lines.Add($t) } } catch { $sync.Error = $_.Exception.Message } }).AddArgument($JavaFuncs.ToString()).AddArgument($Data).AddArgument($sync2)
+[void]$rs.AddScript({ param($src, $dataDir, $sync) $DataDir = $dataDir; . (Join-Path $src 'Java.ps1'); try { Install-Java 99 { param($t) [void]$sync.Lines.Add($t) } } catch { $sync.Error = $_.Exception.Message } }).AddArgument($SrcDir).AddArgument($Data).AddArgument($sync2)
 [void]$rs.Invoke(); $rs.Dispose()
 Check (@($sync2.Lines).Count -ge 1 -and $sync2.Lines[0] -ceq 'Java 99 indiriliyor...' -and $sync2.Error -like 'Java 99 could not be downloaded: The remote server returned an error: (4*') "runspace, -HeadText yok: '$($sync2.Lines[0])', $($sync2.Error)"
 

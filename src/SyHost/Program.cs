@@ -19,6 +19,10 @@ static class Program
         // Gizli öz denetim komutları (geliştirme ve otomatik testler)
         if (args.Length >= 2 && args[0] == "--selftest")
             return SelfTest.Run(args);
+        // Kaldır ekranı bu exe'yi yönetici olarak yalnızca bu anahtarla açar (0.5.0'ın sistem yazı tipi).
+        // Tek kopya kilidinden ve conhost'a geçişten önce: açık SyHost'un penceresine gidip "oldu" demesin.
+        if (args.Length == 1 && args[0] == OldSystemFont.Arg)
+            return OldSystemFont.Run();
 
         bool hosted = HasArg(args, "--hosted");
         string exe = Environment.ProcessPath;
@@ -30,7 +34,7 @@ static class Program
         if (installed && !Portable.CanWrite(Path.Combine(root, Portable.DataName)))
         {
             Lang.Code = Portable.UiLanguage();
-            Portable.Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve gizli Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç.", root, Portable.DefaultRoot()));
+            Portable.Alert(Lang.L("SyHost bu klasöre yazamıyor:\n{0}\n\nSyHost klasörünü içindekilerle birlikte (SyHost.exe, Servers ve Data) yazılabilir bir yere taşı (ör. {1}) ve SyHost.exe'yi oradan aç.", root, Portable.DefaultRoot()));
             return 1;
         }
 
@@ -54,15 +58,21 @@ static class Program
                 return 0;
             }
             try { app.Run(); }
-            finally { try { mutex.ReleaseMutex(); } catch { } }
+            finally
+            {
+                // Kaldır: klasörün içi, kilit hâlâ bizdeyken silinir (bu sırada ikinci bir SyHost açılıp yazmasın).
+                // app.Run kapanırken sunucuyu, playit'i ve tepsiyi kapattı; çalışan bu exe klasörde kalır.
+                if (app.DeleteRootAfterExit) Uninstall.DeleteFolderAfterExit(root, new[] { exe });
+                try { mutex.ReleaseMutex(); } catch { }
+            }
         }
 
         // Kurulum/güncelleme bitti: SyHost'u yeni yerinden aç (animasyon tekrar oynamasın)
         if (app.LaunchAfterExit != null) Launch(app.LaunchAfterExit, new[] { "--no-splash" });
         // Dil değişince: aynı yerden, açılış animasyonu tekrar oynamadan (Terminal sürümü de böyle)
         else if (app.RestartApp) Launch(exe, args.Where(a => a != "--no-splash").Append("--no-splash").ToArray());
-        // Kaldır: SyHost kapandıktan sonra klasörü sil
-        if (app.DeleteRootAfterExit) Uninstall.DeleteFolderAfterExit(root);
+        // Kaldır: boş kalan klasörü Explorer'da göster, kullanıcı oradan siler
+        if (app.DeleteRootAfterExit && !Uninstall.DryRun) Uninstall.ShowFolder(root);
         return 0;
     }
 

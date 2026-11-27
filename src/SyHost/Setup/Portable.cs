@@ -151,7 +151,6 @@ static unsafe partial class Portable
             s.kurulumTamam = false;
             Json.WriteText(cfg, Json.WriteSettings(s));
         }
-        HideDir(data);
     }
 
     /// <summary>Exe'yi kopyala: önce geçici dosyaya, sonra yerine (yarım dosya kalmasın).</summary>
@@ -163,12 +162,16 @@ static unsafe partial class Portable
         catch { try { File.Delete(tmp); } catch { } throw; }   // hedef açıksa yanında yarım kopya kalmasın
     }
 
-    public static void HideDir(string dir)
+    /// <summary>
+    /// Klasör gizliyse görünür yap. Data gizli değildir: içinde SyHost'un indirdiği programlar (Java, playit) da
+    /// durur ve kullanıcı ne olduğunu görebilmelidir. 1.0 öncesi deneme sürümlerinin gizlediği Data da açılır.
+    /// </summary>
+    public static void ShowDir(string dir)
     {
         try
         {
             var di = new DirectoryInfo(dir);
-            if ((di.Attributes & FileAttributes.Hidden) == 0) di.Attributes |= FileAttributes.Hidden;
+            if (di.Exists && (di.Attributes & FileAttributes.Hidden) != 0) di.Attributes &= ~FileAttributes.Hidden;
         }
         catch { }
     }

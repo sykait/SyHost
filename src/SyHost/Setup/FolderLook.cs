@@ -25,7 +25,7 @@ static partial class FolderLook
             string icons = Path.Combine(data, "icons");
             Directory.CreateDirectory(icons);
             foreach (string n in IconNames) ExtractIcon(n, Path.Combine(icons, n));
-            Portable.HideDir(data);
+            Portable.ShowDir(data);
 
             Write(root, Path.Combine(icons, "folder-syhost.ico"), null);
             string servers = Path.Combine(root, Portable.ServersName);

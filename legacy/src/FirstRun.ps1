@@ -171,140 +171,8 @@ function Test-FrEmptyDir([string]$dir) {
 }
 
 # ---------- Arka plan işleri (indirme vb.) ----------
-# İş ayrı bir çalışma alanında koşar; ekranla yalnızca $sync (= $Fr.Sync) üzerinden konuşur:
-#   Done bitti mi, Text ekrandaki ilerleme yazısı, Error hata metni ($null: hata yok),
-#   Proc çalışan playit komutu (Esc onu kapatır), Cancel Esc'e basıldı, Code playit eşleştirme kodu.
-# $ctx: yollar ve önceden çevrilmiş metinler (bu çalışma alanında ayarlar yok; L yalnızca Java işi için kurulur).
-$FrJobScript = {
-    param($sync, [string]$kind, $ctx)
-    $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'
-    # GitHub ve Adoptium TLS 1.2 ister; Windows PowerShell 5.1 bunu her zaman kendiliğinden açmaz
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
-    $tt = $ctx.Texts
-
-    function Get-FrErrorText($e) {
-        while ($null -ne $e.InnerException -and ($e -is [System.Management.Automation.MethodInvocationException] -or $e -is [System.Reflection.TargetInvocationException] -or $e -is [AggregateException])) { $e = $e.InnerException }
-        $e.Message
-    }
-    # Son dolu satır (satırlar kırpılır, boşlar atlanır)
-    function LastLine([string]$s) {
-        $lines = @(foreach ($ln in ($s -split "`n")) { $t = $ln.Trim(); if ($t.Length -gt 0) { $t } })
-        if ($lines.Count -eq 0) { return '' }
-        $lines[$lines.Count - 1]
-    }
-    # Geçici dosyayı yerine koy (C#: File.Move(tmp, dst, true))
-    function Move-Over([string]$from, [string]$to) {
-        if (-not [IO.File]::Exists($to)) { [IO.File]::Move($from, $to); return }
-        try { [IO.File]::Replace($from, $to, $null) } catch { [IO.File]::Copy($from, $to, $true); [IO.File]::Delete($from) }
-    }
-    function New-FrRequest([string]$url) {
-        $rq = [Net.WebRequest]::Create($url)
-        $rq.UserAgent = 'SyHost/1.0 (+https://github.com/sykait/SyHost)'
-        $rq.Timeout = 300000; $rq.ReadWriteTimeout = 300000
-        $rq
-    }
-    function Get-FrText([string]$url) {
-        $rs = (New-FrRequest $url).GetResponse()
-        try { $sr = New-Object IO.StreamReader($rs.GetResponseStream(), [Text.Encoding]::UTF8); try { $sr.ReadToEnd() } finally { $sr.Dispose() } } finally { $rs.Dispose() }
-    }
-    function Save-FrFile([string]$url, [string]$path) {
-        $rs = (New-FrRequest $url).GetResponse()
-        try {
-            $s = $rs.GetResponseStream(); $f = [IO.File]::Create($path)
-            try { $s.CopyTo($f) } finally { $f.Dispose(); $s.Dispose() }
-        } finally { $rs.Dispose() }
-    }
-
-    # playit'in iki programını indir (GitHub'daki son sürüm, Windows x64, imzalı)
-    function PlayitDownload {
-        $sync.Text = $tt.dl
-        $doc = ConvertFrom-Json (Get-FrText 'https://api.github.com/repos/playit-cloud/playit-agent/releases/latest')
-        $urls = @{}
-        foreach ($a in @($doc.assets)) { $urls[[string]$a.name] = $a.browser_download_url }
-        [void][IO.Directory]::CreateDirectory($ctx.ToolDir)
-        foreach ($pair in @(@('playitd-windows-x86_64', 'playitd.exe'), @('playit-windows-x86_64', 'playit.exe'))) {
-            $asset = $pair[0]
-            $url = if ($urls.ContainsKey($asset + '-signed.exe')) { $urls[$asset + '-signed.exe'] } elseif ($urls.ContainsKey($asset + '.exe')) { $urls[$asset + '.exe'] } else { $null }
-            if ($null -eq $url) { throw $tt.dlFail }
-            $dst = [IO.Path]::Combine($ctx.ToolDir, $pair[1]); $tmp = $dst + '.indiriliyor'
-            Save-FrFile ([string]$url) $tmp
-            Move-Over $tmp $dst
-        }
-    }
-
-    # playit komutunu çalıştır, bütün çıktıyı (stdout ve stderr geliş sırasıyla) döndür.
-    # Çalışan süreç $sync.Proc'ta durur: Esc (PlayitCancel) onu kapatır. SyHost kapanırsa o da kapanır (JobGuard).
-    function PlayitRun([string]$arguments, [int]$timeoutMs) {
-        if ($sync.Cancel) { throw $tt.claimFail }
-        $psi = New-Object Diagnostics.ProcessStartInfo
-        $psi.FileName = [string]$ctx.Cli; $psi.Arguments = $arguments
-        $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-        $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-        $psi.WorkingDirectory = $ctx.Data
-        $p = [Diagnostics.Process]::Start($psi)
-        try {
-            $sync.Proc = $p
-            try { [SyHost.JobGuard]::Add($p) } catch {}
-            if ($sync.Cancel) { try { $p.Kill() } catch {} }
-            $sb = New-Object Text.StringBuilder
-            $readers = @($p.StandardOutput, $p.StandardError)
-            $reads = @($readers[0].ReadLineAsync(), $readers[1].ReadLineAsync())
-            $sw = [Diagnostics.Stopwatch]::StartNew(); $killed = $false
-            while ($null -ne $reads[0] -or $null -ne $reads[1]) {
-                $live = New-Object System.Collections.Generic.List[System.Threading.Tasks.Task]; $which = New-Object System.Collections.Generic.List[int]
-                for ($i = 0; $i -lt 2; $i++) { if ($null -ne $reads[$i]) { $live.Add($reads[$i]); $which.Add($i) } }
-                $w = [System.Threading.Tasks.Task]::WaitAny($live.ToArray(), 100)
-                if ($w -ge 0) {
-                    $i = $which[$w]; $line = $reads[$i].Result
-                    if ($null -eq $line) { $reads[$i] = $null } else { [void]$sb.AppendLine($line); $reads[$i] = $readers[$i].ReadLineAsync() }
-                }
-                if (-not $killed -and $sw.ElapsedMilliseconds -ge $timeoutMs) { $killed = $true; try { $p.Kill() } catch {} }
-            }
-            $p.WaitForExit()
-            $sb.ToString()
-        } finally { $sync.Proc = $null; $p.Dispose() }
-    }
-
-    # Tarayıcıda hesap bağlama: kod üret, sayfayı aç, onayı bekle, anahtarı yaz
-    function PlayitClaim {
-        $code = LastLine (PlayitRun 'claim generate' 30000)
-        if ([string]::IsNullOrWhiteSpace($code)) { throw $tt.claimFail }
-        $sync.Code = $code
-        $url = LastLine (PlayitRun ('claim url ' + $code + ' --name SyHost') 30000)
-        if ($url.StartsWith('http', [StringComparison]::OrdinalIgnoreCase) -and -not $ctx.NoBrowser -and -not $sync.Cancel) { try { [void][Diagnostics.Process]::Start($url) } catch {} }
-        $sync.Text = $tt.waiting
-        $outp = PlayitRun ('claim exchange ' + $code + ' --wait 600') 620000
-        $m = [regex]::Match($outp, '([0-9a-f]{64})')
-        if (-not $m.Success) { throw $tt.claimFail }
-        [IO.File]::WriteAllText($ctx.Secret, 'secret_key = "' + $m.Groups[1].Value + '"' + "`n", (New-Object Text.UTF8Encoding $false))
-    }
-
-    try {
-        switch -CaseSensitive ($kind) {
-            'java' {
-                # Java'yı $JavaFuncs'taki Install-Java indirir (Portable sözleşmesi). L burada da çalışsın diye
-                # ana betiğin metin tablosu ve L'si de getirilir; ilk satır ($ctx.Head) zaten başlıkta yazar.
-                $TextTable = $ctx.TextTable; $LangCode = $ctx.LangCode
-                ${function:L} = [scriptblock]::Create($ctx.LFunc)
-                $DataDir = $ctx.Data
-                . ([scriptblock]::Create($ctx.JavaFuncs))
-                $FrHead = $ctx.Head; $FrSync = $sync
-                $onDetail = { param([string]$t) if ($t -cne $FrHead) { $FrSync.Text = $t } }.GetNewClosure()
-                $jp = @{}
-                $jc = Get-Command Install-Java -CommandType Function -ErrorAction SilentlyContinue
-                if ($null -ne $jc -and $jc.Parameters.ContainsKey('HeadText')) { $jp['HeadText'] = $FrHead }
-                [void](Install-Java 21 $onDetail @jp)
-            }
-            'download' { PlayitDownload }
-            'claim' { PlayitClaim }
-        }
-    } catch {
-        $sync.Error = Get-FrErrorText $_.Exception
-    } finally {
-        $sync.Proc = $null
-        $sync.Done = $true
-    }
-}
+# İş ayrı bir çalışma alanında FirstRunJob.ps1 dosyasıyla koşar; ekranla yalnızca $sync (= $Fr.Sync) üzerinden konuşur.
+# $ctx: yollar ve önceden çevrilmiş metinler (o çalışma alanında ayarlar ve L yok).
 
 # Arka plan işini başlat: java | download | claim
 function FrRun([string]$kind) {
@@ -313,12 +181,11 @@ function FrRun([string]$kind) {
     $ctx = @{
         Data = $Data; Secret = $PlayitSecret; ToolDir = $PlayitToolDir; Cli = (PlayitCliExe); NoBrowser = $FrNoBrowser
         Texts = @{ dl = (L 'playit indiriliyor...'); dlFail = (L 'playit kurulamadı, bu adım atlanıyor.'); claimFail = (L 'playit bağlantısı tamamlanmadı. Tekrar deneyebilirsin.'); waiting = (L 'Tarayıcıda onaylamanı bekliyorum (en fazla 10 dakika)...') }
-        Head = (L 'Java {0} indiriliyor...' 21); JavaFuncs = $(if ($JavaFuncs) { $JavaFuncs.ToString() } else { '' })
-        TextTable = $TextTable; LangCode = $LangCode; LFunc = ${function:L}.ToString()
+        Head = (L 'Java {0} indiriliyor...' 21)
     }
     try {
         $ps = [powershell]::Create()
-        [void]$ps.AddScript($FrJobScript.ToString()).AddArgument($sy).AddArgument($kind).AddArgument($ctx)
+        [void]$ps.AddCommand((Join-Path $SrcDir 'FirstRunJob.ps1')).AddParameter('sync', $sy).AddParameter('kind', $kind).AddParameter('ctx', $ctx)
         $Fr.Job = [pscustomobject]@{ PS = $ps; Handle = $ps.BeginInvoke() }
     } catch {
         # Çalışma alanı açılamadı: iş hemen hatayla biter (Fr-Poll gösterir)
@@ -726,7 +593,7 @@ function PlayitKey([ConsoleKeyInfo]$k) {
                 Set-FrCfg 'arkadasAdresi' $Fr.McAddr; Set-FrCfg 'sesAdresi' $Fr.VoiceAddr; Set-FrCfg 'playitKullan' $true
                 Save-Config
                 $script:HasFriendAddr = $true; $script:FriendAddr = $Fr.McAddr
-                Stop-Playit; Start-Playit
+                Stop-Playit; PlayitResetBudget; Start-Playit
                 $Fr.Phase = 'hazir'
                 return
             }

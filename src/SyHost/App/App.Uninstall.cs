@@ -101,7 +101,8 @@ sealed partial class App
         {
             bool folder = UnItems.Any(x => x.Key == "klasor" && x.On);
             rows.Add("  " + c.green + Bo + Lang.L("Kaldırma tamamlandı.") + R);
-            rows.Add("  " + c.soft + (folder ? Lang.L("SyHost kapanınca klasörü de silinecek.") : Lang.L("Artık SyHost klasörünü silebilirsin; Explorer'da gösterdim.")) + R);
+            string after = folder ? Lang.L("SyHost kapanınca klasörün içi silinecek; sonra klasörü Explorer'da göstereceğim, oradan silebilirsin.") : Lang.L("Artık SyHost klasörünü silebilirsin; Explorer'da gösterdim.");
+            foreach (string l in WordWrap(after, W - 6)) rows.Add("  " + c.soft + l + R);
             if (DryRunShown) rows.Add("  " + c.yellow + Lang.L("Deneme modu: hiçbir şey silinmedi.") + R);
             rows.Add("");
             rows.Add("  " + Pill("240;240;240", "18;18;20", "Enter") + c.text + Lang.L(" SyHost'u kapat") + R);
@@ -131,7 +132,8 @@ sealed partial class App
                         // Hiçbir şey seçilmedi: kaldırılacak iz yok, "bitti" ekranı klasörün silinebileceğini söyler
                         if (!UnItems.Any(x => x.On)) { UnFinish(); return; }
                         UnPhase = "calisiyor";
-                        if (UnItems.Any(x => x.Key == "klasor" && x.On)) StopPlayit();
+                        // Klasör silinecek: playit kapanır ve bu oturumda yeniden açılmaz (dosyaları serbest kalsın)
+                        if (UnItems.Any(x => x.Key == "klasor" && x.On)) { PlayitHold = true; StopPlayit(); }
                         var items = UnItems;
                         // Test modunda kaldırma başlamaz: kare her seferinde aynı çıkar ve hiçbir şeye dokunulmaz
                         if (!TestMode) UnJob = Task.Run(() => Uninstall.RunSelected(items));

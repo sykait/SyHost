@@ -8,6 +8,9 @@
 //  Klasör dışındaki sunucu klasörlerine asla dokunulmaz: kayıtlı bir sunucuyu ya da SyHost klasörünü içeren eski
 //  klasörler önerilmez; sürücü kökü, git deposu ya da kullanıcı klasörü gibi bir SyHost klasörü hiç silinmez.
 //  Silerken bağlantıların (junction, sembolik bağlantı) içine girilmez.
+//  Gizli pencere, kodlanmış komut ya da kendini silen yardımcı süreç yoktur: yönetici izni gereken tek SyHost adımı
+//  SyHost.exe'nin kendisidir (OldSystemFont.Arg); klasörün içi SyHost kapanırken bu süreçte silinir, boş kalan
+//  klasörü kullanıcı Explorer'dan siler.
 //  SYHOST_DRYRUN=1: hiçbir şey silinmez, yalnızca ne yapılacağı yazılır (testler için).
 //  Terminal sürümündeki karşılığı: legacy\src\Uninstall.ps1 (aynı kurallar).
 // =====================================================================
@@ -102,9 +105,6 @@ static class Uninstall
         try
         {
             string full = Path.GetFullPath(root).TrimEnd('\\');
-            // Silme işini cmd yapar: yoldaki % ve ! cmd'nin değişkenleri sayılır (ör. "100%iyi" başka bir klasörü
-            // silerdi). Böyle bir yol için klasör silme sunulmaz; kullanıcı klasörü kendisi siler.
-            if (full.IndexOfAny(new[] { '%', '!' }) >= 0) return false;
             string drive = Path.GetPathRoot(full);
             if (string.IsNullOrEmpty(drive) || drive.TrimEnd('\\').Equals(full, StringComparison.OrdinalIgnoreCase)) return false;
             string git = Path.Combine(full, ".git");
@@ -154,7 +154,7 @@ static class Uninstall
 
     /// <summary>
     /// Klasörü sil. Bağlantılara (junction, sembolik bağlantı) girilmez: bağlantının kendisi silinir, gösterdiği yer
-    /// olduğu gibi kalır. Salt okunur, gizli ve sistem öznitelikleri silmeden önce kaldırılır.
+    /// olduğu gibi kalır. Silmeyi engelleyen tek öznitelik olan "salt okunur" silmeden önce kaldırılır.
     /// </summary>
     internal static string DeleteDir(string dir)
     {
@@ -163,7 +163,7 @@ static class Uninstall
         {
             var top = new DirectoryInfo(dir);
             if ((top.Attributes & FileAttributes.ReparsePoint) != 0) { Directory.Delete(top.FullName, false); return null; }
-            try { top.Attributes = FileAttributes.Normal; } catch { }
+            ClearReadOnly(top);
             var links = new List<FileSystemInfo>();
             var stack = new Stack<DirectoryInfo>();
             stack.Push(top);
@@ -172,7 +172,7 @@ static class Uninstall
                 foreach (var e in stack.Pop().EnumerateFileSystemInfos())
                 {
                     if ((e.Attributes & FileAttributes.ReparsePoint) != 0) { links.Add(e); continue; }
-                    try { e.Attributes = FileAttributes.Normal; } catch { }
+                    ClearReadOnly(e);
                     if (e is DirectoryInfo d) stack.Push(d);
                 }
             }
@@ -181,6 +181,11 @@ static class Uninstall
             return null;
         }
         catch (Exception e) { return e.Message; }
+    }
+
+    static void ClearReadOnly(FileSystemInfo e)
+    {
+        try { if ((e.Attributes & FileAttributes.ReadOnly) != 0) e.Attributes &= ~FileAttributes.ReadOnly; } catch { }
     }
 
     readonly record struct Msi(string Name, string Uninstall);
@@ -215,9 +220,10 @@ static class Uninstall
     internal static (string File, string Args) UninstallerCommand(string cmd)
     {
         cmd = cmd.Trim();
-        // MsiExec.exe /I{GUID} -> /X{GUID} /qb (yalnızca ilerleme çubuğu)
+        // MsiExec.exe /I{GUID} -> /X{GUID} /qb (yalnızca ilerleme çubuğu). Tam yoluyla: yalın ad, SyHost klasöründeki
+        // aynı adlı bir dosyayı da bulabilirdi (çalışma klasörü SyHost klasörü) ve o yönetici olarak açılırdı.
         if (cmd.StartsWith("MsiExec.exe", StringComparison.OrdinalIgnoreCase))
-            return ("msiexec.exe", System.Text.RegularExpressions.Regex.Replace(cmd.Substring("MsiExec.exe".Length), "/I", "/X", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim() + " /qb");
+            return (Path.Combine(Environment.SystemDirectory, "msiexec.exe"), System.Text.RegularExpressions.Regex.Replace(cmd.Substring("MsiExec.exe".Length), "/I", "/X", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim() + " /qb");
         if (cmd.StartsWith("\""))
         {
             int q = cmd.IndexOf('"', 1);
@@ -241,55 +247,87 @@ static class Uninstall
         catch (Exception e) { return e.Message; }
     }
 
-    /// <summary>Eski kurulumun C:\Windows\Fonts'a koyduğu Cascadia Mono'yu kaldır (yönetici izniyle).</summary>
+    /// <summary>
+    /// Eski kurulumun C:\Windows\Fonts'a koyduğu Cascadia Mono'yu kaldır: SyHost.exe kendini yalnızca
+    /// OldSystemFont.Arg ile yönetici olarak açar (Windows izin penceresinde SyHost görünür). 0 dışındaki çıkış
+    /// kodu "kod N" olarak gösterilir (ör. dosya kullanımda: kayıt silindi, dosya oturum kapanınca silinebilir).
+    /// </summary>
     static string RemoveSystemFont()
     {
-        string ps = "$k='HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts';" +
-                    "Remove-ItemProperty $k 'Cascadia Mono Regular (TrueType)' -ErrorAction SilentlyContinue;" +
-                    "Remove-ItemProperty $k 'Cascadia Mono Bold (TrueType)' -ErrorAction SilentlyContinue;" +
-                    "foreach($f in 'CascadiaMono-Regular.ttf','CascadiaMono-Bold.ttf'){ $p=Join-Path $env:WINDIR ('Fonts\\'+$f); try{ Remove-Item $p -Force -ErrorAction Stop }catch{} }";
         try
         {
-            string enc = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(ps));
-            using var p = Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + enc) { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden });
-            p?.WaitForExit();
-            return null;
+            string exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe) || !File.Exists(exe)) return "kod 2";
+            using var p = Process.Start(new ProcessStartInfo(exe, OldSystemFont.Arg) { UseShellExecute = true, Verb = "runas" });
+            if (p == null) return null;
+            p.WaitForExit();
+            return p.ExitCode == 0 ? null : "kod " + p.ExitCode;
         }
         catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223) { return "izin verilmedi"; }
         catch (Exception e) { return e.Message; }
     }
 
     /// <summary>
-    /// Klasörü silen cmd komutu: 60 kez dener, SyHost'un açık tuttuğu dosyalar o kapanınca silinir.
-    /// Yalnızca klasörün kendi öznitelikleri kaldırılır: "attrib /s" klasör yolu üzerinde üst klasörün altındaki
-    /// aynı adlı başka klasörlere, "klasör\* /s" ise bağlantıların gösterdiği yerlere de dokunuyordu.
-    /// rmdir /s salt okunur, gizli ve sistem dosyalarını kendisi siler ve bağlantıların içine girmez.
+    /// Kaldır &gt; "SyHost klasörünün kendisi": SyHost kapanırken (sunucu, playit ve tepsi kapandıktan sonra, tek kopya
+    /// kilidi henüz bırakılmadan) klasörün içindekileri BU süreçte siler. Kendini silen yardımcı bir süreç
+    /// başlatılmaz. keep'tekiler (çalışan exe; Terminal sürümünde SyHost.Core.dll'i yüklü App klasörü) ve
+    /// kullanımdaki dosyalar kalır, klasörün kendisi de kalır (SyHost'un çalışma klasörüdür): ardından Explorer
+    /// klasörü gösterir (ShowFolder), kullanıcı kalanı oradan siler. Bağlantıların gösterdiği yere dokunulmaz.
     /// </summary>
-    internal static string DeleteFolderCommand(string root)
-    {
-        string q = "\"" + root.TrimEnd('\\') + "\"";
-        return $"/d /c for /l %i in (1,1,60) do (if exist {q} (attrib -r -s -h {q} /d >nul 2>&1 & rmdir /s /q {q} >nul 2>&1 & ping -n 2 127.0.0.1 >nul))";
-    }
-
-    /// <summary>SyHost kapandıktan sonra klasörü sil (kendini silemediği için ayrı bir cmd ile).</summary>
-    public static void DeleteFolderAfterExit(string root)
+    public static void DeleteFolderAfterExit(string root, IEnumerable<string> keep)
     {
         if (!CanDeleteRoot(root)) return;
         if (DryRun) { Log("SyHost kapanınca klasör silinecekti: " + root); return; }
-        try
+        try { Environment.CurrentDirectory = Path.GetTempPath(); } catch { }
+        var kept = new List<string>();
+        foreach (string k in keep ?? Enumerable.Empty<string>())
+            try { if (!string.IsNullOrEmpty(k)) kept.Add(Path.GetFullPath(k).TrimEnd('\\')); } catch { }
+        // Yeni kapanan sunucu ya da playit dosyaları bir an daha tutabilir: birkaç tur dene (en çok ~5 sn)
+        for (int round = 0; round < 10 && !EmptyFolder(root, kept); round++) Thread.Sleep(500);
+        try { var di = new DirectoryInfo(root); di.Attributes &= ~(FileAttributes.ReadOnly | FileAttributes.System); } catch { }
+    }
+
+    /// <summary>Klasörün içini sil (klasörün kendisi kalır); keep'tekiler kalır. Silinemeyen bir şey kaldıysa false.</summary>
+    static bool EmptyFolder(string dir, List<string> keep)
+    {
+        List<FileSystemInfo> entries;
+        try { entries = new DirectoryInfo(dir).EnumerateFileSystemInfos().ToList(); }
+        catch { return false; }
+        bool clean = true;
+        foreach (var e in entries)
         {
-            Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), DeleteFolderCommand(root))
+            string full = e.FullName.TrimEnd('\\');
+            if (keep.Any(k => k.Equals(full, StringComparison.OrdinalIgnoreCase))) continue;
+            try
             {
-                UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Path.GetTempPath(),
-            });
+                if ((e.Attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    // Bağlantı: yalnızca kendisi silinir, gösterdiği yer olduğu gibi kalır
+                    if (e is DirectoryInfo) Directory.Delete(full, false); else File.Delete(full);
+                }
+                else if (e is DirectoryInfo)
+                {
+                    // İçinde saklanacak bir şey varsa klasörün içine girilir, yoksa bütünüyle silinir
+                    if (keep.Any(k => Portable.IsInside(k, full))) { if (!EmptyFolder(full, keep)) clean = false; }
+                    else if (DeleteDir(full) != null) clean = false;
+                }
+                else
+                {
+                    ClearReadOnly(e);
+                    File.Delete(full);
+                }
+            }
+            catch { clean = false; }
         }
-        catch { }
+        return clean;
     }
 
     /// <summary>Explorer'da SyHost klasörünü seçili göster ("artık silebilirsin").</summary>
     public static void ShowFolder(string root)
     {
-        try { Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + root.TrimEnd('\\') + "\"") { UseShellExecute = true }); } catch { }
+        // Tam yoluyla: yalın "explorer.exe" çalışma klasöründe (SyHost klasörü) de aranırdı
+        string explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+        try { Process.Start(new ProcessStartInfo(explorer, "/select,\"" + root.TrimEnd('\\') + "\"") { UseShellExecute = true }); } catch { }
     }
 
     /// <summary>
@@ -335,7 +373,6 @@ static class Uninstall
                      Path.GetDirectoryName(profile),
                  })
             Console.WriteLine("candelete|" + p + "|" + CanDeleteRoot(p));
-        Console.WriteLine("cmd|" + DeleteFolderCommand(root));
         // Kaldırıcı komutları yalnızca ayrıştırılır, çalıştırılmaz: kayıt defterindekiler ve örnekler
         var cmds = FindMsiAll(n => n.StartsWith("playit", StringComparison.OrdinalIgnoreCase) || n.StartsWith("Microsoft Build of OpenJDK", StringComparison.OrdinalIgnoreCase) || n.StartsWith("Eclipse Temurin JRE with Hotspot 8", StringComparison.OrdinalIgnoreCase)).Select(m => m.Uninstall).ToList();
         cmds.AddRange(new[]
@@ -348,7 +385,7 @@ static class Uninstall
             try { var (f, a) = UninstallerCommand(c); Console.WriteLine("uninst|" + c + "|" + f + "|" + a); }
             catch { Console.WriteLine("uninst|" + c + "|HATA"); }
         }
-        DeleteFolderAfterExit(root);
+        DeleteFolderAfterExit(root, new[] { Path.Combine(root, Portable.ExeName) });   // deneme modu: yalnızca günlüğe yazar
         return 0;
     }
 }

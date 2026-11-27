@@ -1,6 +1,6 @@
 ﻿# =====================================================================
 #  SyHost - Kaldır (legacy\src\Uninstall.ps1) işlev testleri (Terminal sürümü)
-#    powershell -NoProfile -ExecutionPolicy Bypass -File tests\legacy\Test-Uninstall.ps1
+#    powershell -NoProfile -ExecutionPolicy RemoteSigned -File tests\legacy\Test-Uninstall.ps1
 #        [-WorkRoot D:\SyHostTest\uninstall\func] [-Exe dist\SyHost.exe] [-SkipFont] [-SkipCs]
 #  Her şey -WorkRoot içinde olur (her çalıştırmada yeniden kurulur; "SyHostTest" adlı bir klasörün içinde olmalı).
 #  Gerçek kullanıcı verisine dokunulmaz:
@@ -101,79 +101,24 @@ $Data = Join-Path $AppRoot 'Data'; $PlayitToolDir = Join-Path $Data 'tools\playi
 $Servers = New-Object System.Collections.Generic.List[object]
 $Screen = 'uninstall'; $Dirty = $false; $DeleteRootAfterExit = $false; $TestFrame = $null; $LangCode = 'tr'
 $TdCalls = New-Object System.Collections.Generic.List[string]
+# Yardımcı C# (SyHost.Core.dll): Portable.ps1'in kısayol, yol ve yazı tipi işleri onu kullanır. SyHost.ps1'deki gibi
+# derlenir; arka plandaki kaldırma işi (UninstallJob.ps1) aynı süreçteki türleri kullanır.
+$Bin = Join-Path $WorkRoot 'bin'; [void][IO.Directory]::CreateDirectory($Bin)
+$CoreDll = Join-Path $Bin 'SyHost.Core.dll'
+Add-Type -Path @(Get-ChildItem -LiteralPath $SrcDir -Filter 'SyHost.*.cs' | Sort-Object Name | ForEach-Object { $_.FullName }) -ReferencedAssemblies System.Windows.Forms, System.Drawing, System.IO.Compression, System.IO.Compression.FileSystem -OutputAssembly $CoreDll -OutputType Library
+Add-Type -Path $CoreDll
 . (Join-Path $SrcDir 'Lang.ps1')
 . (Join-Path $SrcDir 'Lang.Screens.ps1')
 . (Join-Path $SrcDir 'Portable.ps1')
-
-# ---------- Portable.ps1 iskeletse: C# Shortcuts ve Fonts ile aynı test yedekleri ----------
-$PortableReal = [bool](Get-Command Remove-OurShortcuts -ErrorAction SilentlyContinue) -and [bool](Get-Command Uninstall-FontPerUser -ErrorAction SilentlyContinue) -and [bool](Get-Command Test-FontBySyHost -ErrorAction SilentlyContinue) -and [bool](Get-Command Install-FontPerUser -ErrorAction SilentlyContinue)
 $TdFonts = @(@('CascadiaMono-Regular.ttf', 'Cascadia Mono Regular (TrueType)'), @('CascadiaMono-Bold.ttf', 'Cascadia Mono Bold (TrueType)'))
 $TdFontKey = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
 function TdUserFontDir { [IO.Path]::Combine([Environment]::GetFolderPath('LocalApplicationData'), 'Microsoft\Windows\Fonts') }
-if (-not $PortableReal) {
-    Add-Type -Namespace SyHostTest -Name TdFont -MemberDefinition @'
-[DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern int AddFontResourceW(string file);
-[DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern bool RemoveFontResourceW(string file);
-[DllImport("user32.dll")] public static extern IntPtr SendMessageTimeoutW(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
-'@
-    function TdBroadcast { $r = [IntPtr]::Zero; try { [void][SyHostTest.TdFont]::SendMessageTimeoutW([IntPtr]0xffff, 0x1D, [IntPtr]::Zero, [IntPtr]::Zero, 2, 1000, [ref]$r) } catch {} }
-    function Get-LinkState([string]$lnk, [string]$exe) {
-        if (-not [IO.File]::Exists($lnk)) { return 'Missing' }
-        $p = $null
-        try {
-            $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
-            foreach ($t in @([string]$s.Arguments, [string]$s.TargetPath)) { $m = [regex]::Match($t, '"?([^"]*?(?:SyHost[^"\\]*\.exe|SyHost\.ps1))"?', 'IgnoreCase'); if ($m.Success) { $p = $m.Groups[1].Value.Trim(); break } }
-        } catch { return 'Foreign' }
-        if ($null -eq $p) { return 'Foreign' }
-        try { if ([string]::Equals([IO.Path]::GetFullPath($p), [IO.Path]::GetFullPath($exe), [StringComparison]::OrdinalIgnoreCase)) { return 'Ours' } } catch {}
-        if ([IO.File]::Exists($p)) { 'OtherLive' } else { 'Dead' }
-    }
-    function Remove-OurShortcuts([string]$exe) { $n = 0; foreach ($l in @(Get-ShortcutLocations)) { try { if ((Get-LinkState $l $exe) -eq 'Ours') { [IO.File]::Delete($l); $n++ } } catch {} }; $n }
-    function Test-FontBySyHost { [IO.File]::Exists([IO.Path]::Combine((TdUserFontDir), 'SyHost-' + $TdFonts[0][0])) }
-    function Install-FontPerUser {
-        try {
-            $dir = TdUserFontDir; [void][IO.Directory]::CreateDirectory($dir)
-            $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($TdFontKey)
-            try {
-                foreach ($f in $TdFonts) {
-                    $path = [IO.Path]::Combine($dir, 'SyHost-' + $f[0])
-                    [IO.File]::Copy([IO.Path]::Combine($LegacyDir, 'fonts\' + $f[0]), $path, $true)
-                    $k.SetValue($f[1], $path, [Microsoft.Win32.RegistryValueKind]::String)
-                    [void][SyHostTest.TdFont]::AddFontResourceW($path)
-                }
-            } finally { $k.Dispose() }
-            TdBroadcast
-            $true
-        } catch { $false }
-    }
-    function Uninstall-FontPerUser {
-        $ok = $true
-        try {
-            $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($TdFontKey, $true)
-            try {
-                foreach ($f in $TdFonts) {
-                    $path = [IO.Path]::Combine((TdUserFontDir), 'SyHost-' + $f[0])
-                    for ($i = 0; $i -lt 8 -and [SyHostTest.TdFont]::RemoveFontResourceW($path); $i++) {}
-                    try { if ($null -ne $k) { $v = $k.GetValue($f[1]); if ($v -is [string] -and [string]::Equals($v, $path, [StringComparison]::OrdinalIgnoreCase)) { $k.DeleteValue($f[1], $false) } } } catch { $ok = $false }
-                }
-            } finally { if ($null -ne $k) { $k.Dispose() } }
-            TdBroadcast
-            foreach ($f in $TdFonts) {
-                $path = [IO.Path]::Combine((TdUserFontDir), 'SyHost-' + $f[0])
-                for ($i = 0; $i -lt 10 -and [IO.File]::Exists($path); $i++) { try { [IO.File]::Delete($path) } catch { Start-Sleep -Milliseconds 300 } }
-                if ([IO.File]::Exists($path)) { $ok = $false }
-            }
-        } catch { $ok = $false }
-        $ok
-    }
-}
 . (Join-Path $SrcDir 'Uninstall.ps1')
 # Ana betiğin ekran fonksiyonları yerine kayıt tutanlar; Explorer açılmasın
 function Reset-Frame { $script:TdCalls.Add('Reset-Frame') }
 function Stop-Playit { $script:TdCalls.Add('Stop-Playit') }
 function Start-Outro { $script:TdCalls.Add('Start-Outro') }
 function Show-UninstallFolder([string]$root) { $script:TdCalls.Add('Show-UninstallFolder ' + $root) }
-Write-Host ('Portable.ps1: ' + $(if ($PortableReal) { 'gerçek' } else { 'iskelet (kısayol ve yazı tipi için test yedekleri)' })) -ForegroundColor DarkGray
 
 # ---------- yardımcılar ----------
 function Read-TdServers([string]$root) {
@@ -256,7 +201,7 @@ New-FakeRoot $AppRoot
 foreach ($f in 'ayarlar.json', 'sunucular.json', 'playit.toml', 'SyHost-TASINDI.txt', 'cache\SyHost.Core.dll') { TdWrite ([IO.Path]::Combine($Legacy, $f)) }
 TdWrite ([IO.Path]::Combine($OldFake, 'src\SyHost.ps1'))
 TdLink $Desk $Conhost ('"' + $ExePath + '" --hosted')                                                                   # bu SyHost: Ours
-TdLink $Start $Conhost ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $OldFake + '\src\SyHost.ps1"')   # 0.5.0 kısayolu: OtherLive
+TdLink $Start $Conhost ('powershell.exe -File "' + $OldFake + '\src\SyHost.ps1"')   # 0.5.0 kısayolu: OtherLive
 foreach ($sv in (Read-TdServers $AppRoot)) { $Servers.Add($sv) }
 
 # =====================================================================
@@ -334,16 +279,23 @@ foreach ($bg in $false, $true) {
 }
 if ([IO.File]::Exists($DryLog)) { [IO.File]::Delete($DryLog) }
 Check ($null -eq (UnDeleteDir $Legacy) -and [IO.Directory]::Exists($Legacy)) 'deneme modunda klasör silinmez'
-Remove-RootAfterExit $AppRoot
-Start-Sleep -Seconds 3
-Check ([IO.Directory]::Exists($AppRoot) -and ((Read-DryLog $DryLog) -contains ('klasör silinecekti: ' + $Legacy)) -and ((Read-DryLog $DryLog) -contains ('SyHost kapanınca klasör silinecekti: ' + $AppRoot))) 'deneme modunda Remove-RootAfterExit yalnızca günlüğe yazar'
-# C# kaynağındaki komut metni (RemoveSystemFont'taki dize parçaları birleştirilir; tek kaçış \\)
-$csSrc = [IO.File]::ReadAllText((Join-Path $Repo 'src\SyHost\Setup\Uninstall.cs'), [Text.Encoding]::UTF8)
-$csPs = [regex]::Match($csSrc, 'static string RemoveSystemFont\(\)\s*\{\s*string ps = (.*?);\s*\r?\n', 'Singleline').Groups[1].Value
-$csScript = (@([regex]::Matches($csPs, '"((?:[^"\\]|\\.)*)"') | ForEach-Object { $_.Groups[1].Value.Replace('\\', '\') })) -join ''
-Check ($csScript.Length -gt 100 -and (UnSystemFontScript) -ceq $csScript) 'sistem yazı tipi komutu C# kaynağındakiyle aynı (çalıştırılmadı)'
-$pe = $null; [void][System.Management.Automation.Language.Parser]::ParseInput((UnSystemFontScript), [ref]$null, [ref]$pe)
-Check ($pe.Count -eq 0) 'sistem yazı tipi komutu geçerli PowerShell'
+Remove-RootAfterExit $AppRoot @($ExePath)
+Check ([IO.Directory]::Exists($AppRoot) -and [IO.File]::Exists($ExePath) -and [IO.Directory]::Exists((Join-Path $AppRoot 'Servers')) -and ((Read-DryLog $DryLog) -contains ('klasör silinecekti: ' + $Legacy)) -and ((Read-DryLog $DryLog) -contains ('SyHost kapanınca klasör silinecekti: ' + $AppRoot))) 'deneme modunda Remove-RootAfterExit yalnızca günlüğe yazar'
+# Sistem yazı tipi (çalıştırılmaz): iki sürüm de SyHost.exe'yi yalnızca aynı anahtarla yönetici olarak açar;
+# kaldırma kodunda PowerShell'e kodlanmış komut, gizli pencere, Base64 ya da cmd silme döngüsü yoktur
+$csUn = [IO.File]::ReadAllText((Join-Path $Repo 'src\SyHost\Setup\Uninstall.cs'), [Text.Encoding]::UTF8)
+$csFont = [IO.File]::ReadAllText((Join-Path $Repo 'src\SyHost\Setup\OldSystemFont.cs'), [Text.Encoding]::UTF8)
+$psUn = [IO.File]::ReadAllText((Join-Path $SrcDir 'Uninstall.ps1'), [Text.Encoding]::UTF8)
+$fontArg = [regex]::Match($csFont, 'const string Arg = "([^"]+)"').Groups[1].Value
+Check ($fontArg -ceq '--remove-old-system-font' -and $psUn.Contains("'" + $fontArg + "'") -and $csUn.Contains('OldSystemFont.Arg')) "sistem yazı tipi: iki sürüm de SyHost.exe $fontArg ile açar (çalıştırılmadı)"
+$banned = @('EncodedCommand', 'ToBase64String', 'WindowStyle Hidden', 'ProcessWindowStyle.Hidden', 'ping -n', 'rmdir /s', 'attrib -', 'cmd.exe', 'scriptblock]::Create', 'Get-ChildItem function:')
+$hits = @($banned | Where-Object { $csUn.Contains($_) -or $psUn.Contains($_) })
+Check ($hits.Count -eq 0) ('kaldırma kodunda kodlanmış komut, gizli pencere, metinden kod ya da cmd silme döngüsü yok' + $(if ($hits) { ': ' + ($hits -join ', ') }))
+foreach ($pf in 'src\SyHost\Program.cs', 'src\SyHost.Terminal\Program.cs') {
+    $t = [IO.File]::ReadAllText((Join-Path $Repo $pf), [Text.Encoding]::UTF8)
+    $iArg = $t.IndexOf('OldSystemFont.Arg'); $iLock = $t.IndexOf('Mutex')
+    Check ($iArg -gt 0 -and $iLock -gt $iArg) "${pf}: yönetici anahtarı tek kopya kilidinden önce işlenir"
+}
 
 # =====================================================================
 Section 'Tuşlar ve UnFinish (işlev düzeyinde)'
@@ -359,14 +311,16 @@ $env:SYHOST_DRYRUN = '1'
 $UnItems = TdItems $false; $UnSel = 0; $UnPhase = 'liste'; $UnJob = $null; $Screen = 'uninstall'; $TdCalls.Clear()
 Handle-UninstallKey (TdKey 'UpArrow') $false; Check ($UnSel -eq 2) 'Yukarı: baştan sona'
 Handle-UninstallKey (TdKey 'DownArrow') $false; Check ($UnSel -eq 0) 'Aşağı: sondan başa'
-Handle-UninstallKey (TdKey 'Enter') $false; Check ($UnPhase -ceq 'liste' -and $null -eq $UnJob) 'hiçbir şey seçili değilken Enter bir şey yapmaz'
+Handle-UninstallKey (TdKey 'Enter') $false; Check ($UnPhase -ceq 'bitti' -and $null -eq $UnJob -and -not $DeleteRootAfterExit) 'hiçbir şey seçili değilken Enter kaldırma başlatmaz, "bitti" ekranına geçer'
+$UnPhase = 'liste'
 Handle-UninstallKey (TdKey 'Spacebar') $false; Check ($UnItems[0].On) 'Boşluk seçer'
 Handle-UninstallKey (TdKey 'Spacebar') $false; Check (-not $UnItems[0].On) 'Boşluk bırakır'
 $UnItems[2].On = $true
 Handle-UninstallKey (TdKey 'Enter') $false; Check ($UnPhase -ceq 'onay' -and $null -eq $UnJob) 'klasör seçiliyken Enter önce onay ister'
 Handle-UninstallKey (TdKey 'DownArrow') $false; Check ($UnPhase -ceq 'liste') 'onaydayken ok tuşu onayı kaldırır'
 Handle-UninstallKey (TdKey 'Enter') $false; Handle-UninstallKey (TdKey 'Enter') $false
-Check ($UnPhase -ceq 'calisiyor' -and $null -ne $UnJob -and $TdCalls.Contains('Stop-Playit')) 'ikinci Enter kaldırmayı başlatır (playit durdurulur, iş arka planda)'
+Check ($UnPhase -ceq 'calisiyor' -and $null -ne $UnJob -and $TdCalls.Contains('Stop-Playit') -and $PlayitHold) 'ikinci Enter kaldırmayı başlatır (playit durdurulur ve yeniden açılmaz, iş arka planda)'
+$PlayitHold = $false
 Handle-UninstallKey (TdKey 'Escape') $false; Check ($UnPhase -ceq 'calisiyor' -and $Screen -ceq 'uninstall') 'kaldırılırken Esc bir şey yapmaz'
 $r = Wait-Job0 ([pscustomobject]@{ PS = $UnJob.PS; Handle = $UnJob.Handle }) 120
 Check ($r.Done -and @($UnItems | Where-Object { $_.State -ne $(if ($_.On) { 2 } else { 4 }) }).Count -eq 0) "iş bitti; seçili satırlar bitti, ötekiler atlandı: $((@($UnItems | ForEach-Object { $_.Key + '=' + $_.State })) -join ' ')"
@@ -470,52 +424,37 @@ else {
 }
 
 # =====================================================================
-Section 'Remove-RootAfterExit: kapanan SyHost''u bekleyip klasörü siler'
+Section 'Remove-RootAfterExit: SyHost kapanırken klasörün içini bu süreçte siler'
 Remove-Item env:SYHOST_DRYRUN
 $gone = Join-Path $WorkRoot 'gone\SyHost Kök'
 $outside = Join-Path $WorkRoot 'gone-outside'; TdWrite (Join-Path $outside 'keep.txt'); TdAttr (Join-Path $outside 'keep.txt') 'Hidden, ReadOnly'
 $sibling = Join-Path $WorkRoot 'gone\diger\SyHost Kök'; [void][IO.Directory]::CreateDirectory($sibling); TdAttr $sibling 'Directory, Hidden'
 New-FakeRoot $gone
+TdWrite (Join-Path $gone 'App\bin\SyHost.Core.dll'); TdWrite (Join-Path $gone 'App\src\SyHost.ps1')
 TdWrite (Join-Path $gone 'Data\kilit.dat'); TdWrite (Join-Path $gone 'Data\ro.txt'); TdAttr (Join-Path $gone 'Data\ro.txt') 'ReadOnly, Hidden, System'
 TdWrite (Join-Path $gone 'desktop.ini') "[.ShellClassInfo]`r`n"; TdAttr (Join-Path $gone 'desktop.ini') 'Hidden, System'
 TdWrite (Join-Path $gone 'Servers\Ic\world\region\r.0.0.mca')
 TdAttr (Join-Path $gone 'Data') 'Directory, Hidden'; TdAttr $gone 'Directory, ReadOnly, System'
 TdJunction (Join-Path $gone 'Servers\Disarida') $outside
-$holder = Join-Path $WorkRoot 'holder.ps1'
-$ready = Join-Path $WorkRoot 'holder-ready.txt'
-[IO.File]::WriteAllText($holder, @'
-param([string]$Src, [string]$Root, [string]$Ready, [int]$Hold)
-$ErrorActionPreference = 'Stop'
-# Kapanmakta olan SyHost: klasördeki bir dosyayı açık tutar, çalışma klasörü SyHost klasörüdür
-$fs = [IO.File]::Open([IO.Path]::Combine($Root, 'Data\kilit.dat'), 'Open', 'ReadWrite', 'None')
-$AppRoot = $Root; $Data = Join-Path $Root 'Data'
-. (Join-Path $Src 'Portable.ps1')
-. (Join-Path $Src 'Uninstall.ps1')
-Remove-RootAfterExit $Root
-[IO.File]::WriteAllText($Ready, 'hazır')
-Start-Sleep -Seconds $Hold
-$fs.Dispose()
-'@, (New-Object Text.UTF8Encoding $true))
-$p = Start-Process powershell.exe -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + $holder + '" -Src "' + $SrcDir + '" -Root "' + $gone + '" -Ready "' + $ready + '" -Hold 5') -WorkingDirectory $gone -WindowStyle Hidden -PassThru
+# Kapanmakta olan SyHost: başlatıcı exe ve App (yüklü SyHost.Core.dll) saklanır; Data'daki bir dosya da açık kalır
+$here = (Get-Location).Path
+$procsBefore = @(Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+$fs = [IO.File]::Open((Join-Path $gone 'Data\kilit.dat'), 'Open', 'ReadWrite', 'None')
 $sw = [Diagnostics.Stopwatch]::StartNew()
-while (-not [IO.File]::Exists($ready) -and -not $p.HasExited -and $sw.Elapsed.TotalSeconds -lt 30) { Start-Sleep -Milliseconds 50 }
-Check ([IO.File]::Exists($ready)) 'SyHost (deneme süreci) Remove-RootAfterExit''i çağırdı'
-Start-Sleep -Seconds 3
-Check (-not $p.HasExited -and [IO.Directory]::Exists($gone) -and [IO.File]::Exists((Join-Path $gone 'Data\kilit.dat'))) 'SyHost açıkken klasör ve açık dosya duruyor'
-Check (-not [IO.Directory]::Exists((Join-Path $gone 'Servers'))) 'silme başladı: açık olmayan dosyalar gitti (Servers)'
-$p.WaitForExit(); $exitAt = $sw.Elapsed.TotalSeconds
-while ([IO.Directory]::Exists($gone) -and $sw.Elapsed.TotalSeconds -lt $exitAt + 20) { Start-Sleep -Milliseconds 100 }
-Check (-not [IO.Directory]::Exists($gone)) ('SyHost kapanınca klasör silindi (' + [Math]::Round($sw.Elapsed.TotalSeconds - $exitAt, 1) + ' sn sonra)')
+try { Remove-RootAfterExit $gone @((Join-Path $gone 'SyHost.exe'), (Join-Path $gone 'App')) } finally { $fs.Dispose(); Set-Location -LiteralPath $here; [Environment]::CurrentDirectory = $here }
+$secs = [Math]::Round($sw.Elapsed.TotalSeconds, 1)
+$spawned = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $procsBefore -notcontains $_.Id -and $_.ProcessName -in 'cmd', 'powershell', 'pwsh', 'conhost' })
+Check ($spawned.Count -eq 0) ('yardımcı süreç başlatılmadı (cmd ya da PowerShell yok)' + $(if ($spawned) { ': ' + (($spawned | ForEach-Object { $_.ProcessName }) -join ', ') }))
+Check ([IO.File]::Exists((Join-Path $gone 'SyHost.exe')) -and [IO.File]::Exists((Join-Path $gone 'App\bin\SyHost.Core.dll'))) 'saklananlar kaldı: SyHost.exe ve App'
+Check (-not [IO.Directory]::Exists((Join-Path $gone 'Servers')) -and -not [IO.File]::Exists((Join-Path $gone 'desktop.ini')) -and -not [IO.File]::Exists((Join-Path $gone 'Data\ro.txt')) -and -not [IO.File]::Exists((Join-Path $gone 'Data\ayarlar.json'))) 'sunucular, desktop.ini ve salt okunur/gizli/sistem dosyaları silindi'
+Check ([IO.File]::Exists((Join-Path $gone 'Data\kilit.dat')) -and $secs -ge 3 -and $secs -lt 20) "kullanımdaki dosya hata değil: bir süre denendi ($secs sn) ve kaldı (kullanıcı Explorer'dan siler)"
+Check (((Get-Item -LiteralPath $gone -Force).Attributes -band ([IO.FileAttributes]::ReadOnly -bor [IO.FileAttributes]::System)) -eq 0) 'SyHost klasörünün salt okunur ve sistem özniteliği kaldırıldı'
 Check ([IO.File]::Exists((Join-Path $outside 'keep.txt')) -and ((Get-Item -LiteralPath (Join-Path $outside 'keep.txt') -Force).Attributes -eq 'Hidden, ReadOnly')) 'bağlantının gösterdiği klasöre dokunulmadı (dosya ve öznitelikleri duruyor)'
 Check ([IO.Directory]::Exists($sibling) -and ((Get-Item -LiteralPath $sibling -Force).Attributes -band [IO.FileAttributes]::Hidden)) 'başka yerdeki aynı adlı klasörün özniteliklerine dokunulmadı'
-Start-Sleep -Seconds 3
-$leftCmd = @(Get-CimInstance Win32_Process -Filter "Name = 'cmd.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($gone) })
-Check ($leftCmd.Count -eq 0) 'silme komutu iş bitince kapandı'
-$git2 = Join-Path $WorkRoot 'gone\GitKok'; [void][IO.Directory]::CreateDirectory((Join-Path $git2 '.git')); TdWrite (Join-Path $git2 'SyHost.exe')
-Remove-RootAfterExit $git2
-Start-Sleep -Seconds 3
-$gitCmd = @(Get-CimInstance Win32_Process -Filter "Name = 'cmd.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($git2) })
-Check ([IO.Directory]::Exists($git2) -and $gitCmd.Count -eq 0) 'git deposu olan klasör silinmez (komut hiç başlamaz)'
+$git2 = Join-Path $WorkRoot 'gone\GitKok'; [void][IO.Directory]::CreateDirectory((Join-Path $git2 '.git')); TdWrite (Join-Path $git2 'SyHost.exe'); TdWrite (Join-Path $git2 'Data\ayarlar.json')
+Remove-RootAfterExit $git2 @((Join-Path $git2 'SyHost.exe'))
+Set-Location -LiteralPath $here; [Environment]::CurrentDirectory = $here
+Check ([IO.File]::Exists((Join-Path $git2 'Data\ayarlar.json'))) 'git deposu olan klasörün içine dokunulmaz'
 $env:SYHOST_DRYRUN = '1'
 
 # =====================================================================
@@ -526,7 +465,7 @@ else {
     # Aynı başlangıç: eski veri klasörü, iki kısayol (biri bu SyHost'un)
     foreach ($f in 'ayarlar.json', 'sunucular.json', 'playit.toml') { TdWrite ([IO.Path]::Combine($Legacy, $f)) }
     TdLink $Desk $Conhost ('"' + $ExePath + '" --hosted')
-    TdLink $Start $Conhost ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $OldFake + '\src\SyHost.ps1"')
+    TdLink $Start $Conhost ('powershell.exe -File "' + $OldFake + '\src\SyHost.ps1"')
     $csDel = Join-Path $WorkRoot 'cs-sil'; $csOut = Join-Path $WorkRoot 'cs-outside'
     TdWrite (Join-Path $csDel 'syhost-selftest-sil.txt'); TdWrite (Join-Path $csDel 'alt\ro.txt'); TdAttr (Join-Path $csDel 'alt\ro.txt') 'ReadOnly, Hidden, System'
     TdWrite (Join-Path $csOut 'keep.txt'); TdJunction (Join-Path $csDel 'Baglanti') $csOut
@@ -552,18 +491,18 @@ else {
             [Environment]::GetFolderPath('DesktopDirectory'), [Environment]::GetFolderPath('MyDocuments'), [Environment]::GetFolderPath('ProgramFiles'), [Environment]::GetFolderPath('Windows'), [IO.Path]::GetDirectoryName($prof))) {
         $psLines.Add('candelete|' + $pp + '|' + (Test-RootDeletable $pp))
     }
-    $psLines.Add('cmd|' + (UnDeleteCommand $AppRoot))
     # Kaldırıcı komutları yalnızca ayrıştırılır, çalıştırılmaz: kayıt defterindekiler ve C# öz denetimindeki örnekler
     $cmds = @(@(UnFindMsi @('playit', 'Microsoft Build of OpenJDK', 'Eclipse Temurin JRE with Hotspot 8')) | ForEach-Object { $_.Uninstall })
     $cmds += @('MsiExec.exe /I{11111111-2222-3333-4444-555555555555}', '  msiexec.exe /i {AAAA} /qn  ', 'MsiExec.exe /X{BBBB}',
         '"C:\Program Files\Deneme App\unins000.exe" /SILENT', 'C:\Deneme\uninstall.exe /S /D=x', 'C:\Deneme\uninstall.exe', '"C:\Kapanmayan tırnak')
     foreach ($c in $cmds) { try { $fa = @(UnUninstallerCommand $c); $psLines.Add('uninst|' + $c + '|' + $fa[0] + '|' + $fa[1]) } catch { $psLines.Add('uninst|' + $c + '|HATA') } }
-    Check (@($psLines | Where-Object { $_ -like 'uninst|MsiExec.exe /I{*' -and $_ -notlike '*|msiexec.exe|/X{*} /qb' }).Count -eq 0) 'MSI kaldırıcısı: MsiExec.exe /I{GUID} -> msiexec.exe /X{GUID} /qb'
-    Remove-RootAfterExit $AppRoot
+    $msiexec = [IO.Path]::Combine([Environment]::SystemDirectory, 'msiexec.exe')
+    Check (@($psLines | Where-Object { $_ -like 'uninst|MsiExec.exe /I{*' -and $_ -notlike ('*|' + $msiexec + '|/X{*} /qb') }).Count -eq 0) "MSI kaldırıcısı: MsiExec.exe /I{GUID} -> $msiexec /X{GUID} /qb (tam yoluyla)"
+    Remove-RootAfterExit $AppRoot @($ExePath)
     $env:TEMP = $Temp; $env:TMP = $Temp
     $csCmp = @($csLines | Where-Object { -not $_.StartsWith('sil|') })
     $diffAt = -1; for ($i = 0; $i -lt [Math]::Max($csCmp.Count, $psLines.Count); $i++) { if ($i -ge $csCmp.Count -or $i -ge $psLines.Count -or $csCmp[$i] -cne $psLines[$i]) { $diffAt = $i; break } }
-    Check ($diffAt -lt 0) ("bulma, deneme çalıştırması, silinebilirlik ve silme komutu iki sürümde aynı ($($psLines.Count) satır)" + $(if ($diffAt -ge 0) { "`n      C#      : " + $(if ($diffAt -lt $csCmp.Count) { $csCmp[$diffAt] } else { '(yok)' }) + "`n      Terminal: " + $(if ($diffAt -lt $psLines.Count) { $psLines[$diffAt] } else { '(yok)' }) } else { '' }))
+    Check ($diffAt -lt 0) ("bulma, deneme çalıştırması, silinebilirlik ve kaldırıcı komutları iki sürümde aynı ($($psLines.Count) satır)" + $(if ($diffAt -ge 0) { "`n      C#      : " + $(if ($diffAt -lt $csCmp.Count) { $csCmp[$diffAt] } else { '(yok)' }) + "`n      Terminal: " + $(if ($diffAt -lt $psLines.Count) { $psLines[$diffAt] } else { '(yok)' }) } else { '' }))
     $lc = Read-DryLog (Join-Path $tCs 'syhost-dryrun.log'); $lp = Read-DryLog (Join-Path $tPs 'syhost-dryrun.log')
     Check (($lc -join "`n") -ceq ($lp -join "`n") -and $lc.Count -gt 0) "deneme günlüğü iki sürümde aynı ($($lc.Count) satır)"
     foreach ($l in $psLines) { if ($l.StartsWith('item|')) { Write-Host ('      ' + $l) -ForegroundColor DarkGray } }
