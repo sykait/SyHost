@@ -85,10 +85,12 @@ sealed partial class App
             }
             else
             {
+                // Yalnızca SyHost'un başlattığı sunucular (IsSyHostServer) kapatılır; başka bir programın sunucusuna dokunulmaz
                 List<int> pids;
                 try { pids = OtherServerPids() ?? new List<int>(); } catch { pids = new List<int>(); }
                 foreach (int pid in pids)
                 {
+                    if (!IsSyHostServer(pid)) { AddLog("warn", Lang.L("PID {0}: bu sunucuyu SyHost başlatmadı, ona dokunulmadı. Kendi penceresinden ya da Görev Yöneticisi'nden kapatabilirsin.", pid)); continue; }
                     string err = TestMode ? null : CmdKillProcess(pid);
                     if (err == null) AddLog("warn", Lang.L("Eski sunucu süreci kapatıldı (PID {0}).", pid));
                     else AddLog("error", err);

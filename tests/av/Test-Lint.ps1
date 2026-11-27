@@ -9,8 +9,9 @@
 #  Kurallar tests\av\lint-rules.json dosyasındadır (bu betik o sözcükleri kendisi taşımasın diye).
 #  Kural: bir kalıp asla bölünerek, kodlanarak ya da başka adla geçilmez; kod değiştirilir.
 #  Exe'ler de taranır: Terminal sürümü betikleri içinde düz metin olarak taşır, bulut tarayıcıları onları görür.
-#  Bilinen ve kalan (düşük önemde) iki konu, bu yüzden henüz kural değil: java süreçlerini WMI/ntdll ile bulmak
-#  ve takılan kurulum sürecini kapatmak.
+#  Bilinen ve kalan (düşük önemde) iki konu, bu yüzden henüz kural değil: çalışan sunucuları komut satırlarından
+#  (WMI/ntdll) bulmak ve takılan kurulum sürecini kapatmak. 'zorla' yalnızca SyHost'un başlattığı sunucuları
+#  (komut satırında -Dsyhost=1) kapatır; başka bir programın sunucusuna dokunmaz.
 # =====================================================================
 [CmdletBinding()]
 param([switch]$NoExe)

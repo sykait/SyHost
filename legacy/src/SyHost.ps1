@@ -669,12 +669,30 @@ function Ensure-VoiceHost {
     }
 }
 
+# Çalışan başka sunucular: komut satırında "nogui" geçen java.exe. Hangisinin SyHost'un olduğunu Test-SyHostServer söyler:
+# iki sürüm de (0.5.0 da) sunucuyu -Dsyhost=1 ile başlatır. 'zorla' yalnızca bunları kapatır, başka bir programın açtığı
+# sunucuya dokunmaz. (C#: App.Server.cs OtherServerPids ve IsSyHostServer)
+function Get-OtherServers { @(Get-CimInstance Win32_Process -Filter "Name='java.exe'" | Where-Object { $_.CommandLine -match 'nogui' }) }
+function Test-SyHostServer([string]$cl) { [bool]$cl -and $cl.IndexOf('-Dsyhost=1', [StringComparison]::OrdinalIgnoreCase) -ge 0 }
+# Süreci kapat: zaten kapanmışsa da kapatılmış sayılır ($null); kapatılamazsa hata metni döner (C#: CmdKillProcess)
+function Stop-ServerProcess([int]$procId) {
+    try { $p = [Diagnostics.Process]::GetProcessById($procId) } catch { return $null }
+    try { $p.Kill(); $null }
+    catch { $x = Get-InnerException $_.Exception; if ($x -is [InvalidOperationException]) { $null } else { $x.Message } }
+    finally { $p.Dispose() }
+}
 function Start-Server {
     if ($S -and $S.Running) { Add-Log panel (L 'Sunucu zaten açık.'); return }
     $script:StopSentAt = $null   # önceki "stop"un 60 sn sayacı yeni sunucuyu öldürmesin
     if (-not (Test-Path -LiteralPath (Join-Path $Cur.klasor 'mods')) -and -not (Test-Path -LiteralPath $Cur.klasor)) { Add-Log error (L 'Sunucu klasörü bulunamadı: {0}  (taşındı ya da silindi)' $Cur.klasor); return }
-    $other = @(Get-CimInstance Win32_Process -Filter "Name='java.exe'" | Where-Object { $_.CommandLine -match 'nogui' })
-    if ($other.Count) { Add-Log error ((L "Başka bir sunucu zaten çalışıyor (PID {0}). Önce onu kapat ya da 'zorla' yaz.") -f $other[0].ProcessId); return }
+    $other = @(Get-OtherServers)
+    if ($other.Count) {
+        # SyHost'un başlattığı bir sunucu 'zorla' ile kapatılabilir; başka bir programınki kullanıcı tarafından kapatılmalı
+        $mine = @($other | Where-Object { Test-SyHostServer $_.CommandLine })
+        if ($mine.Count) { Add-Log error ((L "Başka bir sunucu zaten çalışıyor (PID {0}). Önce onu kapat ya da 'zorla' yaz.") -f $mine[0].ProcessId) }
+        else { Add-Log error (L 'Başka bir Minecraft sunucusu çalışıyor (PID {0}); onu SyHost başlatmadı. Önce onu kapat.' $other[0].ProcessId) }
+        return
+    }
     $java = Find-Java ([int]$Cur.java)
     if (-not $java) { Add-Log error (L 'Java {0} bulunamadı. Sunucuyu yeniden kurman gerekebilir.' $Cur.java); return }
     $eula = Join-Path $Cur.klasor 'eula.txt'
@@ -994,7 +1012,14 @@ function Run-Command([string]$line) {
         { $_ -in 'klasor', 'folder' } { Start-Process explorer.exe $Cur.klasor; break }
         { $_ -in 'zorla', 'force' } {
             if ($S -and $S.Running) { $script:StopRequested = $true; $S.P.Kill(); Add-Log warn (L 'Sunucu zorla kapatıldı (son otomatik kayıttan sonrası kaybolabilir).') }
-            else { Get-CimInstance Win32_Process -Filter "Name='java.exe'" | Where-Object { $_.CommandLine -match 'nogui' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Add-Log warn (L 'Eski sunucu süreci kapatıldı (PID {0}).' $_.ProcessId) } }
+            else {
+                # Yalnızca SyHost'un başlattığı sunucular kapatılır; başka bir programın sunucusuna dokunulmaz (C#: App.Commands.cs)
+                foreach ($o in @(Get-OtherServers)) {
+                    if (-not (Test-SyHostServer $o.CommandLine)) { Add-Log warn (L "PID {0}: bu sunucuyu SyHost başlatmadı, ona dokunulmadı. Kendi penceresinden ya da Görev Yöneticisi'nden kapatabilirsin." $o.ProcessId); continue }
+                    $err = if ($TestFrame) { $null } else { Stop-ServerProcess $o.ProcessId }
+                    if ($null -eq $err) { Add-Log warn (L 'Eski sunucu süreci kapatıldı (PID {0}).' $o.ProcessId) } else { Add-Log error $err }
+                }
+            }
             break
         }
         { $_ -in 'menu', 'kapat', 'close' } { Begin-Shutdown 'home'; break }

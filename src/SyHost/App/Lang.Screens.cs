@@ -206,6 +206,13 @@ static partial class Lang
         Tx("playit açılamadı: Windows ya da bir virüs tarayıcısı engelledi ({0}). Yeniden denemek için: F9 > Arkadaş bağlantısı (playit) > Devam.",
            "playit could not start: Windows or an antivirus program blocked it ({0}). To try again: F9 > Friend connection (playit) > Continue.",
            "playit を起動できませんでした: Windows またはウイルス対策ソフトがブロックしました（{0}）。再試行するには: F9 > フレンド接続（playit） > 続ける。");
+        // Başka bir programın açtığı Minecraft sunucusu: SyHost onu başlatmadı, 'zorla' ona dokunmaz
+        Tx("Başka bir Minecraft sunucusu çalışıyor (PID {0}); onu SyHost başlatmadı. Önce onu kapat.",
+           "Another Minecraft server is running (PID {0}); SyHost did not start it. Close it first.",
+           "別の Minecraft サーバーが実行中です (PID {0})。SyHost が起動したものではありません。先に閉じてください。");
+        Tx("PID {0}: bu sunucuyu SyHost başlatmadı, ona dokunulmadı. Kendi penceresinden ya da Görev Yöneticisi'nden kapatabilirsin.",
+           "PID {0}: SyHost did not start this server, so it was left alone. Close it from its own window or from Task Manager.",
+           "PID {0}: このサーバーは SyHost が起動したものではないため、そのままにしました。そのサーバーのウィンドウかタスクマネージャーから閉じてください。");
         // Kaldır > "SyHost klasörünün kendisi": SyHost kapanırken klasörün içi boşaltılırken pencerede kalan satır
         Tx("SyHost klasörünün içi boşaltılıyor...", "Emptying the SyHost folder...", "SyHost フォルダーの中身を削除しています...");
     }

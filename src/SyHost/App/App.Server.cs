@@ -256,7 +256,14 @@ sealed partial class App
         string dir = Cur.klasor;
         if (!SrvExists(SrvJoin(dir, "mods")) && !SrvExists(dir)) { AddLog("error", Lang.L("Sunucu klasörü bulunamadı: {0}  (taşındı ya da silindi)", dir)); return; }
         List<int> other = OtherServerPids();
-        if (other.Count > 0) { AddLog("error", Lang.L("Başka bir sunucu zaten çalışıyor (PID {0}). Önce onu kapat ya da 'zorla' yaz.", other[0])); return; }
+        if (other.Count > 0)
+        {
+            // SyHost'un başlattığı bir sunucu 'zorla' ile kapatılabilir; başka bir programınki kullanıcı tarafından kapatılmalı
+            int mine = other.FindIndex(IsSyHostServer);
+            if (mine >= 0) AddLog("error", Lang.L("Başka bir sunucu zaten çalışıyor (PID {0}). Önce onu kapat ya da 'zorla' yaz.", other[mine]));
+            else AddLog("error", Lang.L("Başka bir Minecraft sunucusu çalışıyor (PID {0}); onu SyHost başlatmadı. Önce onu kapat.", other[0]));
+            return;
+        }
         string java;
         try { java = FindJava(Cur.java); } catch { java = null; }   // Find-Java hata vermez, "bulunamadı" sayılır
         if (string.IsNullOrEmpty(java)) { AddLog("error", Lang.L("Java {0} bulunamadı. Sunucuyu yeniden kurman gerekebilir.", Cur.java)); return; }
@@ -500,7 +507,18 @@ sealed partial class App
         }
     }
 
-    // ---------- Çalışan başka sunucular (456 ve 892. satırlar) ----------
+    // ---------- Çalışan başka sunucular (Terminal: Start-Server ve 'zorla') ----------
+    /// <summary>
+    /// Bu süreç SyHost'un başlattığı bir sunucu mu? İki sürüm de (0.5.0 da) sunucuyu komut satırında -Dsyhost=1 ile
+    /// başlatır. 'zorla' yalnızca bunları kapatır: başka bir programın açtığı sunucuya dokunulmaz.
+    /// (Terminal: SyHost.ps1 Test-SyHostServer)
+    /// </summary>
+    static bool IsSyHostServer(int pid)
+    {
+        string cl = ProcessQuery.CommandLine(pid);
+        return cl != null && cl.Contains("-Dsyhost=1", StringComparison.OrdinalIgnoreCase);
+    }
+
     private partial List<int> OtherServerPids()
     {
         var list = new List<int>();
