@@ -7,6 +7,7 @@
 //    migrated {"servers":1,"playit":true}, movedTo,
 //    firstRun {steps,index,sel,returnTo,target,otherInstall,note,noteCol,confirm,busy,jobText,desk,start,phase,field,mcAddr,voiceAddr},
 //    settings {sel,note,noteCol}, uninstall {items:[{key,title,detail,on,needsAdmin,state,error}],sel,phase}
+//    keys ["DownArrow", "Enter", "Ctrl+Q", "a"]   (en sonda basılır; bkz. TestKey)
 //  Renk adları: yellow, red, green, dim, soft, text.
 // =====================================================================
 using System.Text.Json;
@@ -83,5 +84,38 @@ sealed partial class App
                 });
             UnSel = Int(u, "sel"); UnPhase = Str(u, "phase") ?? "liste";
         }
+
+        // Tuşlar: durum kurulduktan sonra sırayla basılır, sonra kare çizilir. Örnek: ["DownArrow", "Enter", "Ctrl+Q", "a", "+"]
+        // Tek karakter yazılan harftir; diğerleri ConsoleKey adıdır (önüne Ctrl+, Shift+, Alt+ gelebilir).
+        // Tuşların yan etkileri senaryonun klasöründe kalır (çalıştırıcı SYHOST_* değişkenlerini oraya yönlendirir);
+        // pencere açan, indiren ya da kuran tuşlar kullanılmamalı.
+        if (Has(st, "keys", out var keys))
+            foreach (var kk in keys.EnumerateArray()) HandleKey(TestKey(kk.GetString()));
+    }
+
+    static ConsoleKeyInfo TestKey(string s)
+    {
+        if (s.Length == 1)
+        {
+            char ch = s[0];
+            ConsoleKey key = ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' ? (ConsoleKey)char.ToUpperInvariant(ch)
+                : ch >= '0' && ch <= '9' ? ConsoleKey.D0 + (ch - '0')
+                : ch == ' ' ? ConsoleKey.Spacebar : ch == '+' ? ConsoleKey.OemPlus : ch == '-' ? ConsoleKey.OemMinus : ch == '.' ? ConsoleKey.OemPeriod
+                : ConsoleKey.NoName;
+            return new ConsoleKeyInfo(ch, key, ch >= 'A' && ch <= 'Z', false, false);
+        }
+        bool shift = false, alt = false, ctrl = false;
+        while (true)
+        {
+            if (s.StartsWith("Ctrl+", StringComparison.Ordinal)) { ctrl = true; s = s.Substring(5); }
+            else if (s.StartsWith("Shift+", StringComparison.Ordinal)) { shift = true; s = s.Substring(6); }
+            else if (s.StartsWith("Alt+", StringComparison.Ordinal)) { alt = true; s = s.Substring(4); }
+            else break;
+        }
+        var k = Enum.Parse<ConsoleKey>(s);
+        char c0 = k switch { ConsoleKey.Enter => '\r', ConsoleKey.Spacebar => ' ', ConsoleKey.Tab => '\t', ConsoleKey.Escape => (char)27, ConsoleKey.Backspace => '\b', _ => '\0' };
+        if (ctrl && k >= ConsoleKey.A && k <= ConsoleKey.Z) c0 = (char)(k - ConsoleKey.A + 1);
+        else if (k >= ConsoleKey.A && k <= ConsoleKey.Z) c0 = shift ? (char)('A' + (k - ConsoleKey.A)) : (char)('a' + (k - ConsoleKey.A));
+        return new ConsoleKeyInfo(c0, k, shift, alt, ctrl);
     }
 }

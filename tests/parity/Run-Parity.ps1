@@ -81,6 +81,11 @@ function New-Workspace($t) {
     }
 }
 
+# Senaryodaki tuşların yan etkileri (kısayol, eski veri, kurulum yeri) senaryonun klasöründe kalsın; hiçbir şey silinmesin
+function Get-SandboxEnv($t) {
+    @{ SYHOST_SHORTCUT_DIR = (Join-Path $t.Dir 'shortcuts'); SYHOST_DEFAULT_ROOT = (Join-Path $t.Dir 'defaultroot'); SYHOST_LEGACY_DATA = (Join-Path $t.Dir 'legacy'); SYHOST_DRYRUN = '1'; SYHOST_TEST_TITLE = ('SyHostParity-' + $t.Name) }
+}
+
 # C# sürümü: konsol gerekmez, çıktısı ve hatası yakalanır
 function Invoke-CsFrame($t) {
     $psi = New-Object Diagnostics.ProcessStartInfo $Exe
@@ -90,6 +95,7 @@ function Invoke-CsFrame($t) {
     $psi.WorkingDirectory = $t.Dir
     # gerçek kullanıcı verisine (LOCALAPPDATA\SyHost) hiçbir koşulda dokunmasın
     $psi.EnvironmentVariables['LOCALAPPDATA'] = Join-Path $t.Dir 'localappdata'
+    foreach ($kv in (Get-SandboxEnv $t).GetEnumerator()) { $psi.EnvironmentVariables[$kv.Key] = $kv.Value }
     $p = [Diagnostics.Process]::Start($psi)
     $so = $p.StandardOutput.ReadToEndAsync(); $se = $p.StandardError.ReadToEndAsync()
     if (-not $p.WaitForExit(60000)) { try { $p.Kill() } catch {}; $t.CsError = 'zaman aşımı (60 sn)'; return }
@@ -103,12 +109,14 @@ function Invoke-CsFrame($t) {
 function Start-PsFrame($t) {
     $old = $env:LOCALAPPDATA
     $env:LOCALAPPDATA = Join-Path $t.Dir 'localappdata'   # gerçek kullanıcı verisine hiçbir koşulda dokunmasın
+    $sandbox = Get-SandboxEnv $t; $saved = @{}
+    foreach ($kv in $sandbox.GetEnumerator()) { $saved[$kv.Key] = [Environment]::GetEnvironmentVariable($kv.Key); [Environment]::SetEnvironmentVariable($kv.Key, $kv.Value) }
     try {
         $a = "-NoProfile -ExecutionPolicy Bypass -File `"$PsApp`" -Root `"$(Join-Path $t.Dir 'ps')`" -TestFrame `"$($t.File)`" -TestOut `"$($t.PsOut)`""
         $p = Start-Process powershell.exe -ArgumentList $a -WorkingDirectory $t.Dir -WindowStyle Hidden -PassThru
         $null = $p.Handle   # çıkış kodunu sonra okuyabilmek için
         $t.Proc = $p; $t.Started = [DateTime]::Now
-    } finally { $env:LOCALAPPDATA = $old }
+    } finally { $env:LOCALAPPDATA = $old; foreach ($kv in $saved.GetEnumerator()) { [Environment]::SetEnvironmentVariable($kv.Key, $kv.Value) } }
 }
 function Complete-PsFrame($t) {
     $p = $t.Proc

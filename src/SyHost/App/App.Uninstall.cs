@@ -127,7 +127,7 @@ sealed partial class App
     {
         UnPhase = "bitti";
         if (UnItems.Any(x => x.Key == "klasor" && x.On)) DeleteRootAfterExit = true;
-        else if (!Uninstall.DryRun) Uninstall.ShowFolder(AppRoot);
+        else if (!Uninstall.DryRun && !TestMode) Uninstall.ShowFolder(AppRoot);
         Dirty = true;
     }
 }

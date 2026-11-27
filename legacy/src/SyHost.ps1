@@ -2186,6 +2186,34 @@ if ($TestFrame) {
                 }
                 $UnSel = Get-ScnInt $TestSt.uninstall 'sel'; $UnPhase = $(if ($null -ne (Get-ScnStr $TestSt.uninstall 'phase')) { Get-ScnStr $TestSt.uninstall 'phase' } else { 'liste' })
             }
+            # Tuşlar: durum kurulduktan sonra sırayla basılır (C#: TestKey). Tek karakter yazılan harftir;
+            # diğerleri ConsoleKey adıdır (önüne Ctrl+, Shift+, Alt+ gelebilir).
+            if (Test-ScnHas $TestSt 'keys') {
+                function ConvertTo-TestKey([string]$s) {
+                    if ($s.Length -eq 1) {
+                        $ch = $s[0]; $n = [int]$ch
+                        $key = if (($n -ge 97 -and $n -le 122) -or ($n -ge 65 -and $n -le 90)) { [ConsoleKey][int][char]::ToUpperInvariant($ch) }
+                               elseif ($n -ge 48 -and $n -le 57) { [ConsoleKey]([int][ConsoleKey]::D0 + $n - 48) }
+                               elseif ($ch -eq ' ') { [ConsoleKey]::Spacebar } elseif ($ch -eq '+') { [ConsoleKey]::OemPlus } elseif ($ch -eq '-') { [ConsoleKey]::OemMinus } elseif ($ch -eq '.') { [ConsoleKey]::OemPeriod }
+                               else { [ConsoleKey]::NoName }
+                        return New-Object ConsoleKeyInfo $ch, $key, ($n -ge 65 -and $n -le 90), $false, $false
+                    }
+                    $shift = $false; $alt = $false; $ctrl = $false
+                    while ($true) {
+                        if ($s.StartsWith('Ctrl+', [StringComparison]::Ordinal)) { $ctrl = $true; $s = $s.Substring(5) }
+                        elseif ($s.StartsWith('Shift+', [StringComparison]::Ordinal)) { $shift = $true; $s = $s.Substring(6) }
+                        elseif ($s.StartsWith('Alt+', [StringComparison]::Ordinal)) { $alt = $true; $s = $s.Substring(4) }
+                        else { break }
+                    }
+                    $k = [ConsoleKey]$s
+                    $c0 = switch ($k) { 'Enter' { [char]13 } 'Spacebar' { [char]32 } 'Tab' { [char]9 } 'Escape' { [char]27 } 'Backspace' { [char]8 } default { [char]0 } }
+                    $ki = [int]$k
+                    if ($ctrl -and $ki -ge 65 -and $ki -le 90) { $c0 = [char]($ki - 64) }
+                    elseif ($ki -ge 65 -and $ki -le 90) { $c0 = if ($shift) { [char]$ki } else { [char]($ki + 32) } }
+                    New-Object ConsoleKeyInfo $c0, $k, $shift, $alt, $ctrl
+                }
+                foreach ($TestKs in $TestSt.keys) { Handle-Key (ConvertTo-TestKey ([string]$TestKs)) }
+            }
         }
 
         # Kareyi çiz ve yaz: her satır "\n" ile biter, en sonda imleç satırı; UTF-8 (BOM'suz)

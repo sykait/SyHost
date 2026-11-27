@@ -155,7 +155,7 @@ sealed partial class App
             case "dil": SettingAdjust("dil", +1); return;
             case "klasor":
             {
-                string picked = Native.PickFolder(Lang.L("Yeni sunucuların kurulacağı klasörü seç"), Directory.Exists(Cfg.sunucuKokKlasoru) ? Cfg.sunucuKokKlasoru : AppRoot);
+                string picked = TestMode ? null : Native.PickFolder(Lang.L("Yeni sunucuların kurulacağı klasörü seç"), Directory.Exists(Cfg.sunucuKokKlasoru) ? Cfg.sunucuKokKlasoru : AppRoot);   // test modunda pencere açılmaz
                 ResetFrame();
                 if (string.IsNullOrEmpty(picked)) return;
                 if (Portable.IsInOneDrive(picked)) { SetNote = Lang.L("Bu klasör OneDrive ile eşitleniyor. Sunucu dosyaları büyük ve sürekli değişir; OneDrive dışında bir yer önerilir."); SetNoteCol = c.yellow; }
@@ -176,7 +176,7 @@ sealed partial class App
                 StartFirstRun("java"); ResetFrame(); return;
             case "yazi": case "oyuncu": case "yedek": case "sakla": SettingAdjust(key, +1); return;
             case "cokme": SettingAdjust(key, +1); return;
-            case "ac": try { Process.Start(new ProcessStartInfo("explorer.exe", "\"" + AppRoot + "\"") { UseShellExecute = true }); } catch { } return;
+            case "ac": if (!TestMode) { try { Process.Start(new ProcessStartInfo("explorer.exe", "\"" + AppRoot + "\"") { UseShellExecute = true }); } catch { } } return;
             case "kaldir": StartUninstall(); return;
         }
     }
@@ -187,7 +187,7 @@ sealed partial class App
         Lang.Code = code; Cfg.dil = code; SaveConfig();
         InitTables();
         string root = AppRoot; var dirs = Servers.Select(s => s.klasor).ToList();
-        Task.Run(() => FolderLook.Apply(root, code, dirs));
+        if (!TestMode) Task.Run(() => FolderLook.Apply(root, code, dirs));   // test modunda gerçek klasörlere dokunulmaz
         string desc = Lang.L("SyHost - modlu Minecraft sunucu merkezi");
         foreach (string lnk in Shortcuts.Locations())
             try { if (Shortcuts.StateOf(lnk, ExePath) == Shortcuts.State.Ours) Shortcuts.Write(lnk, ExePath, desc); } catch { }

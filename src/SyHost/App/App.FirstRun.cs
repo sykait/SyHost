@@ -302,7 +302,7 @@ sealed partial class App
                     if (kind == "pick")
                     {
                         string start = Directory.Exists(Fr.Target) ? Fr.Target : Path.GetDirectoryName(Fr.Target);
-                        string picked = Native.PickFolder(Lang.L("SyHost'un kurulacağı klasörü seç"), start);
+                        string picked = TestMode ? null : Native.PickFolder(Lang.L("SyHost'un kurulacağı klasörü seç"), start);   // test modunda pencere açılmaz
                         ResetFrame();
                         if (!string.IsNullOrEmpty(picked))
                         {
