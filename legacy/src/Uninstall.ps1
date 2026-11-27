@@ -422,9 +422,10 @@ function Start-UninstallJob($items) {
     $funcs = New-Object System.Collections.Generic.List[string]
     foreach ($f in @(Get-ChildItem function:)) {
         $sb = $f.ScriptBlock
-        if ($null -eq $sb -or -not $sb.File) { continue }   # PowerShell'in kendi fonksiyonları
-        $fd = $sb.Ast.Parent
-        if ($fd -is [System.Management.Automation.Language.FunctionDefinitionAst]) { $funcs.Add($fd.Extent.Text) }
+        # Yalnızca betiklerin kendi fonksiyonları: PowerShell'inkiler (dosyasız) ve modüllerinki kendi yerinde kalır
+        if ($null -eq $sb -or -not $sb.File -or $f.ModuleName) { continue }
+        # Fonksiyonun asıl metni ("function Ad(...) { ... }"); yoksa gövde (ToString parametreleri param(...) olarak verir)
+        if ($sb.Ast -is [System.Management.Automation.Language.FunctionDefinitionAst]) { $funcs.Add($sb.Ast.Extent.Text) }
         else { $funcs.Add('function ' + $f.Name + " {`r`n" + $sb.ToString() + "`r`n}") }
     }
     $vars = @{}; $blocks = @{}
