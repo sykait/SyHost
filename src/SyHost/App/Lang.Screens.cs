@@ -131,7 +131,7 @@ static partial class Lang
         Tx("SYHOST", "SYHOST", "SYHOST");
         Tx("Sunucu klasörü", "Server folder", "サーバーフォルダー");
         Tx("Masaüstü kısayolu", "Desktop shortcut", "デスクトップのショートカット");
-        Tx("Başlat menüsü kısayolu", "Start menu shortcut", "スタートメニューのショートカット");
+        Tx("Başlat menüsü kısayolu", "Start menu shortcut", "スタートのショートカット");   // ja: 30 sütuna sığsın
         Tx("Yazı boyutu", "Text size", "文字サイズ");
         Tx("Arkadaş bağlantısı (playit)", "Friend connection (playit)", "フレンド接続（playit）");
         Tx("Maksimum oyuncu", "Max players", "最大プレイヤー数");
@@ -168,7 +168,7 @@ static partial class Lang
         Tx("NELER KALDIRILSIN?", "WHAT SHOULD GO?", "削除するもの");
         Tx("BİTTİ", "DONE", "完了");
         Tx("Masaüstü ve Başlat menüsü kısayolları", "Desktop and Start menu shortcuts", "デスクトップとスタートメニューのショートカット");
-        Tx("SyHost'un kurduğu Cascadia Mono yazı tipi", "The Cascadia Mono font SyHost installed", "SyHost がインストールした Cascadia Mono フォント");
+        Tx("SyHost'un kurduğu Cascadia Mono yazı tipi", "The Cascadia Mono font SyHost installed", "SyHost が追加した Cascadia Mono フォント");   // ja: 46 sütuna sığsın
         Tx("Eski sürümün veri klasörü", "Data folder of the old version", "旧バージョンのデータフォルダー");
         Tx("Eski sürümün program klasörü", "Program folder of the old version", "旧バージョンのプログラムフォルダー");
         Tx("Eski playit kurulumu (Program Files)", "Old playit install (Program Files)", "旧 playit（Program Files）");
