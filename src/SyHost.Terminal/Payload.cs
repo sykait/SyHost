@@ -131,15 +131,15 @@ static class Payload
     public static TempApp ExtractTemp()
     {
         string temp = Path.GetTempPath();
-        for (int attempt = 0; ; attempt++)
+        for (int attempt = 1; ; attempt++)
         {
             string dir = Path.Combine(temp, TempPrefix + PayloadInfo.Hash.Substring(0, 12) + "-" + Random.Shared.Next().ToString("x8"));
-            if (Directory.Exists(dir)) continue;
+            if (Directory.Exists(dir) && attempt < 10) continue;
             Directory.CreateDirectory(dir);
             FileStream lk;
             // Kilit hemen: o ana kadar boş klasörü eşzamanlı bir temizleyici silmiş olabilir, o zaman yeni ad
             try { lk = new FileStream(Path.Combine(dir, LockName), FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None); }
-            catch (IOException) when (attempt < 5) { continue; }
+            catch (IOException) when (attempt < 10) { continue; }
             var t = new TempApp(dir, lk);
             try { ExtractTo(dir); }
             catch { t.Dispose(); throw; }
