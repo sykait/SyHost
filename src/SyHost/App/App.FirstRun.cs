@@ -67,6 +67,7 @@ sealed partial class App
         public volatile bool JobDone;
         public volatile string JobText = "";
         public volatile string JobError;
+        public volatile bool Cancel;        // Esc: çalışan playit komutu kapatıldı, sıradakiler başlamasın
         public bool Desk = true, Start = true;
         public string Phase = "";           // arkadaş adımının alt aşaması: soru, indir, bagla, adres, hazir
         public string Code;                 // playit eşleştirme kodu
@@ -151,6 +152,8 @@ sealed partial class App
         if (Fr.Index < Fr.Steps.Count - 1) { Fr.Index++; FrEnterStep(); return; }
         // Akış bitti
         if (Fr.ReturnTo != null) { Fr = null; Screen = "settings"; ResetFrame(); return; }
+        // 1. aşama konum adımı olmadan bitti (exe kendi boş klasöründe): SyHost buraya kurulur ve buradan yeniden açılır
+        if (SetupMode) { FrInstall("target"); return; }
         Cfg.kurulumTamam = true;
         SaveConfig();
         Fr = null; Screen = "home"; ShowPendingHomeMsg(); ResetFrame();
@@ -241,7 +244,7 @@ sealed partial class App
     // ---------- Arka plan işleri (indirme vb.) ----------
     void FrRun(Action work)
     {
-        Fr.JobDone = false; Fr.JobError = null; Fr.JobText = "";
+        Fr.JobDone = false; Fr.JobError = null; Fr.JobText = ""; Fr.Cancel = false;
         Fr.Job = Task.Run(() =>
         {
             try { work(); }
@@ -370,9 +373,10 @@ sealed partial class App
             case "yazi":
                 if (k.Key == ConsoleKey.Escape) { FrBack(); return; }
                 if (k.Key != ConsoleKey.Enter) return;
-                if (!Fonts.IsAvailable())
+                // Kurulamadıysa (Confirm) Enter devam eder. Test modunda gerçek yazı tipine dokunulmaz: kurulamamış sayılır.
+                if (!Fr.Confirm && !FontOk())
                 {
-                    if (Fonts.InstallPerUser())
+                    if (!TestMode && Fonts.InstallPerUser())
                     {
                         Cfg.yaziTipiKuruldu = true; SaveConfig();
                         Native.SetFont(Fonts.Face, (short)(Cfg.yaziTipiBoyutu != 0 ? Cfg.yaziTipiBoyutu : 16));
@@ -499,6 +503,8 @@ sealed partial class App
                 }
                 rows.Add("");
                 rows.Add("  " + c.dim + Lang.L("Dil daha sonra Ayarlar'dan değiştirilebilir.") + R);
+                // Kurulum (konum adımı olmadan) başarısız olduysa nedeni
+                if (Fr.Note != null) { rows.Add(""); foreach (string l in WordWrap(Fr.Note, W - 8)) rows.Add("  " + Fr.NoteCol + l + R); }
                 keys = Key("↑↓", Lang.L("seç")) + Key("Enter", Lang.L("devam"));
                 break;
 

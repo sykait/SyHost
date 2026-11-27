@@ -61,9 +61,10 @@ sealed partial class App
         }
     }
 
-    /// <summary>playit komutunu çalıştır, son satırı döndür.</summary>
-    string PlayitRun(string args, int timeoutMs, bool keep = false)
+    /// <summary>playit komutunu çalıştır, bütün çıktıyı döndür. Esc (PlayitCancel) hangi komut çalışırken basılırsa basılsın onu kapatır.</summary>
+    string PlayitRun(string args, int timeoutMs)
     {
+        if (Fr.Cancel) throw new Exception(Lang.L("playit bağlantısı tamamlanmadı. Tekrar deneyebilirsin."));
         var psi = new ProcessStartInfo(PlayitCliExe(), args)
         {
             UseShellExecute = false, CreateNoWindow = true,
@@ -71,7 +72,9 @@ sealed partial class App
             WorkingDirectory = Data,
         };
         using var p = Process.Start(psi);
-        if (keep) PlayitClaimProc = p;
+        PlayitClaimProc = p;
+        try { JobGuard.Add(p); } catch { }   // SyHost kapanırsa onay bekleyen playit yetim kalmasın
+        if (Fr.Cancel) { try { p.Kill(); } catch { } }   // iptal tam başlarken geldiyse
         var output = new System.Text.StringBuilder();
         p.OutputDataReceived += (s, e) => { if (e.Data != null) lock (output) output.AppendLine(e.Data); };
         p.ErrorDataReceived += (s, e) => { if (e.Data != null) lock (output) output.AppendLine(e.Data); };
@@ -90,9 +93,9 @@ sealed partial class App
         if (string.IsNullOrWhiteSpace(code)) throw new Exception(Lang.L("playit bağlantısı tamamlanmadı. Tekrar deneyebilirsin."));
         Fr.Code = code;
         string url = LastLine(PlayitRun("claim url " + code + " --name SyHost", 30000));
-        if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }
+        if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !TestMode && !Fr.Cancel) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }
         Fr.JobText = Lang.L("Tarayıcıda onaylamanı bekliyorum (en fazla 10 dakika)...");
-        string outp = PlayitRun("claim exchange " + code + " --wait 600", 620000, keep: true);
+        string outp = PlayitRun("claim exchange " + code + " --wait 600", 620000);
         var m = Regex.Match(outp, "([0-9a-f]{64})");
         if (!m.Success) throw new Exception(Lang.L("playit bağlantısı tamamlanmadı. Tekrar deneyebilirsin."));
         File.WriteAllText(PlayitSecret, "secret_key = \"" + m.Groups[1].Value + "\"\n", Json.Utf8NoBom);
@@ -106,6 +109,7 @@ sealed partial class App
 
     void PlayitCancel()
     {
+        Fr.Cancel = true;
         try { PlayitClaimProc?.Kill(); } catch { }
         Fr.Phase = "soru"; Fr.Note = Lang.L("playit bağlantısı tamamlanmadı. Tekrar deneyebilirsin."); Fr.NoteCol = c.yellow;
     }
@@ -122,7 +126,7 @@ sealed partial class App
         if (Fr.Phase == "bagla")
         {
             Fr.Phase = "adres"; Fr.Field = 0; Fr.McAddr = Cfg.arkadasAdresi ?? ""; Fr.VoiceAddr = Cfg.sesAdresi ?? "";
-            try { Process.Start(new ProcessStartInfo("https://playit.gg/account/tunnels") { UseShellExecute = true }); } catch { }
+            if (!TestMode) { try { Process.Start(new ProcessStartInfo("https://playit.gg/account/tunnels") { UseShellExecute = true }); } catch { } }
         }
     }
 
