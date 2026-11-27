@@ -20,9 +20,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Build SyHost.exe (C#, single file)
+      - name: Build SyHost.exe (C#) and SyHost-Terminal.exe (PowerShell app in one exe)
         shell: powershell
-        run: .\build\Build.ps1 -Publish
+        run: .\build\Build.ps1 -Publish -Terminal
 
       - name: Self-tests (shortcuts, folder look, migration)
         shell: powershell
@@ -34,6 +34,10 @@ jobs:
           New-Item -ItemType Directory -Force (Join-Path $t 'legacy') | Out-Null
           Set-Content (Join-Path $t 'legacy\sunucular.json') '[]' -Encoding ASCII
           .\dist\SyHost.exe --selftest migration (Join-Path $t 'legacy') (Join-Path $t 'mig'); if ($LASTEXITCODE) { exit 1 }
+
+      - name: Terminal edition exe (carries the PowerShell app and SyHost.Core.dll)
+        shell: powershell
+        run: .\tests\terminal\Test-TerminalExe.ps1
 
       - name: Parity (C# and Terminal editions draw the same frames)
         shell: powershell
