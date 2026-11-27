@@ -750,11 +750,46 @@ if ($Java) {
     Check ($exe2 -eq $exe -and (Test-Path $exe2) -and @(Get-Leftovers (Join-Path $jd 'tools') 17).Count -eq 0 -and @(Get-ChildItem (Join-Path $jd 'tools\java-17') -Directory).Count -eq 1) 'ikinci indirme eskisinin yerine geçti, artık yok'
     # Arka plan işinde (runspace, L yok): FirstRun ve kurulum böyle kullanır
     $rs = [powershell]::Create()
-    [void]$rs.AddScript({ param($funcs, $dataDir) $DataDir = $dataDir; . ([scriptblock]::Create($funcs)); $out = New-Object System.Collections.Generic.List[string]; $j = Find-Java 17; [pscustomobject]@{ Java = $j; HasL = [bool](Get-Command L -ErrorAction SilentlyContinue) } }).AddArgument($JavaFuncs.ToString()).AddArgument($jd)
+    [void]$rs.AddScript({ param($funcs, $dataDir) $DataDir = $dataDir; . ([scriptblock]::Create($funcs)); $j = Find-Java 17; [pscustomobject]@{ Java = $j; HasL = [bool](Get-Command L -ErrorAction SilentlyContinue) } }).AddArgument($JavaFuncs.ToString()).AddArgument($jd)
     $rr = @($rs.Invoke()); $rs.Dispose()
     Check ($rr.Count -eq 1 -and $rr[0].Java -eq $exe -and -not $rr[0].HasL) 'runspace içinde $JavaFuncs: Find-Java indirilen kopyayı bulur (L olmadan)'
+    # İlk açılıştaki gibi: arka plan işi, ortak (synchronized) tablo, ilk satır -HeadText ile; geri çağrı runspace içinde tanımlı
+    $sync = [hashtable]::Synchronized(@{ Text = ''; Lines = (New-Object System.Collections.ArrayList); Error = $null; Done = $false; Exe = $null })
+    $rs = [powershell]::Create()
+    [void]$rs.AddScript({
+        param($funcs, $dataDir, $sync, $head)
+        $DataDir = $dataDir; . ([scriptblock]::Create($funcs))
+        try { $sync.Exe = Install-Java 17 { param($t) $sync.Text = $t; [void]$sync.Lines.Add($t) } $head } catch { $sync.Error = $_.Exception.Message }
+        $sync.Done = $true
+    }).AddArgument($JavaFuncs.ToString()).AddArgument($jd).AddArgument($sync).AddArgument((L 'Java {0} indiriliyor...'))
+    $h = $rs.BeginInvoke()
+    $seen = New-Object System.Collections.Generic.List[string]
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    while (-not $sync.Done -and $sw.Elapsed.TotalSeconds -lt 300) { if ($seen.Count -eq 0 -or $seen[$seen.Count - 1] -cne $sync.Text) { $seen.Add($sync.Text) }; Start-Sleep -Milliseconds 50 }
+    try { $rs.EndInvoke($h) } catch {}; $rs.Dispose()
+    $sl = @($sync.Lines)
+    Check ($null -eq $sync.Error -and $sync.Exe -eq $exe) "runspace içinde Install-Java: indirdi ($($sync.Exe)) $($sync.Error)"
+    Check ($sl.Count -ge 3 -and $sl[0] -ceq (L 'Java {0} indiriliyor...' 17) -and $sl[$sl.Count - 1] -cmatch '^OpenJDK17U-jre_x64_windows_hotspot_[0-9._]+\.zip  ·  (\d+) / \1 MB$') "runspace: ilk satır -HeadText'ten ('$($sl[0])'), son satır tam boy ('$($sl[$sl.Count - 1])')"
+    Check ($seen.Count -ge 3) "ana iş parçacığı ilerlemeyi ortak tablodan okudu ($($seen.Count) farklı metin)"
     $DataDir = $Data
 }
+
+Section 'Arka plan işleri (runspace): Install-Java ve Portable.ps1'
+# Arka plan işinde (runspace) -HeadText verilmezse ve L yoksa ilk satır Türkçe anahtar olur; kalıcı hata yine tek denemede
+$sync2 = [hashtable]::Synchronized(@{ Lines = (New-Object System.Collections.ArrayList); Error = $null })
+$rs = [powershell]::Create()
+[void]$rs.AddScript({ param($funcs, $dataDir, $sync) $DataDir = $dataDir; . ([scriptblock]::Create($funcs)); try { Install-Java 99 { param($t) [void]$sync.Lines.Add($t) } } catch { $sync.Error = $_.Exception.Message } }).AddArgument($JavaFuncs.ToString()).AddArgument($Data).AddArgument($sync2)
+[void]$rs.Invoke(); $rs.Dispose()
+Check (@($sync2.Lines).Count -ge 1 -and $sync2.Lines[0] -ceq 'Java 99 indiriliyor...' -and $sync2.Error -like 'Java 99 could not be downloaded: The remote server returned an error: (4*') "runspace, -HeadText yok: '$($sync2.Lines[0])', $($sync2.Error)"
+
+# Portable.ps1 bir arka plan işinde de yüklenebilir (Kaldır'ın silme işi gibi): kısayol silme ve durum okuma çalışır
+$bgExe = Join-Path $WorkRoot 'rs-app\SyHost.exe'; New-Item -ItemType Directory -Force (Split-Path $bgExe) | Out-Null; [IO.File]::WriteAllText($bgExe, 'x')
+Write-Shortcut $desk $bgExe 'rs'
+$rs = [powershell]::Create()
+[void]$rs.AddScript({ param($src, $appDir, $exe) $AppDir = $appDir; . (Join-Path $src 'Portable.ps1'); $a = Get-LinkState (Get-ShortcutLocations)[0] $exe; Remove-OurShortcuts $exe; $b = Get-LinkState (Get-ShortcutLocations)[0] $exe; "$a>$b" }).AddArgument($SrcDir).AddArgument($AppDir).AddArgument($bgExe)
+$rr = @($rs.Invoke()); $rs.Dispose()
+Check ($rr.Count -eq 1 -and $rr[0] -ceq 'Ours>Missing' -and -not (Test-Path $desk)) "runspace içinde Portable.ps1: Get-LinkState ve Remove-OurShortcuts ($($rr -join ','))"
+
 
 # =====================================================================
 if ($Font) {
